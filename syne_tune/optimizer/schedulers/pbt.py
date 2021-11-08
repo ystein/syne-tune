@@ -245,7 +245,7 @@ class PopulationBasedTraining(FIFOScheduler):
             trial_to_clone = self._trial_state[trial_id_to_continue].trial
 
             # explore step
-            config = self._explore(trial_to_clone.config)
+            config = self._explore(trial_to_clone)
             self._trial_decisions_stack.append((trial_id_to_continue,  config))
             return SchedulerDecision.PAUSE
 
@@ -305,13 +305,13 @@ class PopulationBasedTraining(FIFOScheduler):
             return TrialSuggestion.start_suggestion(config=config,
                                                     checkpoint_trial_id=trial_id_to_continue)
 
-    def _explore(self, config: Dict) -> Dict:
+    def _explore(self, trial_to_clone: Dict) -> Dict:
         """Return a config perturbed as specified.
 
         Args:
             config (dict): Original hyperparameter configuration from the cloned trial
         """
-
+        config = trial_to_clone.config
         new_config = copy.deepcopy(config)
 
         self._num_perturbations += 1
