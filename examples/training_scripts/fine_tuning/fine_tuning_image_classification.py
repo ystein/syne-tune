@@ -104,8 +104,8 @@ def _prepare_dataloader(data_dir, batch_size, dataset_name):
     # Data augmentation and normalization for training
     # Just normalization for validation
 
-    normalizing_mean = NORMALIZATION_STATS[dataset_name]
-    normalizing_std = NORMALIZATION_STATS[dataset_name]
+    normalizing_mean = NORMALIZATION_STATS[dataset_name]['mean']
+    normalizing_std = NORMALIZATION_STATS[dataset_name]['std']
 
     data_transforms = {
         TRAIN: transforms.Compose(
