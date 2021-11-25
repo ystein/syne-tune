@@ -61,7 +61,7 @@ class LBFGSOptimizeAcquisitionContext(LocalOptimizer):
             x_ = np.concatenate((x, np.array(self.context)), axis=0)
 
             a, g = acquisition_function.compute_acq_with_gradient(x_)
-            return a, g[:x.shape[0]]
+            return a, g[:-len(self.context)]
 
         res = fmin_l_bfgs_b(f_df, x0=x0, bounds=bounds, maxiter=1000, disp=10)
         self.num_evaluations = n_evaluations[0]
