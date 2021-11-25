@@ -1,0 +1,10 @@
+requests
+filelock
+boto3
+torch
+torchvision
+xgboost  # for BORE
+
+transformers
+sklearn
+datasets
