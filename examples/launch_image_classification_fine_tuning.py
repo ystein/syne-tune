@@ -32,7 +32,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--run_local', action='store_true')
     parser.add_argument('--sagemaker_backend', action='store_true')
-    parser.add_argument('--scheduler', type=str, default='hyperband_stopping')
+    parser.add_argument('--scheduler', type=str, default='pbt')
     parser.add_argument('--searcher', type=str, default='bayesopt')
     parser.add_argument('--lr_schedule', type=str, default='exp')
     parser.add_argument('--population_size', type=int, default=4)
