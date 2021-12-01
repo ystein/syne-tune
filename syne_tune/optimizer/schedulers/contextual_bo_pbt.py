@@ -61,9 +61,9 @@ class LBFGSOptimizeAcquisitionContext(LocalOptimizer):
             x_ = np.concatenate((x, np.array(self.context)), axis=0)
 
             a, g = acquisition_function.compute_acq_with_gradient(x_)
-            return a, g[:-len(self.context)]
+            return a, g[:x.shape[0]]
 
-        res = fmin_l_bfgs_b(f_df, x0=x0, bounds=bounds, maxiter=1000, disp=10)
+        res = fmin_l_bfgs_b(f_df, x0=x0, bounds=bounds, maxiter=1000)
         self.num_evaluations = n_evaluations[0]
         if res[2]['task'] == b'ABNORMAL_TERMINATION_IN_LNSRCH':
             # this condition was copied from the old GPyOpt code
@@ -134,6 +134,7 @@ class ContextualBOPopulationBasedTraining(ModelBasedPopulationBasedTraining):
         factory = GaussProcEmpiricalBayesModelFactory(active_metric='y', gpmodel=gp, num_fantasy_samples=1)
 
         self.model = factory.model(state, fit_params=True)
+        print('GP parameters: ', self.model._gpmodel.get_params())
 
     def _select_new_candidate(self, context):
         print('start optimizer')
@@ -153,6 +154,7 @@ class ContextualBOPopulationBasedTraining(ModelBasedPopulationBasedTraining):
                                               model=self.model, context=context)
 
         candidates, fvals = [], []
+        print('current best: ', self.model.current_best())
         for i in range(self.num_opt_rounds):
             initial_candidate = self._hp_ranges.random_config(None)
             print(f'initial candidate: {initial_candidate}')
