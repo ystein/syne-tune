@@ -18,7 +18,6 @@ from torchvision import models
 
 from syne_tune.report import Reporter
 
-
 # TODO: use dataset specific normalizing statistics
 VALIDATION_SPLIT = 0.20
 RANDOM_RESIZED_CROP = 224
@@ -40,13 +39,13 @@ CALTECH256_NORM_STATS = dict()
 CALTECH256_NORM_STATS['mean'] = [0.5392, 0.5125, 0.4809]
 CALTECH256_NORM_STATS['std'] = [0.2265, 0.2249, 0.2253]
 
-NORMALIZATION_STATS = {'flower': FLOWER_NORM_STATS, 'caltech101': CALTECH101_NORM_STATS, 'caltech256': CALTECH256_NORM_STATS}
+NORMALIZATION_STATS = {'flower': FLOWER_NORM_STATS, 'caltech101': CALTECH101_NORM_STATS,
+                       'caltech256': CALTECH256_NORM_STATS}
 
 report = Reporter()
 
 
 def download_dataset(dataset_name, dataset_dir):
-
     if dataset_name == 'flower':
 
         dst = os.path.join(dataset_dir, 'flower_dataset', 'flower_photos')
@@ -149,7 +148,8 @@ def _prepare_dataloader(data_dir, batch_size, dataset_name):
     return dataloaders, dataset_sizes, class_to_idx
 
 
-def train_model(dataloaders, dataset_sizes, model, criterion, optimizer, scheduler, num_epochs, device, resume_from, st_checkpoint_dir):
+def train_model(dataloaders, dataset_sizes, model, criterion, optimizer, scheduler, num_epochs, device, resume_from,
+                st_checkpoint_dir):
     since = time.time()
 
     best_model_wts = copy.deepcopy(model.state_dict())
@@ -232,14 +232,13 @@ def train_model(dataloaders, dataset_sizes, model, criterion, optimizer, schedul
 
 
 def objective(config):
-
     model_id = config['model_id']
     epochs = config['epochs']
     batch_size = config['batch_size']
     learning_rate = config['learning_rate']
     momentum = config['momentum']
     weight_decay = config['weight_decay']
-
+    adam_learning_rate = config['adam_learning_rate']
     dataset_dir = config['dataset_dir']
     dataset_name = config['dataset_name']
 
@@ -293,9 +292,12 @@ def objective(config):
 
     # init optimizer
     criterion = torch.nn.CrossEntropyLoss()
-    # optimizer = torch.optim.Adam(model.parameters(), lr=adam_learning_rate, weight_decay=weight_decay)
-    optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, nesterov=True,
-                                weight_decay=weight_decay, momentum=momentum)
+
+    if config['optimizer_type'] == "sgd":
+        optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, nesterov=True,
+                                    weight_decay=weight_decay, momentum=momentum)
+    elif config['optimizer_type'] == "adam":
+        optimizer = torch.optim.Adam(model.parameters(), lr=adam_learning_rate)
 
     if config['st_checkpoint_dir'] is not None and os.path.isdir(config['st_checkpoint_dir']):
         print('load checkpoint', flush=True)
@@ -331,6 +333,7 @@ if __name__ == '__main__':
     parser.add_argument("--batch_size", type=int, default=16)
     parser.add_argument("--gamma", type=float, default=0.1)
     parser.add_argument("--learning_rate", type=float, default=0.001)
+    parser.add_argument("--adam_learning_rate", type=float, default=0.001)
     parser.add_argument("--weight_decay", type=float, default=1e-8)
     parser.add_argument("--momentum", type=float, default=0.9)
     parser.add_argument("--dataset_dir", type=str)
@@ -338,6 +341,7 @@ if __name__ == '__main__':
     parser.add_argument("--scheduler_type", type=str, default='none')
     parser.add_argument('--st_checkpoint_dir', type=str)
     parser.add_argument("--trial_id", type=int, default=5)
+    parser.add_argument("--optimizer_type", type=str, default='sgd')
 
     args, _ = parser.parse_known_args()
 

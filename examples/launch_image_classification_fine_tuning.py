@@ -29,6 +29,7 @@ if __name__ == '__main__':
     parser.add_argument('--model_id', type=str, default='resnet18')
     parser.add_argument('--dataset_name', type=str, default='flower')
     parser.add_argument('--experiment_name', type=str, default='comparison')
+    parser.add_argument('--search_space', type=str, default='sgd', choices=['adam', 'sgd'])
 
     parser.add_argument('--run_local', action='store_true')
     parser.add_argument('--sagemaker_backend', action='store_true')
@@ -51,16 +52,28 @@ if __name__ == '__main__':
     entry_point = Path(__file__).parent / "training_scripts" / "fine_tuning" / "fine_tuning_image_classification.py"
     instance_type = args.instance_type
 
-    config_space = {
-        "epochs": args.max_epoch,
-        'model_id': args.model_id,
-        'dataset_dir': dataset_dir,
-        'dataset_name': args.dataset_name,
-        "batch_size": lograndint(4, 128),  # defines the search space for the batch size
-        "learning_rate": loguniform(1e-6, 1),  # defines the search space for the learning rate
-        "momentum": uniform(0.1, 0.99),
-        "weight_decay": loguniform(1e-8, 1e-1)
-    }
+    if args.search_space == "sgd":
+        config_space = {
+            "epochs": args.max_epoch,
+            'model_id': args.model_id,
+            'dataset_dir': dataset_dir,
+            'dataset_name': args.dataset_name,
+            "batch_size": lograndint(4, 128),  # defines the search space for the batch size
+            "learning_rate": loguniform(1e-6, 1),  # defines the search space for the learning rate
+            "momentum": uniform(0.1, 0.99),
+            "weight_decay": loguniform(1e-8, 1e-1),
+            "optimizer_type": 'sgd'
+        }
+    elif args.search_space == "adam":
+        config_space = {
+            "epochs": args.max_epoch,
+            'model_id': args.model_id,
+            'dataset_dir': dataset_dir,
+            'dataset_name': args.dataset_name,
+            "optimizer_type": 'adam',
+            "batch_size": lograndint(1, 128),  # defines the search space for the batch size
+            "adam_learning_rate": loguniform(1e-4, 1),  # defines the search space for the learning rate for ADAM
+        }
 
     # defines the backend
     backend = LocalBackend(entry_point=entry_point)
