@@ -126,9 +126,9 @@ class ModelBasedPopulationBasedTraining(PopulationBasedTraining):
                 row['previous_' + k] = previous_config[k]
 
         if self.mode == 'min':
-            y_t = result[self.metric]
-        else:
             y_t = - result[self.metric]
+        else:
+            y_t = result[self.metric]
 
         last_score_previous_time_step = get_info['last_score_previous_time_step']
         if last_score_previous_time_step is None:

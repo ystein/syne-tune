@@ -87,6 +87,15 @@ class ContextualBOPopulationBasedTraining(ModelBasedPopulationBasedTraining):
     """
 
     """
+
+    def _transform(self, y):
+        # TODO: PBT maximizes internally whereas BO minimizers, that's why we have to retransform the data here again
+
+        if self.mode == 'max':
+            return -y
+        else:
+            return y
+
     def _fit_model(self):
 
         # shape data
@@ -100,12 +109,12 @@ class ContextualBOPopulationBasedTraining(ModelBasedPopulationBasedTraining):
             for k in non_constant_hyperparameter_keys(self.config_space):
                 config[k] = row[k]
 
-            config['previous_objective'] = row['last_score_previous_time_step']
+            config['previous_objective'] = self._transform(row['last_score_previous_time_step'])
 
             if self.add_time_step_to_context:
                 config['t'] = row['t']
 
-            y = float(row['current_score'])
+            y = float(self._transform(row['current_score']))
             evals.append(CandidateEvaluation(candidate=config, metrics={'y': y}))
 
         n_dims = len(evals[0].candidate.keys())
