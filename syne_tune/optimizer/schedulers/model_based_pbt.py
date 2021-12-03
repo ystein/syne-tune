@@ -46,6 +46,7 @@ class ModelBasedPopulationBasedTraining(PopulationBasedTraining):
                  add_time_step_to_context: bool = False,
                  do_exploit: bool = True,
                  num_opt_rounds: int = 1,
+                 acquistion_function_optimization: str = 'gd',
                  **kwargs,
                  ):
 
@@ -57,7 +58,7 @@ class ModelBasedPopulationBasedTraining(PopulationBasedTraining):
         self.do_exploit = do_exploit
         self.num_opt_rounds = num_opt_rounds
         self.acquisition_function = acquisition_function
-
+        self.acquistion_function_optimization = acquistion_function_optimization
         self.dummy_config = {}
         for k in non_constant_hyperparameter_keys(config_space):
             self.dummy_config[k] = 0

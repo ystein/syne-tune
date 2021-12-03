@@ -156,29 +156,54 @@ class ContextualBOPopulationBasedTraining(ModelBasedPopulationBasedTraining):
             acquisition_function_class = EIAcquisitionFunction
 
         print(f'current context {context}')
+
         st = time.time()
 
-        opt = LBFGSOptimizeAcquisitionContext(hp_ranges=self._hp_ranges,
-                                              acquisition_function_class=acquisition_function_class,
-                                              model=self.model, context=context)
+        if self.acquistion_function_optimization == 'gd':
 
-        candidates, fvals = [], []
-        print('current best: ', self.model.current_best())
-        for i in range(self.num_opt_rounds):
-            initial_candidate = self._hp_ranges.random_config(None)
-            print(f'initial candidate: {initial_candidate}')
-            new_candidate, fval = opt.optimize(candidate=initial_candidate, params_acquisition_function=params_acquisition_function)
-            print(f'new candidate: {new_candidate} with acquisition value: {fval}')
+            opt = LBFGSOptimizeAcquisitionContext(hp_ranges=self._hp_ranges,
+                                                  acquisition_function_class=acquisition_function_class,
+                                                  model=self.model, context=context)
 
-            candidates.append(new_candidate)
-            fvals.append(fval)
+            candidates, fvals = [], []
+            print('current best: ', self.model.current_best())
+            for i in range(self.num_opt_rounds):
+                initial_candidate = self._hp_ranges.random_config(None)
+                print(f'initial candidate: {initial_candidate}')
+                new_candidate, fval = opt.optimize(candidate=initial_candidate, params_acquisition_function=params_acquisition_function)
+                print(f'new candidate: {new_candidate} with acquisition value: {fval}')
+
+                candidates.append(new_candidate)
+                fvals.append(fval)
+
+            b = np.argmin(fvals)
+            new_candidate = candidates[b]
+
+        if self.acquistion_function_optimization == 'rs':
+
+            candidates, fvals = [], []
+
+            for i in range(500):
+                cand = self._hp_ranges.random_config(None)
+
+                params_acquisition_function['active_metric'] = None
+                acquisition_function = acquisition_function_class(self.model,
+                                                              **params_acquisition_function)
+
+                x = self._hp_ranges.to_ndarray(cand)
+                x_ = np.concatenate((x, np.array(context)), axis=0)
+
+                fval = acquisition_function.compute_acq(x_)
+
+                candidates.append(cand)
+                fvals.append(fval)
+            print(f'mean acq vals {np.mean(fvals)} std acq vals {np.std(fvals)}')
+            print('first candidate: ', candidates[b])
+            b = np.argmin(fvals)
+            new_candidate = candidates[b]
 
         opt_time = time.time() - st
         logging.info(f'acquisition optimization time: {opt_time} seconds')
-
-        b = np.argmin(fvals)
-        new_candidate = candidates[b]
-
         logging.info(f'return candidate {new_candidate}')
 
         return new_candidate
