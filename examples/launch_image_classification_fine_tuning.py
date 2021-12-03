@@ -1,6 +1,3 @@
-"""
-Example for how to tune one the jumpstart benchmark
-"""
 import argparse
 import logging
 from pathlib import Path
@@ -30,12 +27,12 @@ if __name__ == '__main__':
     parser.add_argument('--dataset_name', type=str, default='flower')
     parser.add_argument('--experiment_name', type=str, default='comparison')
     parser.add_argument('--search_space', type=str, default='sgd', choices=['adam', 'sgd'])
-
+    parser.add_argument('--acquistion_function_optimization', type=str, default='gd')
     parser.add_argument('--run_local', action='store_true')
     parser.add_argument('--sagemaker_backend', action='store_true')
     parser.add_argument('--scheduler', type=str, default='pbt')
     parser.add_argument('--searcher', type=str, default='bayesopt')
-    parser.add_argument('--lr_schedule', type=str, default='exp')
+    parser.add_argument('--lr_schedule', type=str, default='const')
     parser.add_argument('--population_size', type=int, default=4)
     parser.add_argument('--acquisition_function', type=str, default='lcb')
     parser.add_argument('--instance_type', type=str, default='ml.g4dn.12xlarge')
@@ -104,64 +101,57 @@ if __name__ == '__main__':
         'num_init_random': 2
     }
 
-    if args.scheduler in ['asha-stopping', 'asha-promotion', 'fifo']:
+    for run_id in range(args.num_runs):
 
-        config_space['scheduler_type'] = args.lr_schedule
+        if args.scheduler in ['asha-stopping', 'asha-promotion', 'fifo']:
 
-        if args.lr_schedule == 'exp':
-            config_space['gamma'] = loguniform(1e-4, 1)
+            config_space['scheduler_type'] = args.lr_schedule
 
-        if args.scheduler == 'asha-stopping':
+            if args.lr_schedule == 'exp':
+                config_space['gamma'] = loguniform(1e-4, 1)
 
-            scheduler = HyperbandScheduler(
-                config_space,
-                searcher=searcher,
-                type='stopping',
-                search_options=search_options,
-                max_t=args.max_epoch,
-                grace_period=args.grace_period,
-                reduction_factor=args.reduction_factor,
-                resource_attr=resource_attribute,
-                mode=mode,
-                metric=metric)
+            if args.scheduler == 'asha-stopping':
 
-        elif args.scheduler == 'asha-promotion':
+                scheduler = HyperbandScheduler(
+                    config_space,
+                    searcher=searcher,
+                    type='stopping',
+                    search_options=search_options,
+                    max_t=args.max_epoch,
+                    grace_period=args.grace_period,
+                    reduction_factor=args.reduction_factor,
+                    resource_attr=resource_attribute,
+                    mode=mode,
+                    metric=metric)
 
-            scheduler = HyperbandScheduler(
-                config_space,
-                searcher=searcher,
-                type='promotion',
-                search_options=search_options,
-                max_t=args.max_epoch,
-                grace_period=args.grace_period,
-                reduction_factor=args.reduction_factor,
-                resource_attr=resource_attribute,
-                mode=mode,
-                metric=metric)
+            elif args.scheduler == 'asha-promotion':
 
-        elif args.scheduler == 'fifo':
-            scheduler = FIFOScheduler(
-                config_space,
-                searcher=searcher,
-                mode=mode,
-                metric=metric)
+                scheduler = HyperbandScheduler(
+                    config_space,
+                    searcher=searcher,
+                    type='promotion',
+                    search_options=search_options,
+                    max_t=args.max_epoch,
+                    grace_period=args.grace_period,
+                    reduction_factor=args.reduction_factor,
+                    resource_attr=resource_attribute,
+                    mode=mode,
+                    metric=metric)
 
-    elif args.scheduler in ['pbt', 'bore-pbt', 'bo-pbt', 'blr-pbt']:
-        config_space['scheduler_type'] = 'none'
+            elif args.scheduler == 'fifo':
+                scheduler = FIFOScheduler(
+                    config_space,
+                    searcher=searcher,
+                    mode=mode,
+                    metric=metric)
 
-        population_size = args.population_size
+        elif args.scheduler in ['pbt', 'bore-pbt', 'bo-pbt', 'blr-pbt']:
+            config_space['scheduler_type'] = 'none'
 
-        if args.scheduler == 'pbt':
-            scheduler = PopulationBasedTraining(config_space=config_space,
-                                                metric=metric,
-                                                resource_attr=resource_attribute,
-                                                population_size=population_size,
-                                                mode=mode,
-                                                max_t=args.max_epoch,
-                                                perturbation_interval=1)
+            population_size = args.population_size
 
-        elif args.scheduler == 'bore-pbt':
-            scheduler = BorePopulationBasedTraining(config_space=config_space,
+            if args.scheduler == 'pbt':
+                scheduler = PopulationBasedTraining(config_space=config_space,
                                                     metric=metric,
                                                     resource_attr=resource_attribute,
                                                     population_size=population_size,
@@ -169,32 +159,40 @@ if __name__ == '__main__':
                                                     max_t=args.max_epoch,
                                                     perturbation_interval=1)
 
-        elif args.scheduler == 'bo-pbt':
-            scheduler = ContextualBOPopulationBasedTraining(config_space=config_space,
-                                                            metric=metric,
-                                                            resource_attr=resource_attribute,
-                                                            population_size=population_size,
-                                                            mode=mode,
-                                                            max_t=args.max_epoch,
-                                                            acquisition_function=args.acquisition_function,
-                                                            perturbation_interval=1,
-                                                            do_exploit=not args.skip_exploit,
-                                                            num_opt_rounds=args.num_opt_rounds,
-                                                            add_time_step_to_context=args.add_time_step_to_context)
-        elif args.scheduler == 'blr-pbt':
-            scheduler = ContextualBLRBOPopulationBasedTraining(config_space=config_space,
-                                                               metric=metric,
-                                                               resource_attr=resource_attribute,
-                                                               population_size=population_size,
-                                                               mode=mode,
-                                                               max_t=args.max_epoch,
-                                                               acquisition_function=args.acquisition_function,
-                                                               perturbation_interval=1,
-                                                               do_exploit=not args.skip_exploit,
-                                                               num_opt_rounds=args.num_opt_rounds,
-                                                               add_time_step_to_context=args.add_time_step_to_context)
+            elif args.scheduler == 'bore-pbt':
+                scheduler = BorePopulationBasedTraining(config_space=config_space,
+                                                        metric=metric,
+                                                        resource_attr=resource_attribute,
+                                                        population_size=population_size,
+                                                        mode=mode,
+                                                        max_t=args.max_epoch,
+                                                        perturbation_interval=1)
 
-    for run_id in range(args.num_runs):
+            elif args.scheduler == 'bo-pbt':
+                scheduler = ContextualBOPopulationBasedTraining(config_space=config_space,
+                                                                metric=metric,
+                                                                resource_attr=resource_attribute,
+                                                                population_size=population_size,
+                                                                mode=mode,
+                                                                max_t=args.max_epoch,
+                                                                acquisition_function=args.acquisition_function,
+                                                                perturbation_interval=1,
+                                                                acquistion_function_optimization=args.acquistion_function_optimization,
+                                                                do_exploit=not args.skip_exploit,
+                                                                num_opt_rounds=args.num_opt_rounds,
+                                                                add_time_step_to_context=args.add_time_step_to_context)
+            elif args.scheduler == 'blr-pbt':
+                scheduler = ContextualBLRBOPopulationBasedTraining(config_space=config_space,
+                                                                   metric=metric,
+                                                                   resource_attr=resource_attribute,
+                                                                   population_size=population_size,
+                                                                   mode=mode,
+                                                                   max_t=args.max_epoch,
+                                                                   acquisition_function=args.acquisition_function,
+                                                                   perturbation_interval=1,
+                                                                   do_exploit=not args.skip_exploit,
+                                                                   num_opt_rounds=args.num_opt_rounds,
+                                                                   add_time_step_to_context=args.add_time_step_to_context)
 
         local_tuner = Tuner(
             backend=backend,
