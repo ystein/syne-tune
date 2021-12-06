@@ -101,7 +101,7 @@ def convert_dataset(dataset_path: Path, max_rows: int = None):
     # (n_hps, n_seeds, n_epochs)
     # todo utilize expand dim instead of reshape
     epochs = np.repeat(np.arange(1, 101).reshape(1, -1), n_hps * n_seeds, axis=0).reshape(n_hps, n_seeds, -1)
-    runtime_per_epoch = (100 / epochs) * runtime.reshape((n_hps, n_seeds, 1))
+    runtime_per_epoch = (epochs / 100) * runtime.reshape((n_hps, n_seeds, 1))
     
     save_objective_values_helper('runtime', runtime_per_epoch)
 
