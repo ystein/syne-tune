@@ -198,7 +198,7 @@ class ContextualBOPopulationBasedTraining(ModelBasedPopulationBasedTraining):
                 candidates.append(cand)
                 fvals.append(fval)
             print(f'mean acq vals {np.mean(fvals)} std acq vals {np.std(fvals)}')
-            print('first candidate: ', candidates[b])
+            print('first candidate: ', candidates[0])
             b = np.argmin(fvals)
             new_candidate = candidates[b]
 
