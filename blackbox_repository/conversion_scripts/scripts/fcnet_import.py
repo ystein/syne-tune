@@ -21,6 +21,27 @@ from blackbox_repository.conversion_scripts.utils import repository_path
 from syne_tune.util import catchtime
 
 
+BLACKBOX_NAME = 'fcnet'
+
+CONFIG_KEYS = ('hp_activation_fn_1',
+               'hp_activation_fn_2',
+               'hp_batch_size',
+               'hp_dropout_1',
+               'hp_dropout_2',
+               'hp_init_lr',
+               'hp_lr_schedule',
+               'hp_n_units_1',
+               'hp_n_units_2')
+
+METRIC_VALID_ERROR = 'metric_valid_loss'
+
+# This is time required for the given epoch, not time elapsed
+# since start of training
+METRIC_TIME_THIS_RESOURCE = 'metric_runtime'
+
+RESOURCE_ATTR = 'hp_epoch'
+
+
 def convert_dataset(dataset_path: Path, max_rows: int = None):
     data = h5py.File(dataset_path, "r")
     keys = data.keys()
@@ -104,7 +125,7 @@ def convert_dataset(dataset_path: Path, max_rows: int = None):
         'hp_n_units_2': sp.choice([16, 32, 64, 128, 256, 512]),
     }
     fidelity_space = {
-        "hp_epoch": sp.randint(lower=1, upper=100)
+        RESOURCE_ATTR: sp.randint(lower=1, upper=100)
     }
 
     return BlackboxTabular(
@@ -118,7 +139,7 @@ def convert_dataset(dataset_path: Path, max_rows: int = None):
 
 
 def generate_fcnet(s3_root: Optional[str] = None):
-    blackbox_name = "fcnet"
+
     fcnet_file = repository_path / "fcnet_tabular_benchmarks.tar.gz"
     if not (repository_path / "fcnet_tabular_benchmarks.tar.gz").exists():
         src = "http://ml4aad.org/wp-content/uploads/2019/01/fcnet_tabular_benchmarks.tar.gz"
@@ -136,18 +157,18 @@ def generate_fcnet(s3_root: Optional[str] = None):
             bb_dict[dataset] = convert_dataset(dataset_path=dataset_path)
 
     with catchtime("saving to disk"):
-        serialize(bb_dict=bb_dict, path=repository_path / blackbox_name)
+        serialize(bb_dict=bb_dict, path=repository_path / BLACKBOX_NAME)
 
     with catchtime("uploading to s3"):
         from blackbox_repository.conversion_scripts.utils import upload
-        upload(blackbox_name, s3_root=s3_root)
+        upload(BLACKBOX_NAME, s3_root=s3_root)
 
 
 def plot_learning_curves():
     import matplotlib.pyplot as plt
     from blackbox_repository import load
     # plot one learning-curve for sanity-check
-    bb_dict = load("fcnet")
+    bb_dict = load(BLACKBOX_NAME)
 
     b = bb_dict['naval_propulsion']
     configuration = {k: v.sample() for k, v in b.configuration_space.items()}
@@ -155,7 +176,7 @@ def plot_learning_curves():
     errors = []
     for i in range(1, 101):
         res = b.objective_function(configuration=configuration, fidelity={'epochs': i})
-        errors.append(res['metric_valid_loss'])
+        errors.append(res[METRIC_VALID_ERROR])
     plt.plot(errors)
 
 
