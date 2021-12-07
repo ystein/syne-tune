@@ -12,6 +12,7 @@ from syne_tune.optimizer.schedulers.pbt import PopulationBasedTraining
 from syne_tune.optimizer.schedulers.bore_pbt import BorePopulationBasedTraining
 from syne_tune.optimizer.schedulers.contextual_bo_pbt import ContextualBOPopulationBasedTraining
 from syne_tune.optimizer.schedulers.contextual_blr_bo_pbt import ContextualBLRBOPopulationBasedTraining
+from syne_tune.optimizer.schedulers.botorch_pbt import BOTorchPopulationBasedTraining
 
 if __name__ == '__main__':
     logging.getLogger().setLevel(logging.INFO)
@@ -145,7 +146,7 @@ if __name__ == '__main__':
                     mode=mode,
                     metric=metric)
 
-        elif args.scheduler in ['pbt', 'bore-pbt', 'bo-pbt', 'blr-pbt']:
+        elif args.scheduler in ['pbt', 'bore-pbt', 'bo-pbt', 'blr-pbt', 'botorch-pbt']:
             config_space['scheduler_type'] = 'none'
 
             population_size = args.population_size
@@ -183,6 +184,18 @@ if __name__ == '__main__':
                                                                 add_time_step_to_context=args.add_time_step_to_context)
             elif args.scheduler == 'blr-pbt':
                 scheduler = ContextualBLRBOPopulationBasedTraining(config_space=config_space,
+                                                                   metric=metric,
+                                                                   resource_attr=resource_attribute,
+                                                                   population_size=population_size,
+                                                                   mode=mode,
+                                                                   max_t=args.max_epoch,
+                                                                   acquisition_function=args.acquisition_function,
+                                                                   perturbation_interval=1,
+                                                                   do_exploit=not args.skip_exploit,
+                                                                   num_opt_rounds=args.num_opt_rounds,
+                                                                   add_time_step_to_context=args.add_time_step_to_context)
+            elif args.scheduler == 'botorch-pbt':
+                scheduler = BOTorchPopulationBasedTraining(config_space=config_space,
                                                                    metric=metric,
                                                                    resource_attr=resource_attribute,
                                                                    population_size=population_size,

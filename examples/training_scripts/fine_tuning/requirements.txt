@@ -1,10 +1,10 @@
+pip
 requests
 filelock
 boto3
 torch
 torchvision
 xgboost  # for BORE
-
-transformers
+git+https://github.com/pytorch/botorch.gittransformers
 sklearn
 datasets
