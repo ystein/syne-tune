@@ -5,6 +5,6 @@ boto3
 torch
 torchvision
 xgboost  # for BORE
-git+https://github.com/pytorch/botorch.gittransformers
+botorch
 sklearn
 datasets
