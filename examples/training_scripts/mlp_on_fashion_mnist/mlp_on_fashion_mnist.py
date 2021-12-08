@@ -45,7 +45,7 @@ _config_space = {
     'dropout_1': uniform(0, 0.99),
     'dropout_2': uniform(0, 0.99),
     'learning_rate': loguniform(1e-6, 1),
-    'wd': loguniform(1e-8, 1)
+    'weight_decay': loguniform(1e-8, 1)
 }
 
 
@@ -95,7 +95,7 @@ def model_and_optimizer(config):
     dropout_1 = config["dropout_1"]
     dropout_2 = config["dropout_2"]
     learning_rate = config["learning_rate"]
-    wd = config["wd"]
+    weight_decay = config["weight_decay"]
     # Define the network architecture
     comp_list = [
         nn.Linear(28 * 28, n_units_1),
@@ -107,7 +107,7 @@ def model_and_optimizer(config):
         nn.Linear(n_units_2, 10)]
     model = nn.Sequential(*comp_list)
     optimizer = torch.optim.Adam(
-        model.parameters(), lr=learning_rate, weight_decay=wd)
+        model.parameters(), lr=learning_rate, weight_decay=weight_decay)
     criterion = nn.CrossEntropyLoss()
     return {
         'model': model,
@@ -144,8 +144,6 @@ def validate_model(config, state, valid_loader):
 
 
 def objective(config):
-    trial_id = config.get('trial_id')
-    debug_log = trial_id is not None
     report_current_best = parse_bool(config['report_current_best'])
 
     data_train = download_data(config)
@@ -179,9 +177,6 @@ def objective(config):
                   ELAPSED_TIME_ATTR: elapsed_time})
         # Write checkpoint (optional)
         checkpoint_model_at_rung_level(config, save_model_fn, epoch)
-        if debug_log:
-            print("Trial {}: epoch = {}, accuracy = {:.3f}, elapsed_time = {:.2f}".format(
-                trial_id, epoch, objective, elapsed_time), flush=True)
 
 
 if __name__ == '__main__':
@@ -202,7 +197,6 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', type=int, required=True)
     parser.add_argument('--dataset_path', type=str, required=True)
     parser.add_argument('--report_current_best', type=str, default='False')
-    parser.add_argument('--trial_id', type=str)
     add_to_argparse(parser, _config_space)
     add_checkpointing_to_argparse(parser)
 
