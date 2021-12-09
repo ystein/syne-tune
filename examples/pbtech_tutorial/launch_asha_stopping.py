@@ -60,10 +60,10 @@ if __name__ == '__main__':
     scheduler = HyperbandScheduler(
         config_space,
         searcher=searcher,
-        max_t=max_resource_level,
         grace_period=1,
         reduction_factor=3,
         resource_attr=resource_attr,
+        max_resource_attr=max_resource_attr,
         mode=mode,
         metric=metric,
         random_seed=random_seed,
