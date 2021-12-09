@@ -9,7 +9,7 @@ if __name__ == '__main__':
 
     random_seed = 31415927
     n_workers = 4
-    max_wallclock_time = 3600  # Run for 1 hour
+    max_wallclock_time = 4 * 3600  # Run for 4 hours
     max_resource_level = 81  # Maximum number of training epochs
 
     # Here, we specify the training script we want to tune
