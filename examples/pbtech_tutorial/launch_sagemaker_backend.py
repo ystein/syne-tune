@@ -1,8 +1,11 @@
 import logging
 from pathlib import Path
 
+from sagemaker.pytorch import PyTorch
+
 from syne_tune.search_space import randint, uniform, loguniform
-from syne_tune.backend.local_backend import LocalBackend
+from syne_tune.backend.sagemaker_backend.sagemaker_backend import SagemakerBackend
+from syne_tune.backend.sagemaker_backend.sagemaker_utils import get_execution_role
 from syne_tune.optimizer.schedulers.hyperband import HyperbandScheduler
 from syne_tune.tuner import Tuner
 from syne_tune.stopping_criterion import StoppingCriterion
@@ -12,7 +15,7 @@ if __name__ == '__main__':
     logging.getLogger().setLevel(logging.INFO)
 
     random_seed = 31415927
-    n_workers = 4
+    n_workers = 8
     max_wallclock_time = 3 * 3600  # Run for 3 hours
     max_resource_level = 81  # Maximum number of training epochs
 
@@ -20,7 +23,7 @@ if __name__ == '__main__':
     # - `mode` and `metric` must match what is reported in the training script
     # - Metrics need to be reported after each epoch, `resource_attr` must match
     #   what is reported in the training script
-    entry_point = str(Path(__file__).parent / "traincode_report_withcheckpointing.py")
+    entry_point = str(Path(__file__).parent / "traincode_report_eachepoch.py")
     mode = 'max'
     metric = 'accuracy'
     resource_attr = 'epoch'
@@ -45,23 +48,45 @@ if __name__ == '__main__':
         'dataset_path': './',
     })
 
-    # Local back-end: Responsible for scheduling trials
-    # The local back-end runs trials as sub-processes on a single instance
-    backend = LocalBackend(entry_point=entry_point)
+    # SageMaker back-end: Responsible for scheduling trials
+    # Each trial is run as a separate SageMaker training job. This is useful for
+    # expensive workloads, where all resources of an instance (or several ones)
+    # are used for training. On the other hand, training job start-up overhead
+    # is incurred for every trial.
+    backend = SagemakerBackend(
+        # we tune a PyTorch Framework from Sagemaker
+        sm_estimator=PyTorch(
+            entry_point=entry_point,
+            instance_type="ml.m4.xlarge",
+            instance_count=1,
+            role=get_execution_role(),
+            max_run=1.05 * max_wallclock_time,
+            framework_version='1.7.1',
+            py_version='py3',
+        ),
+        metrics_names=[metric],
+    )
 
     # Scheduler:
     # 'HyperbandScheduler' runs asynchronous successive halving, or Hyperband.
     # It starts a trial whenever a worker is free.
-    # The 'promotion' variant pauses each trial at certain resource levels
-    # (called rungs). Trials which outperform others at the same rung, are
-    # promoted later on, to run to the next higher rung.
-    # We configure this scheduler with random search: configurations for new
-    # trials are drawn at random
-    searcher = 'random'
+    # The 'stopping' variant stops trials which underperform compared to others
+    # at certain resource levels (called rungs).
+    # We configure this scheduler with Bayesian optimization: configurations
+    # for new trials are selected by optimizing an acquisition function based
+    # on a Gaussian process surrogate model. The latter models learning curves
+    # f(x, r), x the configuration, r the number of epochs done, not just final
+    # values f(x).
+    searcher = 'bayesopt'
+    search_options = {
+        'num_init_random': n_workers + 2,
+        'gp_resource_kernel': 'exp-decay-sum',  # GP surrogate model
+    }
     scheduler = HyperbandScheduler(
         config_space,
-        type='promotion',
+        type='stopping',
         searcher=searcher,
+        search_options=search_options,
         grace_period=1,
         reduction_factor=3,
         resource_attr=resource_attr,

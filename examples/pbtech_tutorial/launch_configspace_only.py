@@ -5,7 +5,7 @@ from syne_tune.search_space import randint, uniform, loguniform
 
 
 if __name__ == '__main__':
-    logging.getLogger().setLevel(logging.DEBUG)
+    logging.getLogger().setLevel(logging.INFO)
 
     random_seed = 31415927
     n_workers = 4

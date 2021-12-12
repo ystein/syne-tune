@@ -9,7 +9,7 @@ from syne_tune.stopping_criterion import StoppingCriterion
 
 
 if __name__ == '__main__':
-    logging.getLogger().setLevel(logging.DEBUG)
+    logging.getLogger().setLevel(logging.INFO)
 
     random_seed = 31415927
     n_workers = 4
@@ -20,7 +20,7 @@ if __name__ == '__main__':
     # - `mode` and `metric` must match what is reported in the training script
     # - Metrics need to be reported after each epoch, `resource_attr` must match
     #   what is reported in the training script
-    entry_point = str(Path(__file__).parent / "traincode_report_eachepoch.py")
+    entry_point = str(Path(__file__).parent / "traincode_report_withcheckpointing.py")
     mode = 'max'
     metric = 'accuracy'
     resource_attr = 'epoch'

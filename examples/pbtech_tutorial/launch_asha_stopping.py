@@ -9,7 +9,7 @@ from syne_tune.stopping_criterion import StoppingCriterion
 
 
 if __name__ == '__main__':
-    logging.getLogger().setLevel(logging.DEBUG)
+    logging.getLogger().setLevel(logging.INFO)
 
     random_seed = 31415927
     n_workers = 4
