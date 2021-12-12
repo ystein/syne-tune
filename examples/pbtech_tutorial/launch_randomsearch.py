@@ -37,6 +37,7 @@ if __name__ == '__main__':
     }
 
     # Additional fixed parameters
+    # [1]
     config_space.update({
         max_resource_attr: max_resource_level,
         'dataset_path': './',
@@ -44,6 +45,7 @@ if __name__ == '__main__':
 
     # Local back-end: Responsible for scheduling trials
     # The local back-end runs trials as sub-processes on a single instance
+    # [2]
     backend = LocalBackend(entry_point=entry_point)
 
     # Scheduler:
@@ -51,6 +53,7 @@ if __name__ == '__main__':
     # not stop or pause trials, they always run to the end.
     # We configure this scheduler with random search: configurations for new
     # trials are drawn at random
+    # [3]
     searcher = 'random'
     scheduler = FIFOScheduler(
         config_space,
@@ -61,6 +64,7 @@ if __name__ == '__main__':
     )
 
     # The experiment is stopped after `max_wallclock_time` seconds
+    # [4]
     stop_criterion = StoppingCriterion(max_wallclock_time=max_wallclock_time)
 
     # Everything comes together in the tuner

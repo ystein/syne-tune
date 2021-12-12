@@ -52,6 +52,7 @@ if __name__ == '__main__':
     # We configure this scheduler with Bayesian optimization: configurations
     # for new trials are selected by optimizing an acquisition function based
     # on a Gaussian process surrogate model
+    # [1]
     searcher = 'bayesopt'
     search_options = {'num_init_random': n_workers + 2}
     scheduler = FIFOScheduler(

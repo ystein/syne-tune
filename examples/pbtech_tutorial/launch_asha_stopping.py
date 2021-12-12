@@ -20,6 +20,7 @@ if __name__ == '__main__':
     # - `mode` and `metric` must match what is reported in the training script
     # - Metrics need to be reported after each epoch, `resource_attr` must match
     #   what is reported in the training script
+    # [1]
     entry_point = str(Path(__file__).parent / "traincode_report_eachepoch.py")
     mode = 'max'
     metric = 'accuracy'
@@ -56,12 +57,13 @@ if __name__ == '__main__':
     # at certain resource levels (called rungs).
     # We configure this scheduler with random search: configurations for new
     # trials are drawn at random
+    # [2]
     searcher = 'random'
     scheduler = HyperbandScheduler(
         config_space,
         type='stopping',
         searcher=searcher,
-        grace_period=1,
+        grace_period=1,  # [3]
         reduction_factor=3,
         resource_attr=resource_attr,
         max_resource_attr=max_resource_attr,

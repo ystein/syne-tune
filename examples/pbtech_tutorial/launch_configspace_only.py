@@ -7,6 +7,7 @@ from syne_tune.search_space import randint, uniform, loguniform
 if __name__ == '__main__':
     logging.getLogger().setLevel(logging.INFO)
 
+    # [1]
     random_seed = 31415927
     n_workers = 4
     max_wallclock_time = 3 * 3600  # Run for 3 hours
@@ -14,6 +15,7 @@ if __name__ == '__main__':
 
     # Here, we specify the training script we want to tune
     # - `mode` and `metric` must match what is reported in the training script
+    # [2]
     entry_point = str(Path(__file__).parent / "traincode_report_end.py")
     mode = 'max'
     metric = 'accuracy'
@@ -22,6 +24,7 @@ if __name__ == '__main__':
     # Search space (or configuration space)
     # For each tunable parameter, need to define type, range, and encoding
     # (linear, logarithmic)
+    # [3]
     config_space = {
         'n_units_1': randint(4, 1024),
         'n_units_2': randint(4, 1024),

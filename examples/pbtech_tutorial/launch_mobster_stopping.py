@@ -59,6 +59,7 @@ if __name__ == '__main__':
     # on a Gaussian process surrogate model. The latter models learning curves
     # f(x, r), x the configuration, r the number of epochs done, not just final
     # values f(x).
+    # [1]
     searcher = 'bayesopt'
     search_options = {
         'num_init_random': n_workers + 2,

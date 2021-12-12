@@ -43,6 +43,7 @@ def split_data(config, data_train):
     return train_loader, valid_loader
 
 
+# [3]
 def model_and_optimizer(config):
     n_units_1 = config['n_units_1']
     n_units_2 = config['n_units_2']
@@ -97,6 +98,7 @@ def validate_model(config, state, valid_loader):
     return correct / total  # Validation accuracy
 
 
+# [1]
 def objective(config):
     # Download data
     data_train = download_data(config)
@@ -133,6 +135,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--epochs', type=int, required=True)
     parser.add_argument('--dataset_path', type=str, required=True)
+    # [2]
     # Hyperparameters
     parser.add_argument('--n_units_1', type=int, required=True)
     parser.add_argument('--n_units_2', type=int, required=True)

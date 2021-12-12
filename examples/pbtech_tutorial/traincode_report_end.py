@@ -117,6 +117,7 @@ def objective(config):
         train_model(config, state, train_loader)
 
     # Report validation accuracy to Syne Tune
+    # [1]
     accuracy = validate_model(config, state, valid_loader)
     report(accuracy=accuracy)
 
