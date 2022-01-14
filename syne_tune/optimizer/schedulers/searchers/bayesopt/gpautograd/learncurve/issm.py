@@ -18,6 +18,7 @@ from autograd.scipy.special import logsumexp
 from autograd.scipy.linalg import solve_triangular
 from autograd.tracer import getval
 from numpy.random import RandomState
+from operator import itemgetter
 
 from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.constants \
     import NUMERICAL_JITTER, MIN_POSTERIOR_VARIANCE
@@ -25,6 +26,8 @@ from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.custom_op \
     import cholesky_factorization
 from syne_tune.optimizer.schedulers.searchers.bayesopt.datatypes.tuning_job_state \
     import TuningJobState
+from syne_tune.optimizer.schedulers.searchers.bayesopt.datatypes.common import \
+    FantasizedPendingEvaluation
 from syne_tune.optimizer.schedulers.searchers.bayesopt.datatypes.config_ext \
     import ExtendedConfiguration
 from syne_tune.optimizer.schedulers.utils.simple_profiler \
@@ -33,7 +36,33 @@ from syne_tune.optimizer.schedulers.utils.simple_profiler \
 
 def prepare_data(
         state: TuningJobState, configspace_ext: ExtendedConfiguration,
-        active_metric: str, normalize_targets: bool = False) -> Dict:
+        active_metric: str, normalize_targets: bool = False,
+        do_fantasizing: bool = False) -> Dict:
+    """
+    Prepares data in `state` for further processing. The entries
+    `configs`, `targets` are lists of one entry per trial, they are
+    sorted in decreasing order of number of target values. `features`
+    is the feature matrix corresponding to `configs`.
+    If `normalize_targets` is True, the target values are normalized
+    to mean 0, variance 1 (over all values), and `mean_targets`,
+    `std_targets` is returned.
+
+    If `do_fantasizing` is True, `state.pending_evaluations` is also
+    taken into account. Entries there have to be of type
+    `FantasizedPendingEvaluation`. Also, in terms of their resource
+    levels, they need to be adjacent to observed entries, so there are
+    no gaps. In this case, the entries of the `targets` list are
+    matrices, each column corresponding to a fantasy sample.
+    If targets are normalized, mean and stddev are computed over
+    observed values only.
+
+    :param state: `TuningJobState` with data
+    :param configspace_ext: Extended config space
+    :param active_metric:
+    :param normalize_targets: See above
+    :param do_fantasizing: See above
+    :return: See above
+    """
     # Group w.r.t. configs
     # data maps config_to_tuple(config) -> (config, observed), where
     # observed = [(r_j, y_j)], r_j resource values, y_j reward values. The
@@ -51,8 +80,9 @@ def prepare_data(
         observed = list(sorted(
             ((int(k), v) for k, v in metric_vals.items()),
             key=lambda x: x[0]))
-        config = state.config_for_trial[ev.trial_id]
-        data_lst.append((config, observed))
+        trial_id = ev.trial_id
+        config = state.config_for_trial[trial_id]
+        data_lst.append((config, observed, trial_id))
         targets += [x[1] for x in observed]
     mean = 0.0
     std = 1.0
@@ -60,19 +90,69 @@ def prepare_data(
         std = max(np.std(targets), 1e-9)
         mean = np.mean(targets)
     configs = [x[0] for x in data_lst]
+
     targets = []
-    for config, observed in data_lst:
+    fantasized = dict()
+    num_fantasy_samples = None
+    if do_fantasizing:
+        for ev in state.pending_evaluations:
+            assert isinstance(ev, FantasizedPendingEvaluation)
+            trial_id = ev.trial_id
+            entry = (ev.resource, ev.fantasies[active_metric])
+            sz = entry[1].size
+            if num_fantasy_samples is None:
+                num_fantasy_samples = sz
+            else:
+                assert sz == num_fantasy_samples, \
+                    "Number of fantasy samples must be the same for all " +\
+                    f"pending evaluations (got at least {sz}, {num_fantasy_samples})"
+            if trial_id in fantasized:
+                fantasized[trial_id].append(entry)
+            else:
+                fantasized[trial_id] = [entry]
+
+    trial_ids_done = set()
+    for config, observed, trial_id in data_lst:
         # Observations must be from r_min without any missing
         obs_res = [x[0] for x in observed]
         num_obs = len(observed)
         test = list(range(r_min, r_min + num_obs))
         assert obs_res == test, \
-            f"Config {config} has observations at {obs_res}, but " +\
-            f"we need observations at {test}"
-        targets.append([(x[1] - mean) / std for x in observed])
+            f"trial_id {trial_id} has observations at {obs_res}, but " +\
+            f"we need them at {test}"
+        this_targets = np.array([x[1] for x in observed])
+        if do_fantasizing and trial_id in fantasized:
+            this_fantasized = sorted(fantasized[trial_id], key=itemgetter(0))
+            fanta_res = [x[0] for x in this_fantasized]
+            start = r_min + num_obs
+            test = list(range(start, start + len(this_fantasized)))
+            assert fanta_res == test, \
+                f"trial_id {trial_id} has pending evaluations at {fanta_res}" +\
+                f", but we need them at {test}"
+            this_targets = np.vstack(
+                [this_targets * np.ones((1, num_fantasy_samples))] +
+                [x[1].reshape((1, -1)) for x in this_fantasized])
+            trial_ids_done.add(trial_id)
+        targets.append((this_targets - mean) * (1 / std))
+
+    if do_fantasizing:
+        # There may be trials with pending evals, but no observes ones
+        for trial_id, this_fantasized in fantasized.items():
+            if trial_id not in trial_ids_done:
+                configs.append(state.config_for_trial[trial_id])
+                this_fantasized = sorted(this_fantasized, key=itemgetter(0))
+                fanta_res = [x[0] for x in this_fantasized]
+                test = list(range(r_min, r_min + len(this_fantasized)))
+                assert fanta_res == test, \
+                    f"trial_id {trial_id} has pending evaluations at {fanta_res}" + \
+                    f", but we need them at {test}"
+                this_targets = np.vstack(
+                    [x[1].reshape((1, -1)) for x in this_fantasized])
+                targets.append((this_targets - mean) * (1 / std))
+
     # Sort in decreasing order w.r.t. number of targets
     configs, targets = zip(*sorted(
-        zip(configs, targets), key=lambda x: -len(x[1])))
+        zip(configs, targets), key=lambda x: -x[1].shape[0]))
     features = hp_ranges.to_ndarray_matrix(configs)
     result = {
         'configs': configs,
@@ -84,6 +164,10 @@ def prepare_data(
         result['mean_targets'] = mean
         result['std_targets'] = std
     return result
+
+# TODO:
+# - Support of fantasizing
+# - targets is list of ndarray now!
 
 def issm_likelihood_precomputations(targets: List[tuple], r_min: int) -> Dict:
     """
