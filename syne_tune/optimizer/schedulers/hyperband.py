@@ -502,8 +502,14 @@ class HyperbandScheduler(FIFOScheduler):
             # Register pending evaluation with searcher
             next_milestone = extra_kwargs['milestone']
             resume_from = extra_kwargs['resume_from']
+            # The next observation for which the searcher will be updated,
+            # is at `pending_milestone`
+            if self.searcher_data == 'rungs':
+                pending_milestone = next_milestone
+            else:
+                pending_milestone = resume_from + 1
             self.searcher.register_pending(
-                trial_id=trial_id, milestone=next_milestone)
+                trial_id=trial_id, milestone=pending_milestone)
             if self.searcher.debug_log is not None:
                 logger.info(
                     f"trial_id {trial_id}: Promotion from "
