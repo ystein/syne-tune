@@ -40,21 +40,19 @@ def prepare_data(
         do_fantasizing: bool = False) -> Dict:
     """
     Prepares data in `state` for further processing. The entries
-    `configs`, `targets` are lists of one entry per trial, they are
-    sorted in decreasing order of number of target values. `features`
-    is the feature matrix corresponding to `configs`.
-    If `normalize_targets` is True, the target values are normalized
-    to mean 0, variance 1 (over all values), and `mean_targets`,
-    `std_targets` is returned.
+    `configs`, `targets` of the result dict are lists of one entry per trial,
+    they are sorted in decreasing order of number of target values. `features`
+    is the feature matrix corresponding to `configs`. If `normalize_targets`
+    is True, the target values are normalized to mean 0, variance 1 (over all
+    values), and `mean_targets`, `std_targets` is returned.
 
-    If `do_fantasizing` is True, `state.pending_evaluations` is also
-    taken into account. Entries there have to be of type
-    `FantasizedPendingEvaluation`. Also, in terms of their resource
-    levels, they need to be adjacent to observed entries, so there are
-    no gaps. In this case, the entries of the `targets` list are
-    matrices, each column corresponding to a fantasy sample.
-    If targets are normalized, mean and stddev are computed over
-    observed values only.
+    If `do_fantasizing` is True, `state.pending_evaluations` is also taken into
+    account. Entries there have to be of type `FantasizedPendingEvaluation`.
+    Also, in terms of their resource levels, they need to be adjacent to
+    observed entries, so there are no gaps. In this case, the entries of the
+    `targets` list are matrices, each column corresponding to a fantasy sample.
+    If targets are normalized, mean and stddev are computed over observed
+    values only.
 
     :param state: `TuningJobState` with data
     :param configspace_ext: Extended config space
@@ -73,13 +71,12 @@ def prepare_data(
     hp_ranges = configspace_ext.hp_ranges
     data_lst = []
     targets = []
-
     for ev in state.trials_evaluations:
         metric_vals = ev.metrics[active_metric]
         assert isinstance(metric_vals, dict)
         observed = list(sorted(
             ((int(k), v) for k, v in metric_vals.items()),
-            key=lambda x: x[0]))
+            key=itemgetter(0)))
         trial_id = ev.trial_id
         config = state.config_for_trial[trial_id]
         data_lst.append((config, observed, trial_id))
@@ -105,7 +102,7 @@ def prepare_data(
             else:
                 assert sz == num_fantasy_samples, \
                     "Number of fantasy samples must be the same for all " +\
-                    f"pending evaluations (got at least {sz}, {num_fantasy_samples})"
+                    f"pending evaluations ({sz}, {num_fantasy_samples})"
             if trial_id in fantasized:
                 fantasized[trial_id].append(entry)
             else:
@@ -120,19 +117,22 @@ def prepare_data(
         assert obs_res == test, \
             f"trial_id {trial_id} has observations at {obs_res}, but " +\
             f"we need them at {test}"
-        this_targets = np.array([x[1] for x in observed])
-        if do_fantasizing and trial_id in fantasized:
-            this_fantasized = sorted(fantasized[trial_id], key=itemgetter(0))
-            fanta_res = [x[0] for x in this_fantasized]
-            start = r_min + num_obs
-            test = list(range(start, start + len(this_fantasized)))
-            assert fanta_res == test, \
-                f"trial_id {trial_id} has pending evaluations at {fanta_res}" +\
-                f", but we need them at {test}"
-            this_targets = np.vstack(
-                [this_targets * np.ones((1, num_fantasy_samples))] +
-                [x[1].reshape((1, -1)) for x in this_fantasized])
-            trial_ids_done.add(trial_id)
+        this_targets = np.array([x[1] for x in observed]).reshape((-1, 1))
+        if do_fantasizing:
+            if num_fantasy_samples > 1:
+                this_targets = this_targets * np.ones((1, num_fantasy_samples))
+            if trial_id in fantasized:
+                this_fantasized = sorted(fantasized[trial_id], key=itemgetter(0))
+                fanta_res = [x[0] for x in this_fantasized]
+                start = r_min + num_obs
+                test = list(range(start, start + len(this_fantasized)))
+                assert fanta_res == test, \
+                    f"trial_id {trial_id} has pending evaluations at {fanta_res}" +\
+                    f", but we need them at {test}"
+                this_targets = np.vstack(
+                    [this_targets] +
+                    [x[1].reshape((1, -1)) for x in this_fantasized])
+                trial_ids_done.add(trial_id)
         targets.append((this_targets - mean) * (1 / std))
 
     if do_fantasizing:
@@ -165,11 +165,9 @@ def prepare_data(
         result['std_targets'] = std
     return result
 
-# TODO:
-# - Support of fantasizing
-# - targets is list of ndarray now!
 
-def issm_likelihood_precomputations(targets: List[tuple], r_min: int) -> Dict:
+def issm_likelihood_precomputations(
+        targets: List[np.ndarray], r_min: int) -> Dict:
     """
     Precomputations required by `issm_likelihood_computations`.
 
@@ -177,7 +175,8 @@ def issm_likelihood_precomputations(targets: List[tuple], r_min: int) -> Dict:
     targets `ydims[i]`. For `0 <= j < ydim_max`, `ydim_max = ydims[0] =
     max(ydims)`, `num_configs[j]` is the number of datapoints i for which
     `ydims[i] > j`.
-    `deltay` is a flat vector consisting of `ydim_max` parts, where part j is
+    `deltay` is a flat matrix (rows corresponding to fantasy samples; column
+    vector if no fantasizing) consisting of `ydim_max` parts, where part j is
     of size `num_configs[j]` and contains `y[j] - y[j-1]` for targets of
     those i counted in `num_configs[j]`, the term needed in the recurrence to
     compute `w[j]`.
@@ -190,7 +189,7 @@ def issm_likelihood_precomputations(targets: List[tuple], r_min: int) -> Dict:
     :param r_min: Value of r_min, as returned by `prepare_data`
     :return: See above
     """
-    ydims = [len(y) for y in targets]
+    ydims = [y.shape[0] for y in targets]
     ydim_max = ydims[0]
     num_configs = list(np.sum(
         np.array(ydims).reshape((-1, 1)) > np.arange(ydim_max).reshape((1, -1)),
@@ -199,25 +198,44 @@ def issm_likelihood_precomputations(targets: List[tuple], r_min: int) -> Dict:
     assert num_configs[-1] > 0, num_configs
     total_size = sum(num_configs)
     assert total_size == sum(ydims)
-    deltay = np.zeros(total_size)
-    yprev = np.array([y[-1] for y in targets])
-    off = num_configs[0]
-    deltay[:off] = yprev
+    yprev = np.vstack([y[-1].reshape((1, -1)) for y in targets])
+    deltay_parts = [yprev]
     log_r = []
     for pos, num in enumerate(num_configs[1:], start=1):
-        ycurr = np.array([y[-(pos + 1)] for y in targets[:num]])
-        deltay[off:(off + num)] = ycurr - yprev[:num]
-        off += num
+        ycurr = np.vstack(
+            [y[-(pos + 1)].reshape((1, -1)) for y in targets[:num]])
+        deltay_parts.append(ycurr - yprev[:num, :])
         yprev = ycurr
         logr_curr = [np.log(ydim + r_min - pos) for ydim in ydims[:num]]
         log_r.extend(logr_curr)
-    assert off == total_size
+    deltay = np.vstack(deltay_parts)
+    assert deltay.shape[0] == total_size
     assert len(log_r) == total_size - num_configs[0]
     return {
         'ydims': ydims,
         'num_configs': num_configs,
         'deltay': deltay,
         'logr': np.array(log_r)}
+
+
+def _squared_norm(a):
+    return anp.sum(anp.square(a))
+
+
+def _inner_product(a, b):
+    return anp.sum(anp.multiply(a, b))
+
+
+def _colvec(a):
+    return anp.reshape(a, (-1, 1))
+
+
+def _rowvec(a):
+    return anp.reshape(a, (1, -1))
+
+
+def _flatvec(a):
+    return anp.reshape(a, (-1,))
 
 
 def issm_likelihood_computations(
@@ -236,11 +254,11 @@ def issm_likelihood_computations(
     - gamma: scalar, positive
 
     Results returned are:
-    - c: n-vector [c_i], negative
-    - d: n-vector [d_i], positive
-    - vtv: n-vector [|v_i|^2]
-    - wtv: n-vector [(w_i)^T v_i]
-    - wtw: n-vector [|w_i|^2]
+    - c: n vector [c_i], negative
+    - d: n vector [d_i], positive
+    - vtv: n vector [|v_i|^2]
+    - wtv: (n, F) matrix [(W_i)^T v_i], F number of fantasy samples
+    - wtw: n-vector [|w_i|^2] (only if no fantasizing)
 
     :param precomputed: Output of `issm_likelihood_precomputations`
     :param issm_params: Parameters of ISSM likelihood
@@ -254,8 +272,10 @@ def issm_likelihood_computations(
     num_res = r_max + 1 - r_min
     assert num_all_configs > 0, "targets must not be empty"
     assert num_res > 0, f"r_min = {r_min} must be <= r_max = {r_max}"
-    alphas = anp.reshape(issm_params['alpha'], (-1,))
-    betas = anp.reshape(issm_params['beta'], (-1,))
+    num_fantasy_samples = precomputed['deltay'].shape[1]
+    compute_wtw = num_fantasy_samples == 1
+    alphas = _flatvec(issm_params['alpha'])
+    betas = _flatvec(issm_params['beta'])
     gamma = issm_params['gamma']
     n = getval(alphas.size)
     assert n == num_all_configs, f"alpha.size = {n} != {num_all_configs}"
@@ -299,10 +319,11 @@ def issm_likelihood_computations(
     logr = precomputed['logr']
     off_dely = num_all_configs
     vvec = anp.ones(off_dely)
-    wvec = deltay[:off_dely]  # [y_0]
+    wmat = deltay[:off_dely, :]  # [y_0]
     vtv = anp.ones(off_dely)
-    wtv = wvec.copy()
-    wtw = anp.square(wvec)
+    wtv = wmat.copy()
+    if compute_wtw:
+        wtw = _flatvec(anp.square(wmat))
     # Note: We need the detour via `vtv_lst`, etc, because `autograd` does not
     # support overwriting the content of an `ndarray`. Their role is to collect
     # parts of the final vectors, in reverse ordering
@@ -316,18 +337,19 @@ def issm_likelihood_computations(
             # Size of working vectors is shrinking
             assert vtv.size == num_prev
             # These parts are done: Collect them in the lists
-            vtv_lst.append(vtv[num:])
-            wtv_lst.append(wtv[num:])
-            wtw_lst.append(wtw[num:])
             # All vectors are resized to `num`, dropping the tails
+            vtv_lst.append(vtv[num:])
+            wtv_lst.append(wtv[num:, :])
             vtv = vtv[:num]
-            wtv = wtv[:num]
-            wtw = wtw[:num]
+            wtv = wtv[:num, :]
+            if compute_wtw:
+                wtw_lst.append(wtw[num:])
+                wtw = wtw[:num]
             alphas = alphas[:num]
             alpham1s = alpham1s[:num]
             betas = betas[:num]
             vvec = vvec[:num]
-            wvec = wvec[:num]
+            wmat = wmat[:num, :]
             num_prev = num
         # [a_{j-1}]
         off_logr = off_dely - num_all_configs
@@ -335,18 +357,20 @@ def issm_likelihood_computations(
         avec = alphas * anp.exp(logr_curr * alpham1s + betas)
         evec = avec * gamma + 1  # [e_j]
         vvec = vvec * evec  # [v_j]
-        deltay_curr = deltay[off_dely:(off_dely + num)]
+        deltay_curr = deltay[off_dely:(off_dely + num), :]
         off_dely += num
-        wvec = wvec * evec + deltay_curr + avec  # [w_j]
+        wmat = _colvec(evec) * wmat + deltay_curr + _colvec(avec)  # [w_j]
         vtv = vtv + anp.square(vvec)
-        wtw = wtw + anp.square(wvec)
-        wtv = wtv + wvec * vvec
+        if compute_wtw:
+            wtw = wtw + _flatvec(anp.square(wmat))
+        wtv = wtv + _colvec(vvec) * wmat
     vtv_lst.append(vtv)
     wtv_lst.append(wtv)
-    wtw_lst.append(wtw)
     vtv_all = anp.concatenate(tuple(reversed(vtv_lst)), axis=0)
     wtv_all = anp.concatenate(tuple(reversed(wtv_lst)), axis=0)
-    wtw_all = anp.concatenate(tuple(reversed(wtw_lst)), axis=0)
+    if compute_wtw:
+        wtw_lst.append(wtw)
+        wtw_all = anp.concatenate(tuple(reversed(wtw_lst)), axis=0)
     if profiler is not None:
         profiler.stop('issm_part2')
 
@@ -354,39 +378,21 @@ def issm_likelihood_computations(
     result = {
         'num_data': sum(precomputed['ydims']),
         'vtv': vtv_all,
-        'wtv': wtv_all,
-        'wtw': wtw_all}
+        'wtv': wtv_all}
+    if compute_wtw:
+        result['wtw'] = wtw_all
     if not skip_c_d:
         result['c'] = anp.array(c_lst)
         result['d'] = anp.array(d_lst)
     return result
 
 
-def _squared_norm(a):
-    return anp.sum(anp.square(a))
-
-
-def _inner_product(a, b):
-    return anp.sum(anp.multiply(a, b))
-
-
-def _colvec(a):
-    return anp.reshape(a, (-1, 1))
-
-
-def _rowvec(a):
-    return anp.reshape(a, (1, -1))
-
-
-def _flatvec(a):
-    return anp.reshape(a, (-1,))
-
-
 def posterior_computations(
         features, mean, kernel, issm_likelihood: Dict, noise_variance) -> Dict:
     """
     Computes posterior state (required for predictions) and negative log
-    marginal likelihood.
+    marginal likelihood (returned in `criterion`), The latter is computed only
+    when there is no fantasizing (i.e., if `issm_likelihood` contains `wtw`).
 
     :param features: Input matrix X
     :param mean: Mean function
@@ -410,44 +416,44 @@ def posterior_computations(
     # r vectors
     muhat = _flatvec(mean(features)) - issm_likelihood['c']
     s2muhat = s2vec * muhat  # S^2 mu_hat
-    r2vec = _colvec(issm_likelihood['wtv'] / noise_variance - s2muhat)
-    r3vec = anp.matmul(kernel_mat, r2vec) + _colvec(dvec) * r2vec
-    r4vec = solve_triangular(lfact, r3vec * svec, lower=True)
-    # Prediction vector p
-    svec = _flatvec(svec)
-    r2vec = _flatvec(r2vec)
-    pvec = r2vec - svec * _flatvec(
-        solve_triangular(lfact, r4vec, lower=True, trans='T'))
-    # Negative log marginal likelihood
-    # Part sigma^{-2} |r_1|^2 - (r_2)^T r_3 + |r_4|^2
-    r3vec = _flatvec(r3vec)
-    r4vec = _flatvec(r4vec)
-    # We use: r_1 = w - V mu_hat, sigma^{-2} V^T V = S^2, and
-    # r_2 = sigma^{-2} V^T w - S^2 mu_hat, so that:
-    # sigma^{-2} |r_1|^2
-    # = sigma^{-2} |w|^2 + |S mu_hat|^2 - 2 sigma^{-2} w^T V mu_hat
-    # = sigma^{-2} |w|^2 - |S mu_hat|^2 - 2 * (r_2)^T mu_hat
-    # = sigma^{-2} |w|^2 - mu_hat^T (S^2 mu_hat + 2 r_2)
-    part2 = 0.5 * (anp.sum(issm_likelihood['wtw']) / noise_variance -
-                   _inner_product(muhat, s2muhat + 2.0 * r2vec) -
-                   _inner_product(r2vec, r3vec) + _squared_norm(r4vec))
-    part1 = anp.sum(anp.log(anp.abs(anp.diag(lfact)))) + \
-            0.5 * num_data * anp.log(2 * anp.pi * noise_variance)
-    criterion = part1 + part2
-    return {
+    r2mat = issm_likelihood['wtv'] / noise_variance - _colvec(s2muhat)
+    r3mat = anp.matmul(kernel_mat, r2mat) + _colvec(dvec) * r2mat
+    r4mat = solve_triangular(lfact, r3mat * svec, lower=True)
+    # Prediction matrix P
+    pmat = r2mat - svec * solve_triangular(
+        lfact, r4mat, lower=True, trans='T')
+    result = {
         'features': features,
         'chol_fact': lfact,
         'svec': svec,
-        'pvec': pvec,
-        'criterion': criterion,
+        'pmat': pmat,
         'likelihood': issm_likelihood}
+    if 'wtw' in issm_likelihood:
+        # Negative log marginal likelihood
+        # Part sigma^{-2} |r_1|^2 - (r_2)^T r_3 + |r_4|^2
+        r2vec = _flatvec(r2mat)
+        r3vec = _flatvec(r3mat)
+        r4vec = _flatvec(r4mat)
+        # We use: r_1 = w - V mu_hat, sigma^{-2} V^T V = S^2, and
+        # r_2 = sigma^{-2} V^T w - S^2 mu_hat, so that:
+        # sigma^{-2} |r_1|^2
+        # = sigma^{-2} |w|^2 + |S mu_hat|^2 - 2 sigma^{-2} w^T V mu_hat
+        # = sigma^{-2} |w|^2 - |S mu_hat|^2 - 2 * (r_2)^T mu_hat
+        # = sigma^{-2} |w|^2 - mu_hat^T (S^2 mu_hat + 2 r_2)
+        part2 = 0.5 * (anp.sum(issm_likelihood['wtw']) / noise_variance -
+                       _inner_product(muhat, s2muhat + 2.0 * r2vec) -
+                       _inner_product(r2vec, r3vec) + _squared_norm(r4vec))
+        part1 = anp.sum(anp.log(anp.abs(anp.diag(lfact)))) + \
+                0.5 * num_data * anp.log(2 * anp.pi * noise_variance)
+        result['criterion'] = part1 + part2
+    return result
 
 
 def predict_posterior_marginals(
         poster_state: Dict, mean, kernel, test_features):
     k_tr_te = kernel(poster_state['features'], test_features)
-    posterior_means = _flatvec(anp.matmul(
-        _rowvec(poster_state['pvec']), k_tr_te)) + _flatvec(mean(test_features))
+    posterior_means = anp.matmul(
+        k_tr_te.T, poster_state['pmat']) + _colvec(mean(test_features))
     qmat = solve_triangular(
         poster_state['chol_fact'], anp.multiply(
             _colvec(poster_state['svec']), k_tr_te), lower=True)
@@ -462,13 +468,15 @@ def sample_posterior_marginals(
         random_state: RandomState, num_samples: int = 1):
     post_means, post_vars = predict_posterior_marginals(
         poster_state, mean, kernel, test_features)
+    assert getval(post_means.shape[1]) == 1, \
+        "sample_posterior_marginals cannot be used for posterior state " +\
+        "based on fantasizing"
     n01_mat = random_state.normal(
         size=(getval(post_means.shape[0]), num_samples))
     post_stds = _colvec(anp.sqrt(post_vars))
     return anp.multiply(post_stds, n01_mat) + _colvec(post_means)
 
 
-# TODO!! Use precomputation and `issm_likelihood_computations` !!
 def sample_posterior_joint(
         poster_state: Dict, mean, kernel, feature, targets: List,
         issm_params: Dict, r_min: int, r_max: int, random_state: RandomState,
@@ -505,6 +513,9 @@ def sample_posterior_joint(
     ydim = len(targets)
     t_obs = num_res - ydim
     assert t_obs > 0, f"len(targets) = {ydim} must be < {num_res}"
+    assert getval(poster_state['pmat'].shape[1]) == 1, \
+        "sample_posterior_joint cannot be used for posterior state " +\
+        "based on fantasizing"
     # ISSM parameters
     alpha = issm_params['alpha'][0]
     alpha_m1 = alpha - 1.0
@@ -513,8 +524,8 @@ def sample_posterior_joint(
     # Posterior mean and variance of h for additional config
     post_mean, post_variance = predict_posterior_marginals(
         poster_state, mean, kernel, _rowvec(feature))
-    post_mean = post_mean[0]
-    post_variance = post_variance[0]
+    post_mean = post_mean[0].item()
+    post_variance = post_variance[0].item()
     # Compute [a_t], [gamma^2 a_t^2]
     lrvec = anp.array(
         [np.log(r_max - t) for t in range(num_res - 1)]) * alpha_m1 + beta
@@ -596,7 +607,7 @@ def sample_posterior_joint(
 
 
 def issm_likelihood_slow_computations(
-        targets: List[tuple], issm_params: Dict, r_min: int, r_max: int,
+        targets: List[np.ndarray], issm_params: Dict, r_min: int, r_max: int,
         skip_c_d: bool = False,
         profiler: Optional[SimpleProfiler] = None) -> Dict:
     """
@@ -610,8 +621,9 @@ def issm_likelihood_slow_computations(
     num_res = r_max + 1 - r_min
     assert num_configs > 0, "targets must not be empty"
     assert num_res > 0, f"r_min = {r_min} must be <= r_max = {r_max}"
-    alphas = anp.reshape(issm_params['alpha'], (-1,))
-    betas = anp.reshape(issm_params['beta'], (-1,))
+    compute_wtw = targets[0].shape[1] == 1
+    alphas = _flatvec(issm_params['alpha'])
+    betas = _flatvec(issm_params['beta'])
     gamma = issm_params['gamma']
     n = getval(alphas.shape[0])
     assert n == num_configs, f"alpha.size = {n} != {num_configs}"
@@ -624,11 +636,11 @@ def issm_likelihood_slow_computations(
     wtv_lst = []
     wtw_lst = []
     num_data = 0
-    for i, yvec in enumerate(targets):
+    for i, ymat in enumerate(targets):
         alpha = alphas[i]
         alpha_m1 = alpha - 1.0
         beta = betas[i]
-        ydim = len(yvec)
+        ydim = ymat.shape[0]
         if profiler is not None:
             profiler.start('issm_part1')
         num_data += ydim
@@ -653,14 +665,15 @@ def issm_likelihood_slow_computations(
         if profiler is not None:
             profiler.stop('issm_part1')
             profiler.start('issm_part2')
-        yprev = yvec[-1]  # y_{j-1}
-        vprev = 1.0  # v_{j-1}
-        wprev = yprev  # w_{j-1}
-        vtv = vprev * vprev
-        wtv = wprev * vprev
-        wtw = wprev * wprev
+        yprev = ymat[-1]  # y_{j-1} (vector)
+        vprev = 1.0  # v_{j-1} (scalar)
+        wprev = yprev  # w_{j-1} (vector)
+        vtv = vprev * vprev  # scalar
+        wtv = wprev * vprev  # vector
+        if compute_wtw:
+            wtw = wprev * wprev  # vector, shape (1,)
         for j in range(1, ydim):
-            ycurr = yvec[ydim - j - 1]  # y_j
+            ycurr = ymat[ydim - j - 1]  # y_j (vector)
             # a_{j-1}
             ascal = alpha * anp.exp(np.log(r_obs - j) * alpha_m1 + beta)
             escal = gamma * ascal + 1.0
@@ -668,21 +681,25 @@ def issm_likelihood_slow_computations(
             wcurr = escal * wprev + ycurr - yprev + ascal  # w_j
             vtv = vtv + vcurr * vcurr
             wtv = wtv + wcurr * vcurr
-            wtw = wtw + wcurr * wcurr
             yprev = ycurr
             vprev = vcurr
-            wprev = wcurr
+            if compute_wtw:
+                wtw = wtw + wcurr * wcurr
+                wprev = wcurr
         vtv_lst.append(vtv)
         wtv_lst.append(wtv)
-        wtw_lst.append(wtw)
+        if compute_wtw:
+            assert wtw.shape == (1,)
+            wtw_lst.append(wtw.item())
         if profiler is not None:
             profiler.stop('issm_part2')
     # Compile results
     result = {
         'num_data': num_data,
         'vtv': anp.array(vtv_lst),
-        'wtv': anp.array(wtv_lst),
-        'wtw': anp.array(wtw_lst)}
+        'wtv': anp.array(wtv_lst)}
+    if compute_wtw:
+        result['wtw'] = anp.array(wtw_lst)
     if not skip_c_d:
         result['c'] = anp.array(c_lst)
         result['d'] = anp.array(d_lst)
