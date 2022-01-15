@@ -104,6 +104,9 @@ class MarginalLikelihood(Block):
 
         :param data: Input points (features, configs), targets
         """
+        assert not data['do_fantasizing'], \
+            "data must not be for fantasizing. Call prepare_data with " +\
+            "do_fantasizing=False"
         return self.get_posterior_state(data).neg_log_likelihood()
 
     def param_encoding_pairs(self):

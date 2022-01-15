@@ -121,6 +121,9 @@ class GaussianProcessLearningCurveModel(object):
         :param data: Input points (features, configs), targets. May also have
             to contain precomputed values
         """
+        assert not data['do_fantasizing'], \
+            "data must not be for fantasizing. Call prepare_data with " +\
+            "do_fantasizing=False"
         if self.fit_reset_params:
             self.reset_params()
         if profiler is not None:

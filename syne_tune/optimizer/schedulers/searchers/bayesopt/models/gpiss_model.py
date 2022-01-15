@@ -33,7 +33,7 @@ from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.learncurve.pos
 from syne_tune.optimizer.schedulers.searchers.bayesopt.tuning_algorithms.base_classes \
     import SurrogateModel
 from syne_tune.optimizer.schedulers.searchers.bayesopt.datatypes.common import \
-    ConfigurationFilter
+    ConfigurationFilter, FantasizedPendingEvaluation
 from syne_tune.optimizer.schedulers.searchers.bayesopt.utils.debug_log \
     import DebugLogPrinter
 from syne_tune.optimizer.schedulers.utils.simple_profiler \
@@ -44,9 +44,10 @@ logger = logging.getLogger(__name__)
 
 class GaussProcAdditiveSurrogateModel(BaseSurrogateModel):
     def __init__(
-            self, state: TuningJobState, active_metric: str,
+            self, state: TuningJobState,
             gpmodel: GaussianProcessLearningCurveModel,
-            hp_ranges: HyperparameterRanges,
+            fantasy_samples: List[FantasizedPendingEvaluation],
+            active_metric: str, hp_ranges: HyperparameterRanges,
             means_observed_candidates: np.ndarray,
             filter_observed_data: Optional[ConfigurationFilter] = None,
             normalize_mean: float = 0.0, normalize_std: float = 1.0):
@@ -54,21 +55,23 @@ class GaussProcAdditiveSurrogateModel(BaseSurrogateModel):
         Gaussian Process additive surrogate model, where model parameters are
         fit by marginal likelihood maximization.
 
-        Pending evaluations in `state` are not taken into account here.
-        Note that `state` contains extended configs (x, r), while the GP
-        part of the model is over configs x (it models the function at r_max).
-
         `means_observed_candidates` are what is returned by
         `predict_mean_current_candidates`, after denormalization.
 
+        `fantasy_samples` contains the sampled (normalized) target values for
+        pending configs. Only `active_metric` target values are considered.
+        The target values for a pending config are a flat vector.
+
         :param state: TuningJobSubState
-        :param active_metric: Name of the metric to optimize.
         :param gpmodel: GaussianProcessLearningCurveModel
+        :param fantasy_samples: See above
+        :param active_metric: Name of the metric to optimize.
         :param hp_ranges: HyperparameterRanges for predictions
         :param means_observed_candidates: What is returned by
             `predict_mean_current_candidates`
         :param normalize_mean: Mean used to normalize targets
         :param normalize_std: Stddev used to normalize targets
+
         """
         super().__init__(state, active_metric, filter_observed_data)
         self._gpmodel = gpmodel
@@ -77,6 +80,7 @@ class GaussProcAdditiveSurrogateModel(BaseSurrogateModel):
             means_observed_candidates * normalize_std + normalize_mean
         self.mean = normalize_mean
         self.std = normalize_std
+        self.fantasy_samples = fantasy_samples
 
     def predict(self, inputs: np.ndarray) -> List[Dict[str, np.ndarray]]:
         """
@@ -135,22 +139,29 @@ class GaussProcAdditiveSurrogateModel(BaseSurrogateModel):
 
 class GaussProcAdditiveModelFactory(TransformerModelFactory):
     def __init__(
-            self, active_metric: str,
-            gpmodel: GaussianProcessLearningCurveModel,
+            self, gpmodel: GaussianProcessLearningCurveModel,
+            active_metric: str,
             configspace_ext: ExtendedConfiguration,
+            normalize_targets: bool = False,
             profiler: Optional[SimpleProfiler] = None,
             debug_log: Optional[DebugLogPrinter] = None,
             filter_observed_data: Optional[ConfigurationFilter] = None,
-            normalize_targets: bool = False):
+            no_fantasizing: bool = False):
         """
         Pending evaluations in `state` are not taken into account here.
         Note that `state` contains extended configs (x, r), while the GP
         part of the GP-ISSM is over configs x (it models the function
         at r_max).
 
-        :param active_metric: Name of the metric to optimize.
         :param gpmodel: GaussianProcessLearningCurveModel
+        :param active_metric: Name of the metric to optimize.
         :param configspace_ext: ExtendedConfiguration
+        :param normalize_targets: Normalize observed target values?
+        :param debug_log: DebugLogPrinter (optional)
+        :param filter_observed_data: Filter for observed data before
+            computing incumbent
+        :param no_fantasizing: If True, pending evaluations in the state are
+            simply ignored, fantasizing is not done
 
         """
         self._gpmodel = gpmodel
@@ -163,6 +174,7 @@ class GaussProcAdditiveModelFactory(TransformerModelFactory):
         self._profiler = profiler
         self._filter_observed_data = filter_observed_data
         self.normalize_targets = normalize_targets
+        self._no_fantasizing = no_fantasizing
 
     @property
     def debug_log(self) -> Optional[DebugLogPrinter]:
@@ -186,13 +198,14 @@ class GaussProcAdditiveModelFactory(TransformerModelFactory):
             f"for metric {self.active_metric}"
         if self._debug_log is not None:
             self._debug_log.set_state(state)
-        # Prepare data in format required by GP-ISSM
+
+        # [1] Fit model and compute posterior state, ignoring pending evals
         data = prepare_data(
             state, self._configspace_ext, self.active_metric,
-            normalize_targets=self.normalize_targets)
+            normalize_targets=self.normalize_targets,
+            do_fantasizing=False)
         # Precomputations (optional)
         self._gpmodel.data_precomputations(data)
-
         if not fit_params:
             logger.info("Recomputing posterior state")
             self._gpmodel.recompute_states(data)
@@ -201,13 +214,30 @@ class GaussProcAdditiveModelFactory(TransformerModelFactory):
             self._gpmodel.fit(data, profiler=self._profiler)
         if self._debug_log is not None:
             self._debug_log.set_model_params(self.get_params())
-
         if self.normalize_targets:
             extra_kwargs = {
                 'normalize_mean': data['mean_targets'],
                 'normalize_std': data['std_targets']}
         else:
             extra_kwargs = dict()
+
+        # [2] Fantasizing for pending evaluations (optional)
+        if state.pending_evaluations and not self._no_fantasizing:
+            # Sample fantasy values for pending evaluations
+            state_with_fantasies = self._draw_fantasy_values(state)
+            fantasy_samples = state_with_fantasies.pending_evaluations
+            # Recompute posterior state with fantasy samples
+            data = prepare_data(
+                state_with_fantasies, self._configspace_ext,
+                self.active_metric,
+                normalize_targets=self.normalize_targets,
+                do_fantasizing=True)
+            self._gpmodel.data_precomputations(data)
+            self._gpmodel.recompute_states(data)
+        else:
+            fantasy_samples = []
+
+        # TODO: Also pass fantasy_samples!
         return GaussProcAdditiveSurrogateModel(
             state=state,
             active_metric=self.active_metric,
@@ -235,3 +265,16 @@ class GaussProcAdditiveModelFactory(TransformerModelFactory):
         not.
         """
         return False
+
+    def _draw_fantasy_values(
+            self, state: TuningJobState) -> TuningJobState:
+        """
+        Note: Fantasized target values are not de-normalized, because they
+        are used internally only (see `prepare_data` with
+        `do_fantasizing=True`).
+
+        :param state: State with pending evaluations without fantasies
+        :return: Copy of `state`, where `pending_evaluations` contains
+            fantasized target values
+        """
+        # HIER!!!

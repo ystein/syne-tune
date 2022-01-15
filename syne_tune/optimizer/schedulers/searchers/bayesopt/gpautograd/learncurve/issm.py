@@ -50,9 +50,12 @@ def prepare_data(
     account. Entries there have to be of type `FantasizedPendingEvaluation`.
     Also, in terms of their resource levels, they need to be adjacent to
     observed entries, so there are no gaps. In this case, the entries of the
-    `targets` list are matrices, each column corresponding to a fantasy sample.
-    If targets are normalized, mean and stddev are computed over observed
-    values only.
+    `targets` list are matrices, each column corr´esponding to a fantasy sample.
+
+    Note: If `normalize_targets`, mean and stddev are computed over observed
+    values only. Also, fantasy values in `state.pending_evaluations` are not
+    normalized, because they are assumed to be sampled from the posterior with
+    normalized targets as well.
 
     :param state: `TuningJobState` with data
     :param configspace_ext: Extended config space
@@ -117,7 +120,9 @@ def prepare_data(
         assert obs_res == test, \
             f"trial_id {trial_id} has observations at {obs_res}, but " +\
             f"we need them at {test}"
-        this_targets = np.array([x[1] for x in observed]).reshape((-1, 1))
+        # Note: Only observed targets are normalized, not fantasized ones
+        this_targets = (
+            np.array([x[1] for x in observed]).reshape((-1, 1)) - mean) / std
         if do_fantasizing:
             if num_fantasy_samples > 1:
                 this_targets = this_targets * np.ones((1, num_fantasy_samples))
@@ -133,7 +138,7 @@ def prepare_data(
                     [this_targets] +
                     [x[1].reshape((1, -1)) for x in this_fantasized])
                 trial_ids_done.add(trial_id)
-        targets.append((this_targets - mean) * (1 / std))
+        targets.append(this_targets)
 
     if do_fantasizing:
         # There may be trials with pending evals, but no observes ones
@@ -148,7 +153,7 @@ def prepare_data(
                     f", but we need them at {test}"
                 this_targets = np.vstack(
                     [x[1].reshape((1, -1)) for x in this_fantasized])
-                targets.append((this_targets - mean) * (1 / std))
+                targets.append(this_targets)
 
     # Sort in decreasing order w.r.t. number of targets
     configs, targets = zip(*sorted(
@@ -159,7 +164,8 @@ def prepare_data(
         'features': features,
         'targets': targets,
         'r_min': r_min,
-        'r_max': r_max}
+        'r_max': r_max,
+        'do_fantasizing': do_fantasizing}
     if normalize_targets:
         result['mean_targets'] = mean
         result['std_targets'] = std
@@ -478,7 +484,7 @@ def sample_posterior_marginals(
 
 
 def sample_posterior_joint(
-        poster_state: Dict, mean, kernel, feature, targets: List,
+        poster_state: Dict, mean, kernel, feature, targets: np.ndarray,
         issm_params: Dict, r_min: int, r_max: int, random_state: RandomState,
         num_samples: int = 1) -> Dict:
     """
@@ -510,9 +516,10 @@ def sample_posterior_joint(
     :return: See above
     """
     num_res = r_max + 1 - r_min
-    ydim = len(targets)
+    targets = targets.reshape((-1,))
+    ydim = targets.size
     t_obs = num_res - ydim
-    assert t_obs > 0, f"len(targets) = {ydim} must be < {num_res}"
+    assert t_obs > 0, f"targets.size = {ydim} must be < {num_res}"
     assert getval(poster_state['pmat'].shape[1]) == 1, \
         "sample_posterior_joint cannot be used for posterior state " +\
         "based on fantasizing"
