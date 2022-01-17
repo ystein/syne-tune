@@ -32,6 +32,7 @@ _config_space = {
     'hp_n_units_2': randint(0, 5),
 }
 
+
 def nashpobench_default_params(params=None):
     dont_sleep = str(
         params is not None and params.get('backend') == 'simulated')
