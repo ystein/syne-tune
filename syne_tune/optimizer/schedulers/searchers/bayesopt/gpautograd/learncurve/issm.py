@@ -10,15 +10,18 @@
 # on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
 # express or implied. See the License for the specific language governing
 # permissions and limitations under the License.
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 
 import numpy as np
+import scipy.linalg as spl
 import autograd.numpy as anp
 from autograd.scipy.special import logsumexp
 from autograd.scipy.linalg import solve_triangular
 from autograd.tracer import getval
 from numpy.random import RandomState
 from operator import itemgetter
+from collections import Counter
+
 
 from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.constants \
     import NUMERICAL_JITTER, MIN_POSTERIOR_VARIANCE
@@ -27,71 +30,22 @@ from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.custom_op \
 from syne_tune.optimizer.schedulers.searchers.bayesopt.datatypes.tuning_job_state \
     import TuningJobState
 from syne_tune.optimizer.schedulers.searchers.bayesopt.datatypes.common import \
-    FantasizedPendingEvaluation
+    FantasizedPendingEvaluation, Configuration, TrialEvaluations
 from syne_tune.optimizer.schedulers.searchers.bayesopt.datatypes.config_ext \
     import ExtendedConfiguration
 from syne_tune.optimizer.schedulers.utils.simple_profiler \
     import SimpleProfiler
 
 
-def prepare_data(
-        state: TuningJobState, configspace_ext: ExtendedConfiguration,
-        active_metric: str, normalize_targets: bool = False,
-        do_fantasizing: bool = False) -> Dict:
-    """
-    Prepares data in `state` for further processing. The entries
-    `configs`, `targets` of the result dict are lists of one entry per trial,
-    they are sorted in decreasing order of number of target values. `features`
-    is the feature matrix corresponding to `configs`. If `normalize_targets`
-    is True, the target values are normalized to mean 0, variance 1 (over all
-    values), and `mean_targets`, `std_targets` is returned.
-
-    If `do_fantasizing` is True, `state.pending_evaluations` is also taken into
-    account. Entries there have to be of type `FantasizedPendingEvaluation`.
-    Also, in terms of their resource levels, they need to be adjacent to
-    observed entries, so there are no gaps. In this case, the entries of the
-    `targets` list are matrices, each column corr´esponding to a fantasy sample.
-
-    Note: If `normalize_targets`, mean and stddev are computed over observed
-    values only. Also, fantasy values in `state.pending_evaluations` are not
-    normalized, because they are assumed to be sampled from the posterior with
-    normalized targets as well.
-
-    :param state: `TuningJobState` with data
-    :param configspace_ext: Extended config space
-    :param active_metric:
-    :param normalize_targets: See above
-    :param do_fantasizing: See above
-    :return: See above
-    """
-    # Group w.r.t. configs
-    # data maps config_to_tuple(config) -> (config, observed), where
-    # observed = [(r_j, y_j)], r_j resource values, y_j reward values. The
-    # key is easily hashable, while config may not be.
-    # The lists returned ('configs', 'targets') are sorted in decreasing
-    # order w.r.t. the number of targets.
+def _prepare_data_internal(
+        state: TuningJobState, data_lst: List[Tuple[Configuration, List, str]],
+        configspace_ext: ExtendedConfiguration, active_metric: str,
+        do_fantasizing: bool, mean: float,
+        std: float) -> (List[Configuration], List[np.ndarray]):
     r_min, r_max = configspace_ext.resource_attr_range
-    hp_ranges = configspace_ext.hp_ranges
-    data_lst = []
-    targets = []
-    for ev in state.trials_evaluations:
-        metric_vals = ev.metrics[active_metric]
-        assert isinstance(metric_vals, dict)
-        observed = list(sorted(
-            ((int(k), v) for k, v in metric_vals.items()),
-            key=itemgetter(0)))
-        trial_id = ev.trial_id
-        config = state.config_for_trial[trial_id]
-        data_lst.append((config, observed, trial_id))
-        targets += [x[1] for x in observed]
-    mean = 0.0
-    std = 1.0
-    if normalize_targets:
-        std = max(np.std(targets), 1e-9)
-        mean = np.mean(targets)
     configs = [x[0] for x in data_lst]
-
     targets = []
+
     fantasized = dict()
     num_fantasy_samples = None
     if do_fantasizing:
@@ -155,6 +109,72 @@ def prepare_data(
                     [x[1].reshape((1, -1)) for x in this_fantasized])
                 targets.append(this_targets)
 
+    return configs, targets
+
+
+def _create_tuple(
+        ev: TrialEvaluations, active_metric: str, config_for_trial: Dict):
+    metric_vals = ev.metrics[active_metric]
+    assert isinstance(metric_vals, dict)
+    observed = list(sorted(
+        ((int(k), v) for k, v in metric_vals.items()),
+        key=itemgetter(0)))
+    trial_id = ev.trial_id
+    config = config_for_trial[trial_id]
+    return (config, observed, trial_id)
+
+
+def prepare_data(
+        state: TuningJobState, configspace_ext: ExtendedConfiguration,
+        active_metric: str, normalize_targets: bool = False,
+        do_fantasizing: bool = False) -> Dict:
+    """
+    Prepares data in `state` for further processing. The entries
+    `configs`, `targets` of the result dict are lists of one entry per trial,
+    they are sorted in decreasing order of number of target values. `features`
+    is the feature matrix corresponding to `configs`. If `normalize_targets`
+    is True, the target values are normalized to mean 0, variance 1 (over all
+    values), and `mean_targets`, `std_targets` is returned.
+
+    If `do_fantasizing` is True, `state.pending_evaluations` is also taken into
+    account. Entries there have to be of type `FantasizedPendingEvaluation`.
+    Also, in terms of their resource levels, they need to be adjacent to
+    observed entries, so there are no gaps. In this case, the entries of the
+    `targets` list are matrices, each column corr´esponding to a fantasy sample.
+
+    Note: If `normalize_targets`, mean and stddev are computed over observed
+    values only. Also, fantasy values in `state.pending_evaluations` are not
+    normalized, because they are assumed to be sampled from the posterior with
+    normalized targets as well.
+
+    :param state: `TuningJobState` with data
+    :param configspace_ext: Extended config space
+    :param active_metric:
+    :param normalize_targets: See above
+    :param do_fantasizing: See above
+    :return: See above
+    """
+    r_min, r_max = configspace_ext.resource_attr_range
+    hp_ranges = configspace_ext.hp_ranges
+    data_lst = []
+    targets = []
+    for ev in state.trials_evaluations:
+        tpl = _create_tuple(ev, active_metric, state.config_for_trial)
+        observed = tpl[1]
+        targets += [x[1] for x in observed]
+    mean = 0.0
+    std = 1.0
+    if normalize_targets:
+        std = max(np.std(targets), 1e-9)
+        mean = np.mean(targets)
+
+    configs, targets = _prepare_data_internal(
+        state=state,
+        data_lst=data_lst,
+        configspace_ext=configspace_ext,
+        active_metric=active_metric,
+        do_fantasizing=do_fantasizing,
+        mean=mean, std=std)
     # Sort in decreasing order w.r.t. number of targets
     configs, targets = zip(*sorted(
         zip(configs, targets), key=lambda x: -x[1].shape[0]))
@@ -170,6 +190,86 @@ def prepare_data(
         result['mean_targets'] = mean
         result['std_targets'] = std
     return result
+
+
+def prepare_data_with_pending(
+        state: TuningJobState, configspace_ext: ExtendedConfiguration,
+        active_metric: str, normalize_targets: bool = False) -> (Dict, Dict):
+    """
+    Similar to `prepare_data` with `do_fantasizing=False`, but two dicts are
+    returned, the first for trials without pending evaluations, the second
+    for trials with pending evaluations. The latter dict also contains trials
+    which have pending, but no observed evaluations.
+    The second dict has the additional entry `num_pending`, which lists the
+    number of pending evals for each trial. These evals must be contiguous and
+    adjacent with observed evals, so that the union of observed and pending
+    evals are contiguous (when it comes to resource levels).
+
+    :param state: See `prepare_data`
+    :param configspace_ext: See `prepare_data`
+    :param active_metric: See `prepare_data`
+    :param normalize_targets: See `prepare_data`
+    :return: See above
+
+    """
+    r_min, r_max = configspace_ext.resource_attr_range
+    hp_ranges = configspace_ext.hp_ranges
+    data1_lst = []  # trials without pending evals
+    data2_lst = []  # trials with pending evals
+    num_pending = []
+    num_pending_for_trial = Counter(
+        ev.trial_id for ev in state.pending_evaluations)
+    targets = []
+    for ev in state.trials_evaluations:
+        tpl = _create_tuple(ev, active_metric, state.config_for_trial)
+        _, observed, trial_id = tpl[2]
+        if trial_id not in num_pending_for_trial:
+            data1_lst.append(tpl)
+        else:
+            data2_lst.append(tpl)
+            num_pending.append(num_pending_for_trial[trial_id])
+        targets += [x[1] for x in observed]
+    mean = 0.0
+    std = 1.0
+    if normalize_targets:
+        std = max(np.std(targets), 1e-9)
+        mean = np.mean(targets)
+
+    results = ()
+    with_pending = False
+    for data_lst in (data1_lst, data2_lst):
+        configs, targets = _prepare_data_internal(
+            state=state,
+            data_lst=data_lst,
+            configspace_ext=configspace_ext,
+            active_metric=active_metric,
+            do_fantasizing=False,
+            mean=mean, std=std)
+        # Sort in decreasing order w.r.t. number of targets
+        if not with_pending:
+            configs, targets = zip(*sorted(
+                zip(configs, targets),
+                key=lambda x: -x[1].shape[0]))
+        else:
+            configs, targets, num_pending = zip(*sorted(
+                zip(configs, targets, num_pending),
+                key=lambda x: -x[1].shape[0]))
+        features = hp_ranges.to_ndarray_matrix(configs)
+        result = {
+            'configs': configs,
+            'features': features,
+            'targets': targets,
+            'r_min': r_min,
+            'r_max': r_max,
+            'do_fantasizing': False}
+        if with_pending:
+            result['num_pending'] = num_pending
+        if normalize_targets:
+            result['mean_targets'] = mean
+            result['std_targets'] = std
+        results = results + (result,)
+        with_pending = True
+    return results
 
 
 def issm_likelihood_precomputations(
@@ -224,24 +324,24 @@ def issm_likelihood_precomputations(
         'logr': np.array(log_r)}
 
 
-def _squared_norm(a):
-    return anp.sum(anp.square(a))
+def _squared_norm(a, _np=anp):
+    return _np.sum(_np.square(a))
 
 
-def _inner_product(a, b):
-    return anp.sum(anp.multiply(a, b))
+def _inner_product(a, b, _np=anp):
+    return _np.sum(_np.multiply(a, b))
 
 
-def _colvec(a):
-    return anp.reshape(a, (-1, 1))
+def _colvec(a, _np=anp):
+    return _np.reshape(a, (-1, 1))
 
 
-def _rowvec(a):
-    return anp.reshape(a, (1, -1))
+def _rowvec(a, _np=anp):
+    return _np.reshape(a, (1, -1))
 
 
-def _flatvec(a):
-    return anp.reshape(a, (-1,))
+def _flatvec(a, _np=anp):
+    return _np.reshape(a, (-1,))
 
 
 def issm_likelihood_computations(
@@ -394,7 +494,8 @@ def issm_likelihood_computations(
 
 
 def posterior_computations(
-        features, mean, kernel, issm_likelihood: Dict, noise_variance) -> Dict:
+        features, mean, kernel, issm_likelihood: Dict, noise_variance,
+        with_r2_r4=False) -> Dict:
     """
     Computes posterior state (required for predictions) and negative log
     marginal likelihood (returned in `criterion`), The latter is computed only
@@ -405,6 +506,9 @@ def posterior_computations(
     :param kernel: Kernel function
     :param issm_likelihood: Outcome of `issm_likelihood_computations`
     :param noise_variance: Variance of ISSM innovations
+    :param with_r2_r4: If True, the vectors r_2 and r_4 are returned as
+        `r2vec`, `r4vec`. This is done only if there is no fantasizing. It is
+        needed for incremental updating
     :return: Internal posterior state
 
     """
@@ -431,7 +535,7 @@ def posterior_computations(
     result = {
         'features': features,
         'chol_fact': lfact,
-        'svec': svec,
+        'svec': _flatvec(svec),
         'pmat': pmat,
         'likelihood': issm_likelihood}
     if 'wtw' in issm_likelihood:
@@ -452,6 +556,9 @@ def posterior_computations(
         part1 = anp.sum(anp.log(anp.abs(anp.diag(lfact)))) + \
                 0.5 * num_data * anp.log(2 * anp.pi * noise_variance)
         result['criterion'] = part1 + part2
+        if with_r2_r4:
+            result['r2vec'] = r2vec
+            result['r4vec'] = r4vec
     return result
 
 
@@ -622,7 +729,7 @@ def issm_likelihood_slow_computations(
     require precomputations, but is much slower. Here, results are computed
     one datapoint at a time, instead of en bulk.
 
-    This code is used in unit testing only.
+    This code is used in unit testing, and called from `sample_posterior_joint`.
     """
     num_configs = len(targets)
     num_res = r_max + 1 - r_min
@@ -711,3 +818,124 @@ def issm_likelihood_slow_computations(
         result['c'] = anp.array(c_lst)
         result['d'] = anp.array(d_lst)
     return result
+
+
+def _update_posterior_internal(
+        poster_state: Dict, kernel, feature, d_new, s_new, r2_new) -> Dict:
+    assert 'r2vec' in poster_state and 'r4vec' in poster_state, \
+        "Call posterior_computations with with_r2_r4=True"
+    features = poster_state['features']
+    r2vec = poster_state['r2vec']
+    r4vec = poster_state['r4vec']
+    svec = poster_state['svec']
+    chol_fact = poster_state['chol_fact']
+    # New row of L: [evec * s_new, l_new]
+    feature = _rowvec(feature, _np=np)
+    kvec = _flatvec(kernel(features, feature), _np=np)
+    evec = _flatvec(spl.solve_triangular(
+        chol_fact, _colvec(kvec * svec), lower=True), _np=np)
+    kscal = _flatvec(kernel.diagonal(feature), _np=np)[0]
+    khat_min_esq = kscal + d_new - _squared_norm(evec, _np=np)
+    l_new = np.sqrt(khat_min_esq * np.square(s_new) + 1.0)
+    # New entry of r_4
+    pref = s_new / l_new
+    r4_new = pref * (
+            _inner_product(kvec, r2vec, _np=np) + khat_min_esq * r2_new -
+            _inner_product(evec, r4vec, _np=np))
+    # Update of p
+    p_new = r2_new - pref * r4_new
+    # L^{-T} e
+    ltinv_evec = _flatvec(spl.solve_triangular(
+        chol_fact, _colvec(evec, _np=np), lower=True, trans='T'), _np=np)
+    return {
+        'evec': evec,
+        'ltinv_evec': ltinv_evec,
+        'l_new': l_new,
+        'r4_new': r4_new,
+        'p_new': p_new}
+
+
+def update_posterior_state(
+        poster_state: Dict, kernel, feature, d_new, s_new, r2_new) -> Dict:
+    """
+    Incremental update of posterior state, given data for one additional
+    configuration. The new datapoint gives rise to a new row/column of the
+    Cholesky factor. r2vec and svec are extended by `r2_new`, `s_new`
+    respectively. r4vec and pvec are extended and all entries change. The new
+    datapoint is represented by `feature`, `d_new`, `s_new`, `r2_new`.
+
+    Note: The field `criterion` is not updated, but set to np.nan.
+
+    :param poster_state: Posterior state for data
+    :param kernel: Kernel function
+    :param feature: Features for additional config
+    :param d_new: See above
+    :param s_new: See above
+    :param r2_new: See above
+    :return: Updated posterior state
+    """
+    features = poster_state['features']
+    assert 'r2vec' in poster_state and 'r4vec' in poster_state, \
+        "Call posterior_computations with with_r2_r4=True"
+    r2vec = poster_state['r2vec']
+    r4vec = poster_state['r4vec']
+    svec = poster_state['svec']
+    pvec = poster_state['pmat']
+    assert pvec.shape[1] == 1, "Cannot update fantasizing posterior_state"
+    pvec = _flatvec(pvec, _np=np)
+    chol_fact = poster_state['chol_fact']
+    feature = _rowvec(feature, _np=np)
+    # Update computations:
+    result = _update_posterior_internal(
+        poster_state, kernel, feature, d_new, s_new, r2_new)
+    # Put together new state variables
+    # Note: Criterion not updated, but invalidated
+    new_poster_state = {
+        'criterion': np.nan,
+        'features': np.concatenate([features, feature], axis=0),
+        'svec': np.concatenate([svec, np.array([s_new])]),
+        'r2vec': np.concatenate([r2vec, np.array([r2_new])]),
+    }
+    evec = result['evec']
+    ltinv_evec = result['ltinv_evec']
+    l_new = result['l_new']
+    r4_new = result['r4_new']
+    p_new = result['p_new']
+    new_poster_state['r4vec'] = np.concatenate(
+        [r4vec + evec * r2_new, np.array([r4_new])])
+    new_poster_state['pmat'] = _colvec(np.concatenate(
+        [pvec - (ltinv_evec * svec) * p_new, np.array([p_new])]), _np=np)
+    lvec = _rowvec(evec, _np=np) * s_new
+    zerovec = _colvec(np.zeros_like(lvec), _np=np)
+    new_poster_state['chol_fact'] = np.concatenate([
+        np.concatenate([chol_fact, lvec], axis=0),
+        np.concatenate([zerovec, np.array([l_new])], axis=0)], axis=1)
+    return new_poster_state
+
+
+def update_posterior_pvec(
+        poster_state: Dict, kernel, feature, d_new, s_new,
+        r2_new) -> np.ndarray:
+    """
+    Part of `update_posterior_state`, just returns the new p vector.
+
+    :param poster_state: See `update_posterior_state`
+    :param kernel:  See `update_posterior_state`
+    :param feature:  See `update_posterior_state`
+    :param d_new:  See `update_posterior_state`
+    :param s_new:  See `update_posterior_state`
+    :param r2_new:  See `update_posterior_state`
+    :return: New p vector, as flat vector
+
+    """
+    # Update computations:
+    result = _update_posterior_internal(
+        poster_state, kernel, feature, d_new, s_new, r2_new)
+    svec = poster_state['svec']
+    pvec = poster_state['pmat']
+    assert pvec.shape[1] == 1, "Cannot update fantasizing posterior_state"
+    pvec = _flatvec(pvec, _np=np)
+    ltinv_evec = result['ltinv_evec']
+    p_new = result['p_new']
+    return np.concatenate(
+        [pvec - (ltinv_evec * svec) * p_new, np.array([p_new])])
