@@ -181,6 +181,8 @@ def parse_args(allow_lists_as_values=True):
     parser.add_argument('--searcher_data', type=str,
                         help='Parameter of HyperbandScheduler',
                         **allow_list)
+    parser.add_argument('--register_pending_myopic', action='store_true',
+                        help='Parameter of HyperbandScheduler')
     parser.add_argument('--not_normalize_targets', action='store_true',
                         help='Do not normalize targets to mean 0, variance 1'
                              ' before fitting surrogate model')
@@ -398,6 +400,7 @@ def make_searcher_and_scheduler(params) -> (dict, dict):
                     [int(x) for x in rung_levels.split()])
             scheduler_args = scheduler_args + (
                 ('searcher_data', str),
+                ('register_pending_myopic', bool),
                 ('rung_system_per_bracket', bool))
     for name, tp in scheduler_args:
         _enter_not_none(
