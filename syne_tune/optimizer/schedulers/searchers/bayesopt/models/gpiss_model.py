@@ -298,9 +298,28 @@ class GaussProcAdditiveModelFactory(TransformerModelFactory):
             configspace_ext=self._configspace_ext,
             active_metric=self.active_metric,
             normalize_targets=self.normalize_targets)
+        if not data_nopending['configs']:
+            # It can happen that all trials with observed data also have
+            # pending evaluations. This is possible only at the very start,
+            # as long as no trial has been stopped or paused.
+            # In this case, we find the trial with the
+            # largest number of observed targets and remove its pending
+            # evaluations (it is not possible to compute a posterior state
+            # without any data, so handling this case correctly would be
+            # very tedious).
+            assert data_pending['configs'], \
+                "State {state} is empty, cannot do posterior inference"
+            names = ('configs', 'features', 'targets', 'trial_ids')
+            elem = {k: data_pending[k].pop(0) for k in names}
+            for k, v in elem:
+                data_nopending[k] = [v]
+            logger.info(
+                "All trials currently have pending evaluations. In order to "
+                "sample fantasy targets, I'll remove pending evaluations "
+                f"from trial_id {elem['trial_ids']} (which has "
+                f"{elem['targets'].size} observations)")
         # Start with posterior state, conditioned on data from trials without
         # pending evaluations
-        # TODO: What if data_nopending is empty?
         self._gpmodel.data_precomputations(data_nopending)
         self._gpmodel.recompute_states(data_nopending)
         poster_state_nopending = self._gpmodel.states[0]

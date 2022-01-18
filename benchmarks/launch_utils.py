@@ -319,21 +319,21 @@ def parse_args(allow_lists_as_values=True):
     return params
 
 
-def _enter_not_none(dct, key, val, type=None):
-    if type is None:
-        type = str
+def _enter_not_none(dct, key, val, tp=None):
+    if tp is None:
+        tp = str
     if val is not None:
-        dct[key] = type(val)
+        dct[key] = tp(val)
 
 
 def make_searcher_and_scheduler(params) -> (dict, dict):
     # Options for searcher
     search_options = dict()
     _enter_not_none(
-        search_options, 'debug_log', params.get('debug_log'), type=bool)
+        search_options, 'debug_log', params.get('debug_log'), tp=bool)
     _enter_not_none(
         search_options, 'normalize_targets', params.get('normalize_targets'),
-        type=bool)
+        tp=bool)
     model = params.get('searcher_model')
     _enter_not_none(search_options, 'model', model)
 
@@ -341,7 +341,7 @@ def make_searcher_and_scheduler(params) -> (dict, dict):
     searcher_args = (
         ('num_init_random', int, False),
         ('num_init_candidates', int, False),
-        ('num_fantasy_samples', int, True),
+        ('num_fantasy_samples', int, False),
         ('resource_acq', str, True),
         ('resource_acq_bohb_threshold', int, True),
         ('gp_resource_kernel', str, True),
@@ -356,11 +356,12 @@ def make_searcher_and_scheduler(params) -> (dict, dict):
         ('expdecay_normalize_inputs', bool, False),
         ('use_new_code', bool, False),
         ('num_init_candidates_for_batch', int, False),
+        ('no_fantasizing', bool, False),
     )
     gp_add_models = {'gp_issm', 'gp_expdecay'}
     for name, tp, warn in searcher_args:
         _enter_not_none(
-            search_options, name, params.get('searcher_' + name), type=tp)
+            search_options, name, params.get('searcher_' + name), tp=tp)
         if warn and name in search_options and model in gp_add_models:
             logger.warning(f"{name} not used with searcher_model = {model}")
     if 'issm_gamma_one' in search_options and model != 'gp_issm':
@@ -381,7 +382,7 @@ def make_searcher_and_scheduler(params) -> (dict, dict):
     name = 'max_resource_level' if scheduler == 'hyperband_synchronous' \
         else 'max_t'
     _enter_not_none(
-        scheduler_options, name, params.get('max_resource_level'), type=int)
+        scheduler_options, name, params.get('max_resource_level'), tp=int)
     scheduler_args = ()
     if scheduler != 'fifo':
         # Only process these arguments for HyperbandScheduler
@@ -404,7 +405,7 @@ def make_searcher_and_scheduler(params) -> (dict, dict):
                 ('rung_system_per_bracket', bool))
     for name, tp in scheduler_args:
         _enter_not_none(
-            scheduler_options, name, params.get(name), type=tp)
+            scheduler_options, name, params.get(name), tp=tp)
 
     # Special constraints
     searcher = params['searcher']

@@ -51,10 +51,11 @@ class GaussProcSurrogateModel(BaseSurrogateModel):
 
     """
     def __init__(
-            self, state: TuningJobState, gpmodel: GPModel,
+            self, state: TuningJobState,
+            gpmodel: GPModel,
             fantasy_samples: List[FantasizedPendingEvaluation],
-            active_metric: str = None, normalize_mean: float = 0.0,
-            normalize_std: float = 1.0,
+            active_metric: str = None,
+            normalize_mean: float = 0.0, normalize_std: float = 1.0,
             filter_observed_data: Optional[ConfigurationFilter] = None):
         """
         Both `state` and `gpmodel` are immutable. If parameters of the latter

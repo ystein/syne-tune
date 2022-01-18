@@ -124,7 +124,7 @@ def _create_tuple(
         key=itemgetter(0)))
     trial_id = ev.trial_id
     config = config_for_trial[trial_id]
-    return (config, observed, trial_id)
+    return config, observed, trial_id
 
 
 def prepare_data(
@@ -258,16 +258,20 @@ def prepare_data_with_pending(
             active_metric=active_metric,
             do_fantasizing=False,
             mean=mean, std=std)
-        # Sort in decreasing order w.r.t. number of targets
-        if not with_pending:
-            configs, targets, trial_ids = zip(*sorted(
-                zip(configs, targets, trial_ids),
-                key=lambda x: -x[1].shape[0]))
+        if configs:
+            # Sort in decreasing order w.r.t. number of targets
+            if not with_pending:
+                configs, targets, trial_ids = zip(*sorted(
+                    zip(configs, targets, trial_ids),
+                    key=lambda x: -x[1].shape[0]))
+            else:
+                configs, targets, num_pending, trial_ids = zip(*sorted(
+                    zip(configs, targets, num_pending, trial_ids),
+                    key=lambda x: -x[1].shape[0]))
+            features = hp_ranges.to_ndarray_matrix(configs)
         else:
-            configs, targets, num_pending, trial_ids = zip(*sorted(
-                zip(configs, targets, num_pending, trial_ids),
-                key=lambda x: -x[1].shape[0]))
-        features = hp_ranges.to_ndarray_matrix(configs)
+            # It is possible that `data1_lst` is empty
+            features = None
         result = {
             'configs': configs,
             'features': features,
