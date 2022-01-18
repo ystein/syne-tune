@@ -393,6 +393,6 @@ class GaussProcEmpiricalBayesModelFactory(GaussProcModelFactory):
     def _num_samples_for_fantasies(self) -> int:
         # Special case (see header comment): If the current posterior state
         # does not contain pending candidates (no fantasies), we sample
-        # num_fantasy_samples times i.i.d.
+        # `num_fantasy_samples` times i.i.d.
         return 1 if self._gpmodel.multiple_targets() \
             else self.num_fantasy_samples

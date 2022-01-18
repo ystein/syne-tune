@@ -39,7 +39,10 @@ from syne_tune.optimizer.schedulers.searchers.bayesopt.datatypes.common \
 
 logger = logging.getLogger(__name__)
 
-__all__ = ['GaussProcISSMPosteriorState']
+__all__ = ['GaussProcAdditivePosteriorState',
+           'IncrementalUpdateGPAdditivePosteriorState',
+           'GaussProcISSMPosteriorState',
+           'GaussProcExpDecayPosteriorState']
 
 
 class GaussProcAdditivePosteriorState(object):
@@ -501,9 +504,27 @@ class GaussProcExpDecayPosteriorState(IncrementalUpdateGPAdditivePosteriorState)
         data.update(resource_kernel_likelihood_precomputations(
             targets=data['targets']))
 
+    def _prepare_update(
+            self, config: Configuration, feature: np.ndarray,
+            targets: np.ndarray) -> Tuple[float, float, float]:
+        issm_likelihood = resource_kernel_likelihood_slow_computations(
+            [targets], self.res_kernel, self.noise_variance)
+        vtv = issm_likelihood['vtv'].item()
+        wtv = issm_likelihood['wtv'].item()
+        s_sq = vtv / self.noise_variance
+        s_new = np.sqrt(s_sq)
+        muhat = _flatvec(self.mean(feature)).item()
+        r2_new = wtv / self.noise_variance - s_sq * muhat
+        return 0.0, s_new, r2_new
+
     def update(
             self, config: Configuration, feature: np.ndarray,
             targets: np.ndarray) -> 'IncrementalUpdateGPAdditivePosteriorState':
         create_kwargs = self._update_internal(config, feature, targets)
         return GaussProcExpDecayPosteriorState(
             **create_kwargs, res_kernel=self.res_kernel)
+
+    # TODO!
+    #def _sample_posterior_joint_for_config(
+    #        self, poster_state, config: Configuration, feature: np.ndarray,
+    #        targets: np.ndarray, random_state: RandomState) -> np.ndarray:

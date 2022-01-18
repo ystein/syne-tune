@@ -27,7 +27,7 @@ from syne_tune.optimizer.schedulers.searchers.bayesopt.datatypes.tuning_job_stat
 from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.learncurve.gpiss_model \
     import GaussianProcessLearningCurveModel
 from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.learncurve.issm \
-    import prepare_data
+    import prepare_data, prepare_data_with_pending
 from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.learncurve.posterior_state \
     import GaussProcAdditivePosteriorState
 from syne_tune.optimizer.schedulers.searchers.bayesopt.tuning_algorithms.base_classes \
@@ -47,7 +47,8 @@ class GaussProcAdditiveSurrogateModel(BaseSurrogateModel):
             self, state: TuningJobState,
             gpmodel: GaussianProcessLearningCurveModel,
             fantasy_samples: List[FantasizedPendingEvaluation],
-            active_metric: str, hp_ranges: HyperparameterRanges,
+            active_metric: str,
+            hp_ranges: HyperparameterRanges,
             means_observed_candidates: np.ndarray,
             filter_observed_data: Optional[ConfigurationFilter] = None,
             normalize_mean: float = 0.0, normalize_std: float = 1.0):
@@ -140,28 +141,31 @@ class GaussProcAdditiveSurrogateModel(BaseSurrogateModel):
 class GaussProcAdditiveModelFactory(TransformerModelFactory):
     def __init__(
             self, gpmodel: GaussianProcessLearningCurveModel,
+            num_fantasy_samples: int,
             active_metric: str,
             configspace_ext: ExtendedConfiguration,
             normalize_targets: bool = False,
             profiler: Optional[SimpleProfiler] = None,
             debug_log: Optional[DebugLogPrinter] = None,
-            filter_observed_data: Optional[ConfigurationFilter] = None,
-            no_fantasizing: bool = False):
+            filter_observed_data: Optional[ConfigurationFilter] = None):
         """
-        Pending evaluations in `state` are not taken into account here.
+        If `num_fantasy_samples > 0`, we draw this many fantasy targets
+        independently, while each sample is dependent over all pending
+        evaluations. If `num_fantasy_samples == 0`, pending evaluations
+        in `state` are ignored.
+
         Note that `state` contains extended configs (x, r), while the GP
         part of the GP-ISSM is over configs x (it models the function
         at r_max).
 
         :param gpmodel: GaussianProcessLearningCurveModel
+        :param num_fantasy_samples: See above
         :param active_metric: Name of the metric to optimize.
         :param configspace_ext: ExtendedConfiguration
         :param normalize_targets: Normalize observed target values?
         :param debug_log: DebugLogPrinter (optional)
         :param filter_observed_data: Filter for observed data before
             computing incumbent
-        :param no_fantasizing: If True, pending evaluations in the state are
-            simply ignored, fantasizing is not done
 
         """
         self._gpmodel = gpmodel
@@ -169,12 +173,14 @@ class GaussProcAdditiveModelFactory(TransformerModelFactory):
         r_min, r_max = configspace_ext.resource_attr_range
         assert 0 < r_min < r_max, \
             f"r_min = {r_min}, r_max = {r_max}: Need 0 < r_min < r_max"
+        assert num_fantasy_samples >= 0, \
+            f"num_fantasy_samples = {num_fantasy_samples}, must be non-negative int"
+        self.num_fantasy_samples = num_fantasy_samples
         self._configspace_ext = configspace_ext
         self._debug_log = debug_log
         self._profiler = profiler
         self._filter_observed_data = filter_observed_data
         self.normalize_targets = normalize_targets
-        self._no_fantasizing = no_fantasizing
 
     @property
     def debug_log(self) -> Optional[DebugLogPrinter]:
@@ -198,6 +204,8 @@ class GaussProcAdditiveModelFactory(TransformerModelFactory):
             f"for metric {self.active_metric}"
         if self._debug_log is not None:
             self._debug_log.set_state(state)
+        do_fantasizing = \
+            state.pending_evaluations and self.num_fantasy_samples > 0
 
         # [1] Fit model and compute posterior state, ignoring pending evals
         data = prepare_data(
@@ -206,12 +214,12 @@ class GaussProcAdditiveModelFactory(TransformerModelFactory):
             do_fantasizing=False)
         # Precomputations (optional)
         self._gpmodel.data_precomputations(data)
-        if not fit_params:
-            logger.info("Recomputing posterior state")
-            self._gpmodel.recompute_states(data)
-        else:
+        if fit_params:
             logger.info(f"Fitting surrogate model for {self.active_metric}")
             self._gpmodel.fit(data, profiler=self._profiler)
+        elif not do_fantasizing:
+            logger.info("Recomputing posterior state")
+            self._gpmodel.recompute_states(data)
         if self._debug_log is not None:
             self._debug_log.set_model_params(self.get_params())
         if self.normalize_targets:
@@ -222,14 +230,15 @@ class GaussProcAdditiveModelFactory(TransformerModelFactory):
             extra_kwargs = dict()
 
         # [2] Fantasizing for pending evaluations (optional)
-        if state.pending_evaluations and not self._no_fantasizing:
+        if do_fantasizing:
             # Sample fantasy values for pending evaluations
             state_with_fantasies = self._draw_fantasy_values(state)
             fantasy_samples = state_with_fantasies.pending_evaluations
             # Recompute posterior state with fantasy samples
             data = prepare_data(
-                state_with_fantasies, self._configspace_ext,
-                self.active_metric,
+                state=state_with_fantasies,
+                configspace_ext=self._configspace_ext,
+                active_metric=self.active_metric,
                 normalize_targets=self.normalize_targets,
                 do_fantasizing=True)
             self._gpmodel.data_precomputations(data)
@@ -237,11 +246,11 @@ class GaussProcAdditiveModelFactory(TransformerModelFactory):
         else:
             fantasy_samples = []
 
-        # TODO: Also pass fantasy_samples!
         return GaussProcAdditiveSurrogateModel(
             state=state,
-            active_metric=self.active_metric,
             gpmodel=self._gpmodel,
+            fantasy_samples=fantasy_samples,
+            active_metric=self.active_metric,
             hp_ranges=self._configspace_ext.hp_ranges,
             means_observed_candidates=self._predict_mean_current_candidates(
                 data),
@@ -276,5 +285,56 @@ class GaussProcAdditiveModelFactory(TransformerModelFactory):
         :param state: State with pending evaluations without fantasies
         :return: Copy of `state`, where `pending_evaluations` contains
             fantasized target values
+
         """
-        # HIER!!!
+        assert self.num_fantasy_samples > 0
+        # Fantasies are drawn in sequential chunks, one trial with pending
+        # evaluations at a time.
+        data_nopending, data_pending = prepare_data_with_pending(
+            state=state,
+            configspace_ext=self._configspace_ext,
+            active_metric=self.active_metric,
+            normalize_targets=self.normalize_targets)
+        # Start with posterior state, conditioned on data from trials without
+        # pending evaluations
+        # TODO: What if data_nopending is empty?
+        self._gpmodel.data_precomputations(data_nopending)
+        self._gpmodel.recompute_states(data_nopending)
+        poster_state_nopending = self._gpmodel.states[0]
+        # Loop over trials with pending evaluations: For each trial, we sample
+        # fantasy targets given observed ones, then update `poster_state` by
+        # conditioning on both. This ensures we obtain a joint sample (the
+        # ordering of trials does not matter). For the application here, we
+        # do not need the final `poster_state`.
+        all_fantasy_targets = []
+        for sample_it in range(self.num_fantasy_samples):
+            fantasy_targets, _ = poster_state_nopending.sample_and_update_for_pending(
+                data_pending, sample_all_nonobserved=False,
+                random_state=self._gpmodel.random_state)
+            for pos, fantasies in enumerate(data_pending['trial_ids']):
+                if sample_it == 0:
+                    all_fantasy_targets.append([fantasies])
+                else:
+                    all_fantasy_targets[pos].append(fantasies)
+        # Convert into `FantasizedPendingEvaluation`
+        r_min = self._configspace_ext.resource_attr_range[0]
+        pending_evaluations_with_fantasies = []
+        for trial_id, targets, fantasies in zip(
+                data_pending['trial_ids'], data_pending['targets'],
+                all_fantasy_targets):
+            n_observed = targets.size
+            n_pending = fantasies[0].size
+            start = r_min + n_observed
+            resources = list(range(start, start + n_pending))
+            fantasy_matrix = np.hstack(v.reshape((-1, 1)) for v in fantasies)
+            for resource, fantasy in zip(resources, fantasy_matrix):
+                pending_evaluations_with_fantasies.append(
+                    FantasizedPendingEvaluation(
+                        trial_id=trial_id, fantasies=fantasy, resource=resource))
+        # Return new state, with `pending_evaluations` replaced
+        return TuningJobState(
+            hp_ranges=state.hp_ranges,
+            config_for_trial=state.config_for_trial,
+            trials_evaluations=state.trials_evaluations,
+            failed_trials=state.failed_trials,
+            pending_evaluations=pending_evaluations_with_fantasies)

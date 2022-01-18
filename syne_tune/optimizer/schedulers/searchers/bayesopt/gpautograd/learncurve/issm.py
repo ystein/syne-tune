@@ -41,9 +41,10 @@ def _prepare_data_internal(
         state: TuningJobState, data_lst: List[Tuple[Configuration, List, str]],
         configspace_ext: ExtendedConfiguration, active_metric: str,
         do_fantasizing: bool, mean: float,
-        std: float) -> (List[Configuration], List[np.ndarray]):
+        std: float) -> (List[Configuration], List[np.ndarray], List[str]):
     r_min, r_max = configspace_ext.resource_attr_range
     configs = [x[0] for x in data_lst]
+    trial_ids = [x[2] for x in data_lst]
     targets = []
 
     fantasized = dict()
@@ -70,10 +71,11 @@ def _prepare_data_internal(
         # Observations must be from r_min without any missing
         obs_res = [x[0] for x in observed]
         num_obs = len(observed)
-        test = list(range(r_min, r_min + num_obs))
-        assert obs_res == test, \
-            f"trial_id {trial_id} has observations at {obs_res}, but " +\
-            f"we need them at {test}"
+        if num_obs > 0:
+            test = list(range(r_min, r_min + num_obs))
+            assert obs_res == test, \
+                f"trial_id {trial_id} has observations at {obs_res}, but " +\
+                f"we need them at {test}"
         # Note: Only observed targets are normalized, not fantasized ones
         this_targets = (
             np.array([x[1] for x in observed]).reshape((-1, 1)) - mean) / std
@@ -99,6 +101,7 @@ def _prepare_data_internal(
         for trial_id, this_fantasized in fantasized.items():
             if trial_id not in trial_ids_done:
                 configs.append(state.config_for_trial[trial_id])
+                trial_ids.append(trial_id)
                 this_fantasized = sorted(this_fantasized, key=itemgetter(0))
                 fanta_res = [x[0] for x in this_fantasized]
                 test = list(range(r_min, r_min + len(this_fantasized)))
@@ -109,7 +112,7 @@ def _prepare_data_internal(
                     [x[1].reshape((1, -1)) for x in this_fantasized])
                 targets.append(this_targets)
 
-    return configs, targets
+    return configs, targets, trial_ids
 
 
 def _create_tuple(
@@ -168,7 +171,7 @@ def prepare_data(
         std = max(np.std(targets), 1e-9)
         mean = np.mean(targets)
 
-    configs, targets = _prepare_data_internal(
+    configs, targets, trial_ids = _prepare_data_internal(
         state=state,
         data_lst=data_lst,
         configspace_ext=configspace_ext,
@@ -176,13 +179,14 @@ def prepare_data(
         do_fantasizing=do_fantasizing,
         mean=mean, std=std)
     # Sort in decreasing order w.r.t. number of targets
-    configs, targets = zip(*sorted(
-        zip(configs, targets), key=lambda x: -x[1].shape[0]))
+    configs, targets, trial_ids = zip(*sorted(
+        zip(configs, targets, trial_ids), key=lambda x: -x[1].shape[0]))
     features = hp_ranges.to_ndarray_matrix(configs)
     result = {
         'configs': configs,
         'features': features,
         'targets': targets,
+        'trial_ids': trial_ids,
         'r_min': r_min,
         'r_max': r_max,
         'do_fantasizing': do_fantasizing}
@@ -220,6 +224,7 @@ def prepare_data_with_pending(
     num_pending_for_trial = Counter(
         ev.trial_id for ev in state.pending_evaluations)
     targets = []
+    done_trial_ids = set()
     for ev in state.trials_evaluations:
         tpl = _create_tuple(ev, active_metric, state.config_for_trial)
         _, observed, trial_id = tpl[2]
@@ -228,17 +233,25 @@ def prepare_data_with_pending(
         else:
             data2_lst.append(tpl)
             num_pending.append(num_pending_for_trial[trial_id])
+        done_trial_ids.add(trial_id)
         targets += [x[1] for x in observed]
     mean = 0.0
     std = 1.0
     if normalize_targets:
         std = max(np.std(targets), 1e-9)
         mean = np.mean(targets)
+    # There may be trials with pending evaluations, but no observed ones
+    for ev in state.pending_evaluations:
+        trial_id = ev.trial_id
+        if trial_id not in done_trial_ids:
+            config = state.config_for_trial[trial_id]
+            data2_lst.append((config, [], trial_id))
+            num_pending.append(num_pending_for_trial[trial_id])
 
     results = ()
     with_pending = False
     for data_lst in (data1_lst, data2_lst):
-        configs, targets = _prepare_data_internal(
+        configs, targets, trial_ids = _prepare_data_internal(
             state=state,
             data_lst=data_lst,
             configspace_ext=configspace_ext,
@@ -247,18 +260,19 @@ def prepare_data_with_pending(
             mean=mean, std=std)
         # Sort in decreasing order w.r.t. number of targets
         if not with_pending:
-            configs, targets = zip(*sorted(
-                zip(configs, targets),
+            configs, targets, trial_ids = zip(*sorted(
+                zip(configs, targets, trial_ids),
                 key=lambda x: -x[1].shape[0]))
         else:
-            configs, targets, num_pending = zip(*sorted(
-                zip(configs, targets, num_pending),
+            configs, targets, num_pending, trial_ids = zip(*sorted(
+                zip(configs, targets, num_pending, trial_ids),
                 key=lambda x: -x[1].shape[0]))
         features = hp_ranges.to_ndarray_matrix(configs)
         result = {
             'configs': configs,
             'features': features,
             'targets': targets,
+            'trial_ids': trial_ids,
             'r_min': r_min,
             'r_max': r_max,
             'do_fantasizing': False}

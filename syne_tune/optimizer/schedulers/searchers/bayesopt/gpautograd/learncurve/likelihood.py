@@ -16,7 +16,8 @@ import autograd.numpy as anp
 from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.learncurve.model_params \
     import ISSModelParameters
 from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.learncurve.posterior_state \
-    import GaussProcISSMPosteriorState, GaussProcExpDecayPosteriorState
+    import GaussProcISSMPosteriorState, GaussProcExpDecayPosteriorState, \
+    IncrementalUpdateGPAdditivePosteriorState
 from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.learncurve.freeze_thaw \
     import ExponentialDecayBaseKernelFunction
 from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.constants \
@@ -90,7 +91,8 @@ class MarginalLikelihood(Block):
     def set_profiler(self, profiler: Optional[SimpleProfiler]):
         self._profiler = profiler
 
-    def get_posterior_state(self, data: Dict):
+    def get_posterior_state(
+            self, data: Dict) -> IncrementalUpdateGPAdditivePosteriorState:
         return self._type(
             data, self.mean, self.kernel, self.res_model,
             noise_variance=self.get_noise_variance(), profiler=self._profiler)
