@@ -218,6 +218,7 @@ class GaussProcAdditiveModelFactory(TransformerModelFactory):
             logger.info(f"Fitting surrogate model for {self.active_metric}")
             self._gpmodel.fit(data, profiler=self._profiler)
         elif not do_fantasizing:
+            # Fantasizing needs a state depending on fantasy samples, see below
             logger.info("Recomputing posterior state")
             self._gpmodel.recompute_states(data)
         if self._debug_log is not None:
@@ -232,9 +233,11 @@ class GaussProcAdditiveModelFactory(TransformerModelFactory):
         # [2] Fantasizing for pending evaluations (optional)
         if do_fantasizing:
             # Sample fantasy values for pending evaluations
+            logger.info("Sampling fantasy target values for pending evaluations")
             state_with_fantasies = self._draw_fantasy_values(state)
             fantasy_samples = state_with_fantasies.pending_evaluations
             # Recompute posterior state with fantasy samples
+            logger.info("Recomputing posterior state with fantasy targets")
             data = prepare_data(
                 state=state_with_fantasies,
                 configspace_ext=self._configspace_ext,

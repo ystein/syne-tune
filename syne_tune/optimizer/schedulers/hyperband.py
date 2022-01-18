@@ -464,8 +464,15 @@ class HyperbandScheduler(FIFOScheduler):
                 f"trial_id {trial_id} starts (first milestone = "
                 f"{first_milestone})")
         # Register pending evaluation with searcher
-        self.searcher.register_pending(
-            trial_id=trial_id, config=config, milestone=first_milestone)
+        if self.searcher_data == 'rungs':
+            pending_resources = [first_milestone]
+        elif self._register_pending_myopic:
+            pending_resources = [1]
+        else:
+            pending_resources = list(range(1, first_milestone + 1))
+        for resource in pending_resources:
+            self.searcher.register_pending(
+                trial_id=trial_id, config=config, milestone=resource)
         # Extra fields in `config`
         if debug_log is not None:
             # For log outputs:
