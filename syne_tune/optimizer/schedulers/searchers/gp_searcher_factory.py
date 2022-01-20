@@ -267,6 +267,10 @@ def _create_common_objects(model=None, **kwargs):
             **_kwargs)
     result['model_factory'] = model_factory
     result['filter_observed_data'] = filter_observed_data
+    result['num_initial_candidates'] = kwargs['num_init_candidates']
+    result['num_initial_random_choices'] = kwargs['num_init_random']
+    for k in ('initial_scoring', 'cost_attr', 'skip_local_optimization'):
+        result[k] = kwargs[k]
 
     return result
 
@@ -294,12 +298,7 @@ def gp_fifo_searcher_factory(**kwargs) -> Dict:
     # Common objects
     result = _create_common_objects(**kwargs)
 
-    return dict(**result,
-                acquisition_class=EIAcquisitionFunction,
-                num_initial_candidates=kwargs['num_init_candidates'],
-                num_initial_random_choices=kwargs['num_init_random'],
-                initial_scoring=kwargs['initial_scoring'],
-                cost_attr=kwargs['cost_attr'])
+    return dict(**result, acquisition_class=EIAcquisitionFunction)
 
 
 def _resource_for_acquisition(
@@ -339,13 +338,9 @@ def gp_multifidelity_searcher_factory(**kwargs) -> Dict:
     # Common objects
     result = _create_common_objects(**kwargs)
 
-    kwargs_int = dict(**result,
+    kwargs_int = dict(result,
                       resource_attr=kwargs['resource_attr'],
-                      acquisition_class=EIAcquisitionFunction,
-                      num_initial_candidates=kwargs['num_init_candidates'],
-                      num_initial_random_choices=kwargs['num_init_random'],
-                      initial_scoring=kwargs['initial_scoring'],
-                      cost_attr=kwargs['cost_attr'])
+                      acquisition_class=EIAcquisitionFunction)
     if kwargs['model'] == 'gp_multitask':
         kwargs_int['resource_for_acquisition'] = _resource_for_acquisition(
             kwargs, result['hp_ranges'])
@@ -388,14 +383,10 @@ def constrained_gp_fifo_searcher_factory(**kwargs) -> Dict:
     output_skip_optimization = {INTERNAL_METRIC_NAME: skip_optimization,
                                 INTERNAL_CONSTRAINT_NAME: skip_optimization_constraint}
 
-    return dict(**result,
+    return dict(result,
                 output_model_factory=output_model_factory,
                 output_skip_optimization=output_skip_optimization,
-                acquisition_class=CEIAcquisitionFunction,
-                num_initial_candidates=kwargs['num_init_candidates'],
-                num_initial_random_choices=kwargs['num_init_random'],
-                initial_scoring=kwargs['initial_scoring'],
-                cost_attr=kwargs['cost_attr'])
+                acquisition_class=CEIAcquisitionFunction)
 
 
 def cost_aware_coarse_gp_fifo_searcher_factory(**kwargs) -> Dict:
@@ -439,14 +430,10 @@ def cost_aware_coarse_gp_fifo_searcher_factory(**kwargs) -> Dict:
     output_skip_optimization = {INTERNAL_METRIC_NAME: skip_optimization,
                                 INTERNAL_COST_NAME: skip_optimization_cost}
 
-    return dict(**result,
+    return dict(result,
                 output_model_factory=output_model_factory,
                 output_skip_optimization=output_skip_optimization,
-                acquisition_class=acquisition_class,
-                num_initial_candidates=kwargs['num_init_candidates'],
-                num_initial_random_choices=kwargs['num_init_random'],
-                initial_scoring=kwargs['initial_scoring'],
-                cost_attr=kwargs['cost_attr'])
+                acquisition_class=acquisition_class)
 
 
 def cost_aware_fine_gp_fifo_searcher_factory(**kwargs) -> Dict:
@@ -496,14 +483,10 @@ def cost_aware_fine_gp_fifo_searcher_factory(**kwargs) -> Dict:
     output_skip_optimization = {INTERNAL_METRIC_NAME: skip_optimization,
                                 INTERNAL_COST_NAME: skip_optimization_cost}
 
-    return dict(**result,
+    return dict(result,
                 output_model_factory=output_model_factory,
                 output_skip_optimization=output_skip_optimization,
                 acquisition_class=acquisition_class,
-                num_initial_candidates=kwargs['num_init_candidates'],
-                num_initial_random_choices=kwargs['num_init_random'],
-                initial_scoring=kwargs['initial_scoring'],
-                cost_attr=kwargs['cost_attr'],
                 resource_attr=kwargs['resource_attr'])
 
 
@@ -557,16 +540,12 @@ def cost_aware_gp_multifidelity_searcher_factory(**kwargs) -> Dict:
 
     resource_for_acquisition = _resource_for_acquisition(
         kwargs, result['hp_ranges'])
-    return dict(**result,
+    return dict(result,
                 resource_attr=kwargs['resource_attr'],
                 output_model_factory=output_model_factory,
                 output_skip_optimization=output_skip_optimization,
                 resource_for_acquisition=resource_for_acquisition,
-                acquisition_class=acquisition_class,
-                num_initial_candidates=kwargs['num_init_candidates'],
-                num_initial_random_choices=kwargs['num_init_random'],
-                initial_scoring=kwargs['initial_scoring'],
-                cost_attr=kwargs['cost_attr'])
+                acquisition_class=acquisition_class)
 
 
 def _common_defaults(is_hyperband: bool, is_multi_output: bool) -> (Set[str], dict, dict):
@@ -586,6 +565,7 @@ def _common_defaults(is_hyperband: bool, is_multi_output: bool) -> (Set[str], di
         'num_init_random': DEFAULT_NUM_INITIAL_RANDOM_EVALUATIONS,
         'num_init_candidates': DEFAULT_NUM_INITIAL_CANDIDATES,
         'initial_scoring': DEFAULT_INITIAL_SCORING,
+        'skip_local_optimization': False,
         'debug_log': True,
         'cost_attr': 'elapsed_time',
         'normalize_targets': True,
@@ -599,7 +579,7 @@ def _common_defaults(is_hyperband: bool, is_multi_output: bool) -> (Set[str], di
         default_options['num_init_random'] = 6
         default_options['issm_gamma_one'] = False
         default_options['expdecay_normalize_inputs'] = False
-        default_options['use_new_code'] = True  # DEBUG
+        default_options['use_new_code'] = True
     if is_multi_output:
         default_options['initial_scoring'] = 'acq_func'
         default_options['exponent_cost'] = 1.0
@@ -619,6 +599,7 @@ def _common_defaults(is_hyperband: bool, is_multi_output: bool) -> (Set[str], di
         'num_init_candidates': Integer(5, None),
         'initial_scoring': Categorical(
             choices=tuple(SUPPORTED_INITIAL_SCORING)),
+        'skip_local_optimization': Boolean(),
         'debug_log': Boolean(),
         'normalize_targets': Boolean()}
 
