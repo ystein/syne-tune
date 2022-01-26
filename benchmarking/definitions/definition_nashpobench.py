@@ -62,8 +62,7 @@ def nashpobench_benchmark(params):
         dont_sleep=params['dont_sleep'],
         blackbox_repo_s3_root=params.get('blackbox_repo_s3_root'))
     return {
-        'script': Path(__file__).parent.parent.parent / "examples" /
-                  "training_scripts" / "nashpobench" / "nashpobench.py",
+        'script': Path(__file__).parent.parent / "training_scripts" / "nashpobench" / "nashpobench.py",
         'metric': METRIC_VALID_LOSS,
         'mode': 'min',
         'resource_attr': RESOURCE_ATTR,

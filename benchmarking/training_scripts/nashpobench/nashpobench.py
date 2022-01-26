@@ -17,10 +17,10 @@ import time
 
 from syne_tune.report import Reporter
 
-from benchmarks.checkpoint import resume_from_checkpointed_model, \
+from benchmarking.utils.checkpoint import resume_from_checkpointed_model, \
     checkpoint_model_at_rung_level, add_checkpointing_to_argparse
-from benchmarks.utils import parse_bool
-from blackbox_repository.conversion_scripts.scripts.fcnet_import import \
+from benchmarking.utils.parse_bool import parse_bool
+from benchmarking.blackbox_repository.conversion_scripts.scripts.fcnet_import import \
     METRIC_VALID_LOSS, METRIC_ELAPSED_TIME, RESOURCE_ATTR,  BLACKBOX_NAME
 
 from syne_tune.search_space import choice, randint, uniform, loguniform
