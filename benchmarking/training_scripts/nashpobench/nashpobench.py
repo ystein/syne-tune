@@ -134,8 +134,8 @@ if __name__ == '__main__':
     # only when the code is really called)
     import json
 
-    from blackbox_repository import load as load_blackbox
-    from blackbox_repository.utils import metrics_for_configuration
+    from benchmarking.blackbox_repository import load as load_blackbox
+    from benchmarking.blackbox_repository.utils import metrics_for_configuration
 
     root = logging.getLogger()
     root.setLevel(logging.INFO)
