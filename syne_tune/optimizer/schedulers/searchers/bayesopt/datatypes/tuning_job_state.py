@@ -70,9 +70,12 @@ class TuningJobState(object):
         TuningJobState._check_all_string(failed_trials, 'failed_trials')
         TuningJobState._check_all_string(pending_trials, 'pending_evaluations')
         trial_ids = set(observed_trials + failed_trials + pending_trials)
-        for trial_id in trial_ids:
-            assert trial_id in config_for_trial, \
-                f"trial_id {trial_id} not contained in configs_for_trials"
+        for name, trial_ids in (('trials_evaluations', observed_trials),
+                                ('failed_trials', failed_trials),
+                                ('pending_evaluations', pending_trials)):
+            for trial_id in trial_ids:
+                assert trial_id in config_for_trial, \
+                    f"trial_id {trial_id} in {name} is not contained in configs_for_trials"
 
     @staticmethod
     def empty_state(hp_ranges: HyperparameterRanges) -> 'TuningJobState':
@@ -103,11 +106,12 @@ class TuningJobState(object):
 
     def _register_config_for_trial(
             self, trial_id: str, config: Optional[Configuration] = None):
+        already_there = trial_id in self.config_for_trial
         if config is None:
-            assert trial_id in self.config_for_trial, \
+            assert already_there, \
                 f"trial_id = {trial_id} not yet registered in " + \
                 "config_for_trial, so config must be given"
-        elif trial_id not in self.config_for_trial:
+        elif not already_there:
             self.config_for_trial[trial_id] = config.copy()
 
     def metrics_for_trial(

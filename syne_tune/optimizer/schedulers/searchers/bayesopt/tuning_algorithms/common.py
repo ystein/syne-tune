@@ -104,9 +104,23 @@ class ExclusionList(object):
                     trial_id for trial_id in observed_trial_ids
                     if filter_observed_data(state.config_for_trial[trial_id])]
             _elist = set(_elist + observed_trial_ids)
-            self.excl_set = set(
-                self._to_matchstr(state.config_for_trial[trial_id])
-                for trial_id in _elist)
+            #self.excl_set = set(
+            #    self._to_matchstr(state.config_for_trial[trial_id])
+            #    for trial_id in _elist)
+            # DEBUG
+            self.excl_set = set()
+            for trial_id in _elist:
+                v = state.config_for_trial.get(trial_id)
+                if v is not None:
+                    self.excl_set.add(self._to_matchstr(v))
+                else:
+                    logger.info(
+                        f"ERROR!! trial_id = {trial_id} not in state.config_for_trial. state:\n" +
+                        str(state))
+                    TuningJobState._check_trial_ids(
+                        state.config_for_trial, state.trials_evaluations,
+                        state.failed_trials, state.pending_evaluations)
+                    raise AssertionError("STOP HERE")
         else:
             self.hp_ranges = state['hp_ranges']
             self.excl_set = state['excl_set']
