@@ -25,13 +25,13 @@ from syne_tune.backend.simulator_backend.simulator_callback import SimulatorCall
 from syne_tune.stopping_criterion import StoppingCriterion
 from syne_tune.tuner import Tuner
 from syne_tune.remote.remote_launcher import RemoteLauncher
-from syne_tune.util import s3_experiment_path
+from syne_tune.util import s3_experiment_path, repository_root_path
 
 from benchmarking.cli.estimator_factory import sagemaker_estimator_factory
 from benchmarking.cli.launch_utils import parse_args
 from benchmarking.cli.benchmark_factory import benchmark_factory
 from benchmarking.cli.scheduler_factory import scheduler_factory
-from benchmarking.utils.dict_get import dict_get
+from benchmarking.utils import dict_get
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +40,7 @@ if __name__ == '__main__':
     """
     Example for calling the CLI:
     
-    python benchmarks/launch_hpo.py --scheduler hyperband_stopping \
+    python benchmarking/cli/launch_hpo.py --scheduler hyperband_stopping \
         --searcher bayesopt --benchmark_name mlp_fashionmnist \
         --scheduler_timeout 120 --local_tuner
     
@@ -53,7 +53,7 @@ if __name__ == '__main__':
     
     Example:
     
-    python benchmarks/launch_hpo.py --scheduler fifo hyperband_stopping \
+    python benchmarking/cli/launch_hpo.py --scheduler fifo hyperband_stopping \
         --searcher bayesopt random \
         --benchmark_name mlp_fashionmnist \
         --scheduler_timeout 120 --local_tuner
@@ -73,7 +73,7 @@ if __name__ == '__main__':
     
     Example:
     
-    python benchmarks/launch_hpo.py \
+    python benchmarking/cli/launch_hpo.py \
         --scheduler hyperband_stopping fifo \
         --searcher bayesopt random \
         --max_resource_level 9 27 81 \
@@ -91,7 +91,7 @@ if __name__ == '__main__':
     
     Example:
     
-    python benchmarks/launch_hpo.py \
+    python benchmarking/cli/launch_hpo.py \
         --scheduler hyperband_stopping fifo \
         --searcher bayesopt random \
         --benchmark_name mlp_fashionmnist \
@@ -301,7 +301,7 @@ if __name__ == '__main__':
                 instance_type=params['instance_type'],
                 framework=params.get('framework'),
                 role=params.get('sagemaker_execution_role'),
-                dependencies=[str(Path(__file__).parent.parent / "benchmarks/")],
+                dependencies=[str(repository_root_path() / "benchmarking/")],
                 framework_version=params.get('framework_version'),
                 pytorch_version=params.get('pytorch_version'),
                 source_dir=str(script_path.parent),
@@ -396,10 +396,9 @@ if __name__ == '__main__':
                 estimator_kwargs['max_run'] = int(1.01 * scheduler_timeout)
             log_level = logging.DEBUG if params['debug_log_level'] \
                 else logging.INFO
-            root_path = Path(__file__).parent.parent.parent
-            dependencies = [
-                str(root_path / module)
-                for module in ("benchmarking", "blackbox_repository")]
+
+            root_path = repository_root_path()
+            dependencies = [str(root_path / "benchmarking")]
             tuner = RemoteLauncher(
                 tuner=local_tuner,
                 dependencies=dependencies,
