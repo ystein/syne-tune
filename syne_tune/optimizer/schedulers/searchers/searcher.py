@@ -347,6 +347,11 @@ class SearcherWithRandomSeed(BaseSearcher):
             config_space, metric=metric, points_to_evaluate=points_to_evaluate)
         random_seed, _ = extract_random_seed(kwargs)
         self.random_state = np.random.RandomState(random_seed)
+        # For all categorical HPs: Count how often each value is suggested
+        self.histogram_categorical = dict()
+        for name, hp_range in configspace.items():
+            if isinstance(hp_range, Categorical):
+                self.histogram_categorical[name] = [0] * len(hp_range)
 
     def get_state(self) -> dict:
         state = dict(
@@ -357,6 +362,17 @@ class SearcherWithRandomSeed(BaseSearcher):
     def _restore_from_state(self, state: dict):
         super()._restore_from_state(state)
         self.random_state.set_state(state['random_state'])
+
+    def _get_config(self, **kwargs):
+        raise NotImplementedError
+
+    def get_config(self, **kwargs):
+        config = self._get_config(**kwargs)
+        for name, histogram in self.histogram_categorical.items():
+            value = config[name]
+            hp_range = self.configspace[name]
+            histogram[hp_range.categories.index(value)] += 1
+        return config
 
 
 class RandomSearcher(SearcherWithRandomSeed):
@@ -411,7 +427,7 @@ class RandomSearcher(SearcherWithRandomSeed):
         if isinstance(scheduler, HyperbandScheduler):
             self._resource_attr = scheduler._resource_attr
 
-    def get_config(self, **kwargs):
+    def _get_config(self, **kwargs):
         """Sample a new configuration at random
         This is done without replacement, so previously returned configs are
         not suggested again.
