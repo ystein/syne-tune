@@ -119,7 +119,7 @@ class Bore(SearcherWithRandomSeed):
         else:
             return y[:, 1]  # return probability of class 1
 
-    def get_config(self, **kwargs):
+    def _get_config(self, **kwargs):
         """Function to sample a new configuration
 
         This function is called inside TaskScheduler to query a new

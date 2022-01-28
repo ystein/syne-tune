@@ -239,7 +239,7 @@ class KernelDensityEstimator(SearcherWithRandomSeed):
             msg = f"Update for trial_id {trial_id}: metric = {metric_val:.3f}"
             logger.info(msg)
 
-    def get_config(self, **kwargs):
+    def _get_config(self, **kwargs):
         suggestion = self._next_initial_config()
 
         if suggestion is None:
