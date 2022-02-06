@@ -91,9 +91,7 @@ class GaussianProcessLearningCurveModel:
         optimization_config: OptimizationConfig = None,
         random_seed=None,
         fit_reset_params: bool = True,
-        use_precomputations: bool = True,
     ):
-
         if mean is None:
             mean = ScalarMeanFunction()
         if optimization_config is None:
@@ -104,7 +102,6 @@ class GaussianProcessLearningCurveModel:
         self._states = None
         self.fit_reset_params = fit_reset_params
         self.optimization_config = optimization_config
-        self._use_precomputations = use_precomputations
         self.likelihood = MarginalLikelihood(
             kernel=kernel,
             res_model=res_model,
@@ -142,16 +139,9 @@ class GaussianProcessLearningCurveModel:
         :param data: Input points (features, configs), targets. May also have
             to contain precomputed values
         """
-        assert not data["do_fantasizing"], (
-            "data must not be for fantasizing. Call prepare_data with "
-            + "do_fantasizing=False"
-        )
-        self._data_precomputations(data)
+        self.likelihood.on_fit_start(data, profiler)
         if self.fit_reset_params:
             self.reset_params()
-        if profiler is not None:
-            self.likelihood.set_profiler(profiler)
-            self._debug_log_histogram(data)
         n_starts = self.optimization_config.n_starts
         ret_infos = apply_lbfgs_with_multiple_starts(
             *create_lbfgs_arguments(
@@ -210,7 +200,7 @@ class GaussianProcessLearningCurveModel:
         self._recompute_states(data)
 
     def _recompute_states(self, data: Dict):
-        self._data_precomputations(data)
+        self.likelihood.data_precomputations(data)
         self._states = [self.likelihood.get_posterior_state(data)]
 
     def predict(self, features_test):
@@ -250,22 +240,4 @@ class GaussianProcessLearningCurveModel:
         """
         Reset hyperparameters to their initial values (or resample them).
         """
-        # Note: The `init` parameter is a default sampler which is used only
-        # for parameters which do not have initializers specified. Right now,
-        # all our parameters have such initializers (constant in general),
-        # so this is just to be safe (if `init` is not specified here, it
-        # defaults to `np.random.uniform`, whose seed we do not control).
-        self.likelihood.initialize(init=self._random_state.uniform, force_reinit=True)
-
-    def _data_precomputations(self, data: Dict):
-        """
-        For some `res_model` types, precomputations on top of `data` are
-        needed. This is done here, and the precomputed variables are appended
-        to `data` as extra entries.
-
-        :param data:
-        """
-        if self._use_precomputations and (
-            self._states is None or not self._states[0].has_precomputations(data)
-        ):
-            self.likelihood.data_precomputations(data)
+        self.likelihood.reset_params(self._random_state)

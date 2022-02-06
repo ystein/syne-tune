@@ -10,8 +10,9 @@
 # on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
 # express or implied. See the License for the specific language governing
 # permissions and limitations under the License.
-from typing import Union, Optional, Dict
+from typing import Union, Optional
 import autograd.numpy as anp
+from numpy.random import RandomState
 
 from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.learncurve.model_params import (
     ISSModelParameters,
@@ -66,6 +67,8 @@ class MarginalLikelihood(Block):
     :param mean: Mean function mu(x)
     :param initial_noise_variance: A scalar to initialize the value of the
         residual noise variance
+    :param use_precomputations: If False, we use variants without
+        precomputation (TODO: Still needed?)
     """
 
     def __init__(
@@ -88,12 +91,12 @@ class MarginalLikelihood(Block):
         if encoding_type is None:
             encoding_type = DEFAULT_ENCODING
         self.encoding = create_encoding(
-            encoding_type,
-            initial_noise_variance,
-            NOISE_VARIANCE_LOWER_BOUND,
-            NOISE_VARIANCE_UPPER_BOUND,
-            1,
-            Gamma(mean=0.1, alpha=0.1),
+            encoding_name=encoding_type,
+            init_val=initial_noise_variance,
+            constr_lower=NOISE_VARIANCE_LOWER_BOUND,
+            constr_upper=NOISE_VARIANCE_UPPER_BOUND,
+            dimension=1,
+            prior=Gamma(mean=0.1, alpha=0.1),
         )
         self.mean = mean
         self.kernel = kernel
@@ -129,7 +132,7 @@ class MarginalLikelihood(Block):
         self._profiler = profiler
 
     def get_posterior_state(
-        self, data: Dict, crit_only: bool = False
+        self, data: dict
     ) -> IncrementalUpdateGPAdditivePosteriorState:
         return self._type(
             data,
@@ -138,7 +141,7 @@ class MarginalLikelihood(Block):
             profiler=self._profiler
         )
 
-    def forward(self, data: Dict):
+    def forward(self, data: dict):
         """
         The criterion is the negative log marginal likelihood of `data`, which
         is obtained from `issm.prepare_data`.
@@ -151,7 +154,7 @@ class MarginalLikelihood(Block):
             "data must not be for fantasizing. Call prepare_data with "
             + "do_fantasizing=False"
         )
-        return self.get_posterior_state(data, crit_only=True).neg_log_likelihood()
+        return self.get_posterior_state(data).neg_log_likelihood()
 
     def param_encoding_pairs(self):
         """
@@ -202,10 +205,40 @@ class MarginalLikelihood(Block):
             func.set_params(stripped_dict)
         self.set_noise_variance(param_dict["noise_variance"])
 
-    def data_precomputations(self, data: Dict):
+    def reset_params(self, random_state: RandomState):
+        """
+        Reset hyperparameters to their initial values (or resample them).
+        """
+        # Note: The `init` parameter is a default sampler which is used only
+        # for parameters which do not have initializers specified. Right now,
+        # all our parameters have such initializers (constant in general),
+        # so this is just to be safe (if `init` is not specified here, it
+        # defaults to `np.random.uniform`, whose seed we do not control).
+        self.initialize(init=random_state.uniform, force_reinit=True)
+
+    def data_precomputations(self, data: dict, overwrite: bool = False):
         """
         For some `res_model` types, precomputations on top of `data` are
         needed. This is done here, and the precomputed variables are appended
         to `data` as extra entries.
+        Precomputations are done only if not already included in `data`,
+        unless `overwrite` is True.
         """
-        self._type.data_precomputations(data)
+        if overwrite or not self._type.has_precomputations(data):
+            self._type.data_precomputations(data)
+
+    def on_fit_start(
+            self, data: dict, profiler: Optional[SimpleProfiler] = None):
+        """
+        Called at the beginning of `fit`.
+
+        :param data: Argument passed to `fit`
+        :param profiler: Argument passed to `fit`
+
+        """
+        assert not data['do_fantasizing'], \
+            "data must not be for fantasizing. Call prepare_data with " +\
+            "do_fantasizing=False"
+        self.data_precomputations(data)
+        if profiler is not None:
+            self.set_noise_variance(profiler)

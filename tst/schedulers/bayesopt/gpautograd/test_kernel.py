@@ -129,15 +129,14 @@ def test_matern52_ard():
 def test_matern52_encoding():
     kernel = Matern52(dimension=2, ARD=True)
     assert isinstance(kernel.encoding, LogarithmScalarEncoding)
-    assert isinstance(kernel.squared_distance.encoding, LogarithmScalarEncoding)
+    assert isinstance(kernel.squared_distance.encoding_noise, LogarithmScalarEncoding)
     assert kernel.encoding.dimension == 1
-    assert kernel.squared_distance.encoding.dimension == 2
+    assert kernel.squared_distance.encoding_noise.dimension == 2
     kernel = Matern52(dimension=2, ARD=True, encoding_type="positive")
     assert isinstance(kernel.encoding, PositiveScalarEncoding)
-    assert isinstance(kernel.squared_distance.encoding, PositiveScalarEncoding)
+    assert isinstance(kernel.squared_distance.encoding_noise, PositiveScalarEncoding)
     assert kernel.encoding.dimension == 1
     assert kernel.squared_distance.encoding.dimension == 2
-
 
 def test_fabolas_encoding():
     kernel = FabolasKernelFunction()

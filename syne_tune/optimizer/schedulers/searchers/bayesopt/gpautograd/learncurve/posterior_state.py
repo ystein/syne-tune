@@ -240,7 +240,8 @@ class GaussProcAdditivePosteriorState:
             random_state=random_state,
         )
 
-    def has_precomputations(self, data: Dict) -> bool:
+    @staticmethod
+    def has_precomputations(data: Dict) -> bool:
         raise NotImplementedError()
 
 
@@ -429,8 +430,9 @@ class GaussProcISSMPosteriorState(IncrementalUpdateGPAdditivePosteriorState):
         self.iss_model = iss_model
         super().__init__(data, mean, kernel, noise_variance=noise_variance, **kwargs)
 
-    def has_precomputations(self, data: Dict) -> bool:
-        return all(k in data for k in ("ydims", "num_configs", "deltay", "logr"))
+    @staticmethod
+    def has_precomputations(data: Dict) -> bool:
+        return all(k in data for k in ('ydims', 'num_configs', 'deltay', 'logr'))
 
     def _compute_posterior_state(self, data: Dict, noise_variance, **kwargs):
         profiler = kwargs.get("profiler")
@@ -586,8 +588,9 @@ class GaussProcExpDecayPosteriorState(IncrementalUpdateGPAdditivePosteriorState)
             (res_kernel.r_min, res_kernel.r_max),
         )
 
-    def has_precomputations(self, data: Dict) -> bool:
-        return all(k in data for k in ("ydims", "num_configs", "yflat"))
+    @staticmethod
+    def has_precomputations(data: Dict) -> bool:
+        return all(k in data for k in ('ydims', 'num_configs', 'yflat'))
 
     def _compute_posterior_state(self, data: Dict, noise_variance, **kwargs):
         profiler = kwargs.get("profiler")

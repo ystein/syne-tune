@@ -21,6 +21,7 @@ from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.constants impo
 from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.posterior_state import (
     GaussProcPosteriorState,
 )
+from syne_tune.optimizer.schedulers.utils.simple_profiler import SimpleProfiler
 
 
 class GaussianProcessModel:
@@ -33,11 +34,11 @@ class GaussianProcessModel:
     def states(self) -> Optional[List[GaussProcPosteriorState]]:
         raise NotImplementedError
 
-    def fit(self, features: anp.array, targets: anp.array):
+    def fit(self, data: dict, profiler: SimpleProfiler = None):
         """Train GP on the data and set a list of posterior states to be used by predict function"""
         raise NotImplementedError
 
-    def recompute_states(self, features: anp.array, targets: anp.array):
+    def recompute_states(self, data: dict):
         """Fixing GP hyperparameters and recompute the list of posterior states based on features and targets"""
         raise NotImplementedError
 
