@@ -35,6 +35,7 @@ RESOURCE_ATTR = 'epoch'
 
 ELAPSED_TIME_ATTR = 'elapsed_time'
 
+MAX_EPOCHS = 27
 
 _config_space = {
     BATCH_SIZE_KEY: randint(BATCH_SIZE_LOWER, BATCH_SIZE_UPPER),
@@ -182,8 +183,9 @@ def objective(config):
     optimizer = torch.optim.SGD(
         model.parameters(), lr=lr, momentum=momentum,
         weight_decay=weight_decay)
-    scheduler = torch.optim.lr_scheduler.MultiStepLR(
-        optimizer, milestones=milestones, gamma=0.1)
+    # scheduler = torch.optim.lr_scheduler.MultiStepLR(
+    #     optimizer, milestones=milestones, gamma=0.1)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=MAX_EPOCHS)
 
     # Checkpointing
     load_model_fn, save_model_fn = pytorch_load_save_functions(
