@@ -27,7 +27,7 @@ def distilbert_imdb_default_params(params=None):
         'framework': 'HuggingFace',
         'framework_version': '4.4',
         'pytorch_version': '1.6',
-        'dataset_path': './'
+        'dataset_path': './imdb_cache'
     }
 
 
