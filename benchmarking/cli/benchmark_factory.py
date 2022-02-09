@@ -21,6 +21,8 @@ from benchmarking.definitions.definition_resnet_cifar10 import \
 from benchmarking.nursery.lstm_wikitext2.definition_lstm_wikitext2 import \
     lstm_wikitext2_benchmark, lstm_wikitext2_default_params
 from benchmarking.definitions.definition_nashpobench import nashpobench_benchmark, nashpobench_default_params
+from benchmarking.definitions.definition_distilbert_on_imdb import distilbert_imdb_benchmark, \
+    distilbert_imdb_default_params
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +53,8 @@ BENCHMARKS = {
         nashpobench_benchmark, nashpobench_default_params),
     'nashpobench_slice_localization': (
         nashpobench_benchmark, nashpobench_default_params),
+    'distilbert_imdb': (
+        distilbert_imdb_benchmark, distilbert_imdb_default_params),
 }
 
 
