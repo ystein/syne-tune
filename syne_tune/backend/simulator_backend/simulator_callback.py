@@ -11,6 +11,7 @@
 # express or implied. See the License for the specific language governing
 # permissions and limitations under the License.
 import logging
+import time
 
 from syne_tune.tuner_callback import StoreResultsCallback
 from syne_tune.backend.simulator_backend.simulator_backend import \
@@ -47,7 +48,14 @@ class SimulatorCallback(StoreResultsCallback):
     time keeper.
 
     """
-    def __init__(self):
+    def __init__(self, real_experiment_time_as_metadata: bool = False):
+        """
+        :param real_experiment_time_as_metadata: If True, a field
+            `real_experiment_time` is added to the metadata, containing
+            the real wall-clock time (not simulated time) of the experiment.
+            The metadata file, written at the start of the experiment, is
+            overwritten at the end
+        """
         # Note: `results_update_interval` is w.r.t. real time, not
         # simulated time. Storing results intermediately is not important for
         # the simulator back-end, so the default is larger
@@ -56,6 +64,8 @@ class SimulatorCallback(StoreResultsCallback):
         self._time_keeper = None
         self._tuner = None
         self._backup_stop_criterion = None
+        self._real_experiment_time_as_metadata = real_experiment_time_as_metadata
+        self._start_ts = None
 
     def _modify_stop_criterion(self, tuner: "Tuner"):
         stop_criterion = tuner.stop_criterion
@@ -107,12 +117,17 @@ class SimulatorCallback(StoreResultsCallback):
         # Modify `tuner.stop_criterion` in case it depends on wallclock time
         self._modify_stop_criterion(tuner)
         self._tuner = tuner
+        self._start_ts = time.time()
 
     def on_tuning_sleep(self, sleep_time: float):
         self._time_keeper.advance(self._tuner_sleep_time)
 
     def on_tuning_end(self):
         super().on_tuning_end()
+        if self._real_experiment_time_as_metadata:
+            real_experiment_time = time.time() - self._start_ts
+            self._tuner.metadata['real_experiment_time'] = real_experiment_time
+            self._tuner._save_metadata()
         # Restore `stop_criterion`
         self._tuner.stop_criterion = self._backup_stop_criterion
         self._tuner = None

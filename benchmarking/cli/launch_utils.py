@@ -161,6 +161,9 @@ def parse_args(allow_lists_as_values=True):
                         help='Fixed seeds of blackbox queries to this value '
                              '(0 is safe), so that they return the same '
                              'metric values for the same config')
+    parser.add_argument('--store_real_experiment_time', action='store_true',
+                        help='When using simulator back-end, store real '
+                             'experiment time in metadata file')
     # Arguments for scheduler
     parser.add_argument('--brackets', type=int,
                         help='Number of brackets in HyperbandScheduler',

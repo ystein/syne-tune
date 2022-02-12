@@ -21,9 +21,9 @@ import time
 from syne_tune.report import Reporter
 from benchmarking.utils import resume_from_checkpointed_model, \
     checkpoint_model_at_rung_level, add_checkpointing_to_argparse, parse_bool
-from benchmarking.blackbox_repository.conversion_scripts.scripts.nasbench201_import import \
-    CONFIG_KEYS, METRIC_VALID_ERROR, METRIC_TIME_THIS_RESOURCE, \
-    RESOURCE_ATTR,  BLACKBOX_NAME
+from benchmarking.blackbox_repository.conversion_scripts.scripts.nasbench201_import \
+    import CONFIG_KEYS, METRIC_VALID_ERROR, METRIC_TIME_THIS_RESOURCE, \
+    RESOURCE_ATTR, BLACKBOX_NAME
 
 
 METRIC_ELAPSED_TIME = 'metric_elapsed_time'
@@ -103,8 +103,8 @@ if __name__ == '__main__':
     # only when the code is really called)
     import json
 
-    from blackbox_repository import load as load_blackbox
-    from blackbox_repository.utils import metrics_for_configuration
+    from benchmarking.blackbox_repository import load as load_blackbox
+    from benchmarking.blackbox_repository.utils import metrics_for_configuration
 
     root = logging.getLogger()
     root.setLevel(logging.INFO)

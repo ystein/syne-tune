@@ -1,0 +1,5 @@
+filelock
+numpy
+pandas
+fastparquet
+s3fs

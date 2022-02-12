@@ -68,10 +68,7 @@ class StoreResultsAndModelParamsCallback(StoreResultsCallback):
     callback behaves the same as the superclass.
 
     """
-    def __init__(
-            self,
-            add_wallclock_time: bool = True,
-    ):
+    def __init__(self, add_wallclock_time: bool = True):
         super().__init__(add_wallclock_time)
         self._searcher = None
 
@@ -93,8 +90,8 @@ class SimulatorAndModelParamsCallback(SimulatorCallback):
     callback behaves the same as the superclass.
 
     """
-    def __init__(self):
-        super().__init__()
+    def __init__(self, real_experiment_time_as_metadata: bool = False):
+        super().__init__(real_experiment_time_as_metadata)
         self._searcher = None
 
     def on_tuning_start(self, tuner):

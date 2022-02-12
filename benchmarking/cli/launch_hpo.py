@@ -358,9 +358,12 @@ if __name__ == '__main__':
             else params['tuner_sleep_time']
         # These callbacks also store surrogate model parameters (only for
         # schedulers which support this)
-        callbacks = [SimulatorAndModelParamsCallback()] \
-            if backend_name == 'simulated' \
-            else [StoreResultsAndModelParamsCallback()]
+        if backend_name == 'simulated':
+            callbacks = [SimulatorAndModelParamsCallback(
+                real_experiment_time_as_metadata=params[
+                    'store_real_experiment_time'])]
+        else:
+            callbacks = [StoreResultsAndModelParamsCallback()]
 
         local_tuner = Tuner(
             backend=backend,

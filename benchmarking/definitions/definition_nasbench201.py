@@ -10,6 +10,8 @@
 # on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
 # express or implied. See the License for the specific language governing
 # permissions and limitations under the License.
+from pathlib import Path
+
 from syne_tune.search_space import choice
 from benchmarking.blackbox_repository.conversion_scripts.scripts.nasbench201_import import \
     CONFIG_KEYS, METRIC_VALID_ERROR, METRIC_TIME_THIS_RESOURCE, \
@@ -59,8 +61,7 @@ def nasbench201_benchmark(params):
         dataset_name=params['dataset_name'],
         dont_sleep=params['dont_sleep'],
         blackbox_repo_s3_root=params.get('blackbox_repo_s3_root'))
-    return {
-        'script': None,
+    result = {
         'metric': METRIC_VALID_ERROR,
         'mode': 'min',
         'resource_attr': RESOURCE_ATTR,
@@ -68,11 +69,17 @@ def nasbench201_benchmark(params):
         'max_resource_attr': 'epochs',
         'config_space': config_space,
         'cost_model': _get_cost_model(params),
-        'supports_simulated': True,
-        'blackbox_name': BLACKBOX_NAME,
-        'time_this_resource_attr': METRIC_TIME_THIS_RESOURCE,
     }
-
+    if params.get('backend') == 'simulated':
+        result.update({
+            'supports_simulated': True,
+            'blackbox_name': BLACKBOX_NAME,
+            'time_this_resource_attr': METRIC_TIME_THIS_RESOURCE,
+        })
+    else:
+        result['script'] = Path(__file__).parent.parent / "training_scripts" / \
+                           "nasbench201" / "nasbench201.py"
+    return result
 
 def _get_cost_model(params):
     try:
