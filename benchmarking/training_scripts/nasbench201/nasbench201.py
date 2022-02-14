@@ -10,9 +10,6 @@
 # on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
 # express or implied. See the License for the specific language governing
 # permissions and limitations under the License.
-"""
-Reproduces NASBench201 benchmark from AutoGluonExperiments repo
-"""
 import os
 import argparse
 import logging
@@ -28,9 +25,11 @@ from benchmarking.blackbox_repository.conversion_scripts.scripts.nasbench201_imp
 
 METRIC_ELAPSED_TIME = 'metric_elapsed_time'
 
+INITIALIZATION_ATTR = 'initialization_only'
+
 
 def objective(config):
-    initialization_only = parse_bool(config['initialization_only'])
+    initialization_only = parse_bool(config[INITIALIZATION_ATTR])
     ts_start = time.time()
     s3_root = config.get('blackbox_repo_s3_root')
     blackbox = load_blackbox(
@@ -119,15 +118,15 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset_name', type=str, required=True)
     parser.add_argument('--blackbox_repo_s3_root', type=str)
-    parser.add_argument('--initialization_only', type=str, default='False')
-    args = parser.parse_known_args()[0]
-    initialization_only = parse_bool(args.initialization_only)
+    parser.add_argument(f'--{INITIALIZATION_ATTR}', type=str, default='False')
+    args = vars(parser.parse_known_args()[0])
+    initialization_only = parse_bool(args[INITIALIZATION_ATTR])
     if not initialization_only:
         parser.add_argument('--epochs', type=int, required=True)
         parser.add_argument('--dont_sleep', type=str, required=True)
         for name in CONFIG_KEYS:
             parser.add_argument(f"--{name}", type=str, required=True)
         add_checkpointing_to_argparse(parser)
-        args = parser.parse_known_args()[0]
+        args = vars(parser.parse_known_args()[0])
 
-    objective(config=vars(args))
+    objective(config=args)

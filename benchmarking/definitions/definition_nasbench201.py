@@ -16,6 +16,8 @@ from syne_tune.search_space import choice
 from benchmarking.blackbox_repository.conversion_scripts.scripts.nasbench201_import import \
     CONFIG_KEYS, METRIC_VALID_ERROR, METRIC_TIME_THIS_RESOURCE, \
     RESOURCE_ATTR, BLACKBOX_NAME
+from benchmarking.training_scripts.nasbench201.nasbench201 import \
+    INITIALIZATION_ATTR
 
 
 METRIC_ELAPSED_TIME = 'metric_elapsed_time'
@@ -81,7 +83,7 @@ def nasbench201_benchmark(params):
     else:
         result['script'] = Path(__file__).parent.parent / "training_scripts" / \
                            "nasbench201" / "nasbench201.py"
-        result['initialization_attr'] = 'initialization_only'
+        result['initialization_attr'] = INITIALIZATION_ATTR
     return result
 
 def _get_cost_model(params):

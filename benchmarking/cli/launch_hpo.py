@@ -369,7 +369,14 @@ if __name__ == '__main__':
             callbacks = [StoreResultsAndModelParamsCallback()]
             if backend_name == 'local' and 'initialization_attr' in benchmark:
                 # Special callback needed when running a tabulated blackbox
-                # with the local back-end
+                # with the local back-end. Here, `config_for_initialization`
+                # is the config passed to the training script for triggering
+                # the initialization. It contains the non-HP entries of the
+                # config space and a boolean entry named
+                # `benchmark['initialization_attr']` with value `True`.
+                # Importantly, this special callback comes before the
+                # "store results" callback, so that the initialization code
+                # is run before the start of experiment time.
                 config_for_initialization = {
                     k: v for k, v in benchmark['config_space'].items()
                     if not isinstance(v, Domain)}
