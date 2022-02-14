@@ -303,38 +303,23 @@ class LocalBackend(Backend):
             initialization
         """
         self._prepare_for_schedule()
-        with open(self.local_path / "initialize_std.out", 'a') as stdout:
-            with open(self.local_path / "initialize_std.err", 'a') as stderr:
-                logging.info(
-                    f"Initializating {self.entry_point} by calling it with {config}")
-                config_str = " ".join(
-                    [f"--{key} {value}" for key, value in config.items()])
-                cmd = f"{sys.executable} {self.entry_point} {config_str}"
-                logging.info(f"Running process with command: {cmd}")
-                # HIER!!
-
-        config_copy = config.copy()
-                config_copy[ST_CHECKPOINT_DIR] = str(trial_path / "checkpoints")
-                config_str = " ".join([f"--{key} {value}" for key, value in config_copy.items()])
-
-                def np_encoder(object):
-                    if isinstance(object, np.generic):
-                        return object.item()
-
-                with open(trial_path / "config.json", "w") as f:
-                    # the encoder fixes json error "TypeError: Object of type 'int64' is not JSON serializable"
-                    json.dump(config, f, default=np_encoder)
-
-                cmd = f"{sys.executable} {self.entry_point} {config_str}"
-
-                env = dict(os.environ)
-                self._allocate_gpu(trial_id, env)
-
-                logging.info(f"running subprocess with command: {cmd}")
-
-                self.trial_subprocess[trial_id] = subprocess.Popen(
+        logging.info(
+            f"Initializing {self.entry_point} by calling it with {config}")
+        config_str = " ".join(
+            [f"--{key} {value}" for key, value in config.items()])
+        cmd = f"{sys.executable} {self.entry_point} {config_str}"
+        logging.info(f"Running process with command: {cmd}")
+        env = dict(os.environ)
+        with open(self.local_path / "initialize.std.out", 'a') as stdout:
+            with open(self.local_path / "initialize.std.err", 'a') as stderr:
+                return_status = subprocess.run(
                     cmd.split(" "),
                     stdout=stdout,
                     stderr=stderr,
-                    env=env
-                )
+                    env=env)
+        if return_status.returncode != 0:
+            # In this case, we continue without initialization
+            logger.warning(
+                "Process for initialization of entry_point failed:\n"
+                f"cmd: {cmd}\n"
+                f"returncode: {return_status.returncode}")

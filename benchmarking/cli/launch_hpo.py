@@ -23,10 +23,13 @@ from syne_tune.backend.simulator_backend.simulator_backend import \
     SimulatorBackend
 from syne_tune.optimizer.schedulers.searchers.searcher_callback import \
     StoreResultsAndModelParamsCallback, SimulatorAndModelParamsCallback
+from syne_tune.backend.simulator_backend.comparison_local_callback import \
+    ComparisonSimulatedLocalBackendCallback
 from syne_tune.stopping_criterion import StoppingCriterion
 from syne_tune.tuner import Tuner
 from syne_tune.remote.remote_launcher import RemoteLauncher
 from syne_tune.util import s3_experiment_path, repository_root_path
+from syne_tune.search_space import Domain
 
 from benchmarking.cli.estimator_factory import sagemaker_estimator_factory
 from benchmarking.cli.launch_utils import parse_args
@@ -364,6 +367,16 @@ if __name__ == '__main__':
                     'store_real_experiment_time'])]
         else:
             callbacks = [StoreResultsAndModelParamsCallback()]
+            if backend_name == 'local' and 'initialization_attr' in benchmark:
+                # Special callback needed when running a tabulated blackbox
+                # with the local back-end
+                config_for_initialization = {
+                    k: v for k, v in benchmark['config_space'].items()
+                    if not isinstance(v, Domain)}
+                config_for_initialization[benchmark[
+                    'initialization_attr']] = True
+                callbacks.insert(0, ComparisonSimulatedLocalBackendCallback(
+                    config_for_initialization))
 
         local_tuner = Tuner(
             backend=backend,
