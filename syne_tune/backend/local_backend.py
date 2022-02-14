@@ -288,3 +288,53 @@ class LocalBackend(Backend):
 
     def __str__(self):
         return f"local entry_point {Path(self.entry_point).name}"
+
+    def initialize_entry_point(self, config: Dict):
+        """
+        Calls `entry_point` tuning script with fixed config `config`, with
+        the purpose of initialization.
+        For example, the tuning script may depend on some large file to be
+        downloaded. If this is done in the first real evaluation, this is
+        skewing the evaluation time for the trial. Worse, with more than
+        one worker, several evaluations may try to run the initialization,
+        which may lead to file locking issues.
+
+        :param config: Arguments with which `entry_point` is called for
+            initialization
+        """
+        self._prepare_for_schedule()
+        with open(self.local_path / "initialize_std.out", 'a') as stdout:
+            with open(self.local_path / "initialize_std.err", 'a') as stderr:
+                logging.info(
+                    f"Initializating {self.entry_point} by calling it with {config}")
+                config_str = " ".join(
+                    [f"--{key} {value}" for key, value in config.items()])
+                cmd = f"{sys.executable} {self.entry_point} {config_str}"
+                logging.info(f"Running process with command: {cmd}")
+                # HIER!!
+
+        config_copy = config.copy()
+                config_copy[ST_CHECKPOINT_DIR] = str(trial_path / "checkpoints")
+                config_str = " ".join([f"--{key} {value}" for key, value in config_copy.items()])
+
+                def np_encoder(object):
+                    if isinstance(object, np.generic):
+                        return object.item()
+
+                with open(trial_path / "config.json", "w") as f:
+                    # the encoder fixes json error "TypeError: Object of type 'int64' is not JSON serializable"
+                    json.dump(config, f, default=np_encoder)
+
+                cmd = f"{sys.executable} {self.entry_point} {config_str}"
+
+                env = dict(os.environ)
+                self._allocate_gpu(trial_id, env)
+
+                logging.info(f"running subprocess with command: {cmd}")
+
+                self.trial_subprocess[trial_id] = subprocess.Popen(
+                    cmd.split(" "),
+                    stdout=stdout,
+                    stderr=stderr,
+                    env=env
+                )

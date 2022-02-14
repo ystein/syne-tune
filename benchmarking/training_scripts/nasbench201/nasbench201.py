@@ -30,13 +30,17 @@ METRIC_ELAPSED_TIME = 'metric_elapsed_time'
 
 
 def objective(config):
-    dont_sleep = parse_bool(config['dont_sleep'])
-
+    initialization_only = parse_bool(config['initialization_only'])
     ts_start = time.time()
     s3_root = config.get('blackbox_repo_s3_root')
     blackbox = load_blackbox(
         BLACKBOX_NAME, s3_root=s3_root)[config['dataset_name']]
+    if initialization_only:
+        # Initialization done (download blackbox files to local)
+        return
+
     # We load metric values for all epochs required here
+    dont_sleep = parse_bool(config['dont_sleep'])
     essential_config = {
         k: config[k] for k in CONFIG_KEYS}
     fidelity_range = (1, config['epochs'])
@@ -76,8 +80,8 @@ def objective(config):
     elapsed_time = 0
     for epoch in range(resume_from + 1, config['epochs'] + 1):
         metrics_this_epoch = all_metrics[epoch - 1]
-        time_this_epoch = metrics_this_epoch[METRIC_TIME_THIS_RESOURCE]
-        valid_error = metrics_this_epoch[METRIC_VALID_ERROR]
+        time_this_epoch = float(metrics_this_epoch[METRIC_TIME_THIS_RESOURCE])
+        valid_error = float(metrics_this_epoch[METRIC_VALID_ERROR])
         elapsed_time += time_this_epoch
 
         if not dont_sleep:
@@ -109,15 +113,21 @@ if __name__ == '__main__':
     root = logging.getLogger()
     root.setLevel(logging.INFO)
 
+    # Parse in two steps: If `initialization_only` is True, this is just for
+    # initialization (downloading the blackbox repo files), and HP configs
+    # are not needed
     parser = argparse.ArgumentParser()
-    parser.add_argument('--epochs', type=int, required=True)
     parser.add_argument('--dataset_name', type=str, required=True)
-    parser.add_argument('--dont_sleep', type=str, required=True)
     parser.add_argument('--blackbox_repo_s3_root', type=str)
-    for name in CONFIG_KEYS:
-        parser.add_argument(f"--{name}", type=str, required=True)
-    add_checkpointing_to_argparse(parser)
-
-    args, _ = parser.parse_known_args()
+    parser.add_argument('--initialization_only', type=str, default='False')
+    args = parser.parse_known_args()[0]
+    initialization_only = parse_bool(args.initialization_only)
+    if not initialization_only:
+        parser.add_argument('--epochs', type=int, required=True)
+        parser.add_argument('--dont_sleep', type=str, required=True)
+        for name in CONFIG_KEYS:
+            parser.add_argument(f"--{name}", type=str, required=True)
+        add_checkpointing_to_argparse(parser)
+        args = parser.parse_known_args()[0]
 
     objective(config=vars(args))

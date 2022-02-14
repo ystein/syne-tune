@@ -55,12 +55,14 @@ def nasbench201_benchmark(params):
     but only a `time_this_resource_attr`.
 
     """
+    blackbox_repo_s3_root = params.get('blackbox_repo_s3_root')
     config_space = dict(
         _config_space,
         epochs=params['max_resource_level'],
         dataset_name=params['dataset_name'],
-        dont_sleep=params['dont_sleep'],
-        blackbox_repo_s3_root=params.get('blackbox_repo_s3_root'))
+        dont_sleep=params['dont_sleep'])
+    if blackbox_repo_s3_root is not None:
+        config_space['blackbox_repo_s3_root'] = blackbox_repo_s3_root
     result = {
         'metric': METRIC_VALID_ERROR,
         'mode': 'min',
@@ -79,6 +81,7 @@ def nasbench201_benchmark(params):
     else:
         result['script'] = Path(__file__).parent.parent / "training_scripts" / \
                            "nasbench201" / "nasbench201.py"
+        result['initialization_attr'] = 'initialization_only'
     return result
 
 def _get_cost_model(params):

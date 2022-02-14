@@ -53,7 +53,9 @@ def load(name: str, skip_if_present: bool = True,
                 "Blackbox files do not exist locally or on S3. If you have " +\
                 f"write permissions to {s3_folder}, you can set " +\
                 "generate_if_not_found=True in order to generate and persist them"
-            logging.info("did not find blackbox files locally nor on S3, regenerating it locally and persisting it on S3.")
+            logging.info(
+                f"Did not find blackbox files locally nor on S3 ({s3_folder}/{name}/). "
+                "Generating it locally and persisting it on S3.")
             generate_blackbox_recipe[name](s3_root=s3_root)
 
     if (tgt_folder / "hyperparameters.parquet").exists():
