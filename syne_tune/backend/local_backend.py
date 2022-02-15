@@ -310,6 +310,7 @@ class LocalBackend(Backend):
         cmd = f"{sys.executable} {self.entry_point} {config_str}"
         logging.info(f"Running process with command: {cmd}")
         env = dict(os.environ)
+        os.makedirs(self.local_path, exist_ok=True)
         with open(self.local_path / "initialize.std.out", 'a') as stdout:
             with open(self.local_path / "initialize.std.err", 'a') as stderr:
                 return_status = subprocess.run(
