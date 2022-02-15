@@ -47,7 +47,8 @@ def objective(config):
         blackbox=blackbox,
         config=essential_config,
         resource_attr=RESOURCE_ATTR,
-        fidelity_range=fidelity_range)
+        fidelity_range=fidelity_range,
+        seed=config.get('blackbox_seed'))
     startup_overhead = time.time() - ts_start
 
     report = Reporter()
@@ -124,6 +125,7 @@ if __name__ == '__main__':
     if not initialization_only:
         parser.add_argument('--epochs', type=int, required=True)
         parser.add_argument('--dont_sleep', type=str, required=True)
+        parser.add_argument('--blackbox_seed', type=int)
         for name in CONFIG_KEYS:
             parser.add_argument(f"--{name}", type=str, required=True)
         add_checkpointing_to_argparse(parser)
