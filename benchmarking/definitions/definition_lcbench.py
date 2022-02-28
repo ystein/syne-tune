@@ -64,6 +64,7 @@ def lcbench_default_params(params=None):
         'framework': 'PyTorch',
         'framework_version': '1.6',
         'dataset_name': 'Fashion-MNIST',
+        'searcher_threshold_failure': 7,  # `turbo` searcher
     }
 
 

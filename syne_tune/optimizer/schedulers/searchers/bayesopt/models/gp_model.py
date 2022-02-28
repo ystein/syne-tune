@@ -119,16 +119,17 @@ class GaussProcSurrogateModel(BaseSurrogateModel):
     def posterior_states(self) -> Optional[List[GaussProcPosteriorState]]:
         return self._gpmodel.states
 
-    def _current_best_filter_candidates(self, candidates):
-        candidates = super()._current_best_filter_candidates(candidates)
+    def _current_best_filter_candidates(self, candidates_trial_ids):
+        unfiltered_list = super()._current_best_filter_candidates(
+            candidates_trial_ids)
         hp_ranges = self.state.hp_ranges
-        candidates = hp_ranges.filter_for_last_pos_value(candidates)
-        assert candidates, \
-            "state.hp_ranges does not contain any candidates " + \
-            "(labeled or pending) with resource attribute " + \
-            "'{}' = {}".format(
-                hp_ranges.name_last_pos, hp_ranges.value_for_last_pos)
-        return candidates
+        filtered_list = [tpl for tpl in unfiltered_list
+                         if hp_ranges.check_last_pos_value(tpl[0])]
+        assert filtered_list, \
+            "state.hp_ranges does not contain any labeled candidates " + \
+            "with resource attribute " + \
+            f"'{hp_ranges.name_last_pos}' = {hp_ranges.value_for_last_pos}"
+        return filtered_list
 
 
 @dataclass

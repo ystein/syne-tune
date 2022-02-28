@@ -189,18 +189,9 @@ class HyperparameterRanges(object):
     def __len__(self) -> int:
         return len(self.config_space)
 
-    def filter_for_last_pos_value(self, configs: List[Configuration]) -> List[Configuration]:
-        """
-        If is_attribute_fixed, `configs` is filtered by removing
-        entries whose name_last_pos attribute value is different from
-        value_for_last_pos. Otherwise, it is returned unchanged.
-
-        """
-        if self.is_attribute_fixed():
-            configs = [
-                config for config in configs
-                if config[self.name_last_pos] == self.value_for_last_pos]
-        return configs
+    def check_last_pos_value(self, config: Configuration) -> bool:
+        return (not self.is_attribute_fixed()) or \
+               config[self.name_last_pos] == self.value_for_last_pos
 
     def config_to_tuple(
             self, config: Configuration, keys=None,

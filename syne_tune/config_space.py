@@ -536,7 +536,7 @@ class Categorical(Domain):
                and super(Categorical, self).__eq__(other) \
                and self.categories == other.categories
 
-      
+
 class Function(Domain):
     class _CallSampler(BaseSampler):
         def sample(self,

@@ -197,7 +197,7 @@ def parse_args(allow_lists_as_values=True):
     parser.add_argument('--pasha_epsilon_scaling', type=str,
                         help='Parameter of PASHA scheduler',
                         **allow_list)
-    # Arguments for bayesopt searcher
+    # Arguments for `bayesopt` searcher
     parser.add_argument('--searcher_model', type=str,
                         help='Surrogate model for bayesopt searcher with '
                              'HyperbandScheduler',
@@ -269,7 +269,7 @@ def parse_args(allow_lists_as_values=True):
                         help='DEBUG: Use old code for gp_issm, gp_expdecay')
     parser.add_argument('--searcher_no_fantasizing', action='store_true',
                         help='Ignore pending evaluations, do not use fantasizing')
-    # Arguments for kde searcher
+    # Arguments for `kde` searcher
     parser.add_argument('--searcher_num_min_data_points', type=int,
                         help='KDE: Minimum number of datapoints needed to fit models',
                         **allow_list)
@@ -287,6 +287,24 @@ def parse_args(allow_lists_as_values=True):
                         **allow_list)
     parser.add_argument('--searcher_random_fraction', type=float,
                         help='KDE: Fraction of configs suggested at random',
+                        **allow_list)
+    # Arguments for `turbo` searcher (some of `bayesopt` apply as well)
+    parser.add_argument('--searcher_sidelength_init', type=float,
+                        help='TuRBO: Initial TR sidelength L_init',
+                        **allow_list)
+    parser.add_argument('--searcher_sidelength_min', type=float,
+                        help='TuRBO: Minimum TR sidelength L_min',
+                        **allow_list)
+    parser.add_argument('--searcher_sidelength_max', type=float,
+                        help='TuRBO: Maximum TR sidelength L_init',
+                        **allow_list)
+    parser.add_argument('--searcher_threshold_success', type=float,
+                        help='TuRBO: TR sidelength is doubled after this '
+                             'many consecutive successes',
+                        **allow_list)
+    parser.add_argument('--searcher_threshold_failure', type=float,
+                        help='TuRBO: TR sidelength is halved after this '
+                             'many consecutive failures',
                         **allow_list)
 
     # First pass: All global arguments
@@ -398,16 +416,26 @@ def make_searcher_and_scheduler(params) -> (dict, dict):
             logger.warning(
                 "searcher_expdecay_normalize_inputs not used with searcher_model "
                 f"= {model}")
-    elif searcher == 'kde':
-        # Options for kde searcher
-        searcher_args = (
-            ('num_min_data_points', int),
-            ('top_n_percent', int),
-            ('min_bandwidth', float),
-            ('num_candidates', int),
-            ('bandwidth_factor', int),
-            ('random_fraction', float),
-        )
+    else:
+        if searcher == 'kde':
+            searcher_args = (
+                ('num_min_data_points', int),
+                ('top_n_percent', int),
+                ('min_bandwidth', float),
+                ('num_candidates', int),
+                ('bandwidth_factor', int),
+                ('random_fraction', float),
+            )
+        elif searcher == 'turbo':
+            searcher_args = (
+                ('sidelength_init', float),
+                ('sidelength_min', float),
+                ('sidelength_max', float),
+                ('threshold_success', int),
+                ('threshold_failure', int),
+            )
+        else:
+            searcher_args = ()
         for name, tp in searcher_args:
             _enter_not_none(
                 search_options, name, params.get('searcher_' + name), tp=tp)

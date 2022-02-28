@@ -59,6 +59,7 @@ def nashpobench_default_params(params=None):
         'framework_version': '1.6',
         'dataset_name': 'protein_structure',
         'interpolate_blackbox': True,
+        'searcher_threshold_failure': 14,  # `turbo` searcher
     }
 
 

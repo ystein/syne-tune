@@ -51,6 +51,10 @@ def nasbench201_default_params(params=None):
         'dataset_name': 'cifar10',
         'dont_sleep': dont_sleep,
         'cost_model_type': 'linear',
+        'searcher_sidelength_init': 1.5,  # `turbo` searcher
+        'searcher_sidelength_max': 2.0,
+        'searcher_sidelength_min': 0.25,
+        'searcher_threshold_failure': 15,
     }
 
 

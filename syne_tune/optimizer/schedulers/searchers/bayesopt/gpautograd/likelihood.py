@@ -20,7 +20,8 @@ from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.distribution \
 from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.gluon \
     import Block
 from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.gluon_blocks_helpers \
-    import encode_unwrap_parameter, register_parameter, create_encoding
+    import encode_unwrap_parameter, register_parameter, create_encoding, \
+    check_init_lower_upper
 from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.kernel \
     import KernelFunction
 from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.mean \
@@ -42,18 +43,27 @@ class MarginalLikelihood(Block):
         residual noise variance
     """
     def __init__(
-            self, kernel: KernelFunction, mean: MeanFunction = None,
-            initial_noise_variance=None, encoding_type=None, **kwargs):
+            self, kernel: KernelFunction,
+            mean: MeanFunction = None,
+            encoding_type=None,
+            initial_noise_variance=None,
+            noise_variance_lower_bound=None,
+            noise_variance_upper_bound=None,
+            **kwargs):
         super(MarginalLikelihood, self).__init__(**kwargs)
         if mean is None:
             mean = ScalarMeanFunction()
-        if initial_noise_variance is None:
-            initial_noise_variance = INITIAL_NOISE_VARIANCE
         if encoding_type is None:
             encoding_type = DEFAULT_ENCODING
+        enc_kwargs = check_init_lower_upper(
+            initial_noise_variance, noise_variance_lower_bound,
+            noise_variance_upper_bound, INITIAL_NOISE_VARIANCE,
+            NOISE_VARIANCE_LOWER_BOUND, NOISE_VARIANCE_UPPER_BOUND)
         self.encoding = create_encoding(
-             encoding_type, initial_noise_variance, NOISE_VARIANCE_LOWER_BOUND,
-             NOISE_VARIANCE_UPPER_BOUND, 1, Gamma(mean=0.1, alpha=0.1))
+            encoding_type,
+            **enc_kwargs,
+            dimension=1,
+            prior=Gamma(mean=0.1, alpha=0.1))
         self.mean = mean
         self.kernel = kernel
         with self.name_scope():

@@ -22,6 +22,8 @@ from syne_tune.optimizer.schedulers.searchers.gp_fifo_searcher import \
     ModelBasedSearcher
 from syne_tune.optimizer.schedulers.searchers.bayesopt.models.model_transformer \
     import ModelStateTransformer
+from syne_tune.optimizer.schedulers.searchers.turbo_fifo_searcher import \
+    TuRBOFIFOSearcher
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +58,11 @@ def _extended_result(searcher, result):
             prefix = 'model_'
             kwargs = {prefix + k: v for k, v in params.items()}
         kwargs['cumulative_get_config_time'] = searcher.cumulative_get_config_time
+        if isinstance(searcher, TuRBOFIFOSearcher):
+            # Additional information for `TuRBOFIFOSearcher`
+            kwargs['turbo_basic_sidelength'] = searcher.basic_sidelength
+            kwargs['turbo_counter_success'] = searcher.counter_success
+            kwargs['turbo_counter_failure'] = searcher.counter_failure
         result = dict(result, **kwargs)
     return result
 

@@ -73,6 +73,23 @@ def register_parameter(
         init=init_Constant(encoding.init_val_int), dtype=dtype)
 
 
+def check_init_lower_upper(
+        init, lower, upper, def_init, def_lower, def_upper):
+    if init is None:
+        init = def_init
+    if lower is None:
+        lower = def_lower
+    if upper is None:
+        upper = def_upper
+    assert 0 < lower < upper
+    if not (lower < init < upper):
+        init = np.exp((np.log(lower) + np.log(upper))/2)
+    return {
+        'init_val': init,
+        'constr_lower': lower,
+        'constr_upper': upper}
+
+
 class ScalarEncodingBase(object):
     """
     ScalarEncodingBase

@@ -70,11 +70,13 @@ __all__ = ['gp_fifo_searcher_factory',
            'cost_aware_coarse_gp_fifo_searcher_factory',
            'cost_aware_fine_gp_fifo_searcher_factory',
            'cost_aware_gp_multifidelity_searcher_factory',
+           'gp_turbo_fifo_searcher_factory',
            'gp_fifo_searcher_defaults',
            'gp_multifidelity_searcher_defaults',
            'constrained_gp_fifo_searcher_defaults',
            'cost_aware_gp_fifo_searcher_defaults',
-           'cost_aware_gp_multifidelity_searcher_defaults']
+           'cost_aware_gp_multifidelity_searcher_defaults',
+           'gp_turbo_fifo_searcher_defaults']
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +95,19 @@ def _create_base_gp_kernel(
         # Transfer learning: Specific base kernel
         kernel = create_base_gp_kernel_for_warmstarting(hp_ranges, **kwargs)
     else:
-        kernel = Matern52(dimension=hp_ranges.ndarray_size, ARD=True)
+        if kwargs.get('trust_region_bo', False):
+            # Values from the TuRBO paper/code, see :class:`TuRBOFIFOSearcher`
+            extra_kwargs = dict(
+                initial_inverse_bandwidths=2.0,
+                inverse_bandwidths_lower_bound=0.5,
+                inverse_bandwidths_upper_bound=200.0,
+                initial_covariance_scale=1.0,
+                covariance_scale_lower_bound=0.05,
+                covariance_scale_upper_bound=20.0)
+        else:
+            extra_kwargs = dict()
+        kernel = Matern52(
+            dimension=hp_ranges.ndarray_size, ARD=True, **extra_kwargs)
     return kernel
 
 
@@ -139,11 +153,21 @@ def _create_gp_standard_model(
         kernel, mean = resource_kernel_factory(
             kwargs['gp_resource_kernel'],
             kernel_x=kernel, mean_x=mean, **kernel_kwargs)
+    if kwargs.get('trust_region_bo', False):
+        # Values from the TuRBO paper/code, see :class:`TuRBOFIFOSearcher`
+        extra_kwargs = dict(
+            noise_variance_lower_bound=0.0005,
+            noise_variance_upper_bound=0.2,
+            initial_noise_variance=0.005)
+    else:
+        extra_kwargs = dict()
     gpmodel = GaussianProcessRegression(
-        kernel=kernel, mean=mean,
+        kernel=kernel,
+        mean=mean,
         optimization_config=result['optimization_config'],
         random_seed=random_seed,
-        fit_reset_params=not result['opt_warmstart'])
+        fit_reset_params=not result['opt_warmstart'],
+        **extra_kwargs)
     filter_observed_data = result['filter_observed_data']
     model_factory = GaussProcEmpiricalBayesModelFactory(
         active_metric=active_metric,
@@ -534,6 +558,23 @@ def cost_aware_gp_multifidelity_searcher_factory(**kwargs) -> Dict:
                 acquisition_class=acquisition_class)
 
 
+def gp_turbo_fifo_searcher_factory(**kwargs) -> Dict:
+    """
+    Returns kwargs for `TuRBOFIFOSearcher._create_internal`, based on kwargs
+    equal to search_options passed to and extended by scheduler (see
+    :class:`FIFOScheduler`).
+
+    These are pretty much the same as in `gp_fifo_searcher_factory`, except
+    that we use bounds on surrogate model parameters from their paper,
+    instead of our own ones.
+
+    :param kwargs: search_options coming from scheduler
+    :return: kwargs for `TuRBOFIFOSearcher._create_internal`
+
+    """
+    return gp_fifo_searcher_factory(**kwargs, trust_region_bo=True)
+
+
 def _common_defaults(is_hyperband: bool, is_multi_output: bool) -> (Set[str], dict, dict):
     mandatory = set()
 
@@ -666,3 +707,34 @@ def cost_aware_gp_multifidelity_searcher_defaults() -> (Set[str], dict, dict):
 
     """
     return _common_defaults(is_hyperband=True, is_multi_output=True)
+
+
+def gp_turbo_fifo_searcher_defaults() -> (Set[str], dict, dict):
+    """
+    Returns mandatory, default_options, config_space for
+    check_and_merge_defaults to be applied to search_options for
+    :class:`GPFIFOSearcher`.
+
+    :return: (mandatory, default_options, config_space)
+
+    """
+    mandatory, default_options, constraints = gp_fifo_searcher_defaults()
+    # Values from the TuRBO paper, see :class:`TuRBOFIFOSearcher`
+    k = 'sidelength_init'
+    constraints[k] = Float(1e-10, None)
+    default_options[k] = 0.8
+    k = 'sidelength_min'
+    constraints[k] = Float(1e-10, None)
+    default_options[k] = 1/128
+    k = 'sidelength_max'
+    constraints[k] = Float(1e-10, None)
+    default_options[k] = 1.6
+    k = 'threshold_success'
+    constraints[k] = Integer(1, None)
+    default_options[k] = 3
+    k = 'threshold_failure'
+    constraints[k] = Integer(1, None)
+    # NOTE: The paper recommends ceil(d / q), d the encoded dimensionality,
+    # q the batch size. We don't use batch suggestions here
+    default_options[k] = 5
+    return mandatory, default_options, constraints
