@@ -30,8 +30,9 @@ if __name__ == '__main__':
             role=get_execution_role(),
             dependencies=syne_tune.__path__ + benchmarking.__path__,
             disable_profiler=True,
+            s3_path='s3://sagemaker-us-west-2-536276317016/syne-tune/experiments-march-1'
         )
-        if method != Methods.MOBSTER:
+        if method not in [Methods.MOBSTER, Methods.SGPT]:
             print(f"{experiment_tag}-{method}")
             sm_args["hyperparameters"] = {"experiment_tag": experiment_tag, 'num_seeds': 30, 'method': method}
             est = PyTorch(**sm_args)
