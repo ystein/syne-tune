@@ -17,8 +17,9 @@ import argparse
 import logging
 import time
 
-from syne_tune import Reporter
+from syne_tune.report import Reporter
 from syne_tune.config_space import loguniform, add_to_argparse
+from benchmarking.utils import add_checkpointing_to_argparse
 
 
 METRIC_ACCURACY = 'accuracy'
@@ -80,11 +81,11 @@ def objective(config):
 
     # Define training args
     training_args = TrainingArguments(
-        output_dir='./',
+        output_dir=config['st_checkpoint_dir'],
         num_train_epochs=config['epochs'],
         per_device_train_batch_size=config['train_batch_size'],
         per_device_eval_batch_size=config['eval_batch_size'],
-        evaluation_strategy='steps',
+        evaluation_strategy='epoch',
         eval_steps=config['eval_interval'] // config['train_batch_size'],
         learning_rate=float(config['learning_rate']),
         weight_decay=float(config['weight_decay']),
@@ -92,7 +93,7 @@ def objective(config):
         metric_for_best_model='eval_accuracy',
         greater_is_better=True,
         # avoid filling disk
-        save_strategy="no",
+        save_strategy="epoch",
     )
 
     # Create Trainer instance
@@ -153,7 +154,7 @@ if __name__ == '__main__':
     parser.add_argument('--eval_interval', type=int, default=5000)
     parser.add_argument('--trial_id', type=str)
     add_to_argparse(parser, _config_space)
-    
+    add_checkpointing_to_argparse(parser)
     args, _ = parser.parse_known_args()
 
     objective(config=vars(args))
