@@ -213,7 +213,6 @@ class ConstrainedBayesianOptimization(FIFOScheduler):
             **kwargs,
         )
 
-
 class ZeroShotTransfer(FIFOScheduler):
     def __init__(self, config_space: Dict, transfer_learning_evaluations: Dict[str, TransferLearningTaskEvaluations],
                  metric: str, mode: str = 'min', sort_transfer_learning_evaluations: bool = True,
