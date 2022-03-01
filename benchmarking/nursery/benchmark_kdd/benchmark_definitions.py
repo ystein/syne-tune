@@ -59,9 +59,9 @@ benchmark_definitions = {
     "fcnet-naval": fcnet_benchmark("naval_propulsion"),
     "fcnet-parkinsons": fcnet_benchmark("parkinsons_telemonitoring"),
     "fcnet-slice": fcnet_benchmark("slice_localization"),
-    #"nas201-cifar10": nas201_benchmark("cifar10"),
-    #"nas201-cifar100": nas201_benchmark("cifar100"),
-    #"nas201-ImageNet16-120": nas201_benchmark("ImageNet16-120"),
+    "nas201-cifar10": nas201_benchmark("cifar10"),
+    "nas201-cifar100": nas201_benchmark("cifar100"),
+    "nas201-ImageNet16-120": nas201_benchmark("ImageNet16-120"),
 }
 
 #benchmark_definitions = {}

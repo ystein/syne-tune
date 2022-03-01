@@ -10,6 +10,7 @@ from syne_tune.optimizer.schedulers.transfer_learning.bounding_box import Boundi
 from syne_tune.optimizer.schedulers.searchers.regularized_evolution import RegularizedEvolution
 from syne_tune.optimizer.schedulers.transfer_learning.quantile_based.quantile_based_searcher import \
     QuantileBasedSurrogateSearcher
+from syne_tune.optimizer.schedulers.transfer_learning.rush import RUSHScheduler
 
 
 @dataclass
@@ -37,6 +38,7 @@ class Methods:
     ZEROSHOT = 'ZS'
     SGPT = 'SGPT'
     TPE = 'TPE'
+    RUSH = 'RUSH'
 
     
 methods = {
@@ -162,6 +164,15 @@ methods = {
         mode=method_arguments.mode,
         metric=method_arguments.metric,
         points_to_evaluate=list()
+    ),
+    Methods.RUSH: lambda method_arguments: RUSHScheduler(
+        config_space=method_arguments.config_space,
+        transfer_learning_evaluations=method_arguments.transfer_learning_evaluations,
+        mode=method_arguments.mode,
+        metric=method_arguments.metric,
+        max_t=method_arguments.max_t,
+        resource_attr=method_arguments.resource_attr,
+        random_seed=method_arguments.random_seed,
     ),
 }
 

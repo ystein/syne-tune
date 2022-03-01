@@ -5,8 +5,10 @@ import pandas as pd
 import numpy as np
 import logging
 
+logging.basicConfig(level=logging.DEBUG)
+
 from benchmarking.blackbox_repository.blackbox_tabular import serialize, BlackboxTabular
-from benchmarking.blackbox_repository.conversion_scripts.utils import repository_path
+from benchmarking.blackbox_repository.conversion_scripts.utils import repository_path, upload
 
 from syne_tune import search_space
 from syne_tune.util import catchtime
@@ -183,21 +185,10 @@ def generate_nasbench201(s3_root: Optional[str] = None):
 
                 session = requests.Session()
 
-                response = session.get(URL, params={'id': id}, stream=True)
-                token = get_confirm_token(response)
-
-                if token:
-                    params = {'id': id, 'confirm': token}
-                    response = session.get(URL, params=params, stream=True)
+                params = {'id': id, 'confirm': True}
+                response = session.get(URL, params=params, stream=True)
 
                 save_response_content(response, destination)
-
-            def get_confirm_token(response):
-                for key, value in response.cookies.items():
-                    if key.startswith('download_warning'):
-                        return value
-
-                return None
 
             def save_response_content(response, destination):
                 CHUNK_SIZE = 32768
@@ -224,7 +215,6 @@ def generate_nasbench201(s3_root: Optional[str] = None):
         serialize(bb_dict=bb_dict, path=repository_path / BLACKBOX_NAME)
 
     with catchtime("uploading to S3"):
-        from benchmarking.blackbox_repository.conversion_scripts import upload
         upload(BLACKBOX_NAME, s3_root=s3_root)
 
 
@@ -232,7 +222,7 @@ if __name__ == '__main__':
     generate_nasbench201()
 
     # plot one learning-curve for sanity-check
-    from blackbox_repository import load
+    from benchmarking.blackbox_repository import load
 
     bb_dict = load(BLACKBOX_NAME)
 

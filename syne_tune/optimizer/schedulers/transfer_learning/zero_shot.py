@@ -16,6 +16,7 @@ from typing import Dict
 import numpy as np
 import pandas as pd
 import xgboost
+from sklearn.neighbors import KNeighborsRegressor
 
 from benchmarking.blackbox_repository.blackbox_surrogate import BlackboxSurrogate
 from syne_tune.optimizer.schedulers.searchers.searcher import BaseSearcher
@@ -79,7 +80,8 @@ class ZeroShotTransfer(TransferLearningMixin, BaseSearcher):
                 hyperparameters = hyperparameters.copy()
         hyperparameters.reset_index(drop=True, inplace=True)
         self._hyperparameters = hyperparameters
-        self._scores = pd.DataFrame(scores)
+        sign = 1 if self._mode == 'min' else -1
+        self._scores = sign * pd.DataFrame(scores)
         self._ranks = self._update_ranks()
 
     def _create_surrogate_transfer_learning_evaluations(self, config_space, transfer_learning_evaluations, metric):
@@ -91,7 +93,7 @@ class ZeroShotTransfer(TransferLearningMixin, BaseSearcher):
             estimator = BlackboxSurrogate.make_model_pipeline(
                 configuration_space=config_space,
                 fidelity_space={},
-                model=xgboost.XGBRegressor(),
+                model=KNeighborsRegressor(),
             )
             X_train = task_data.hyperparameters
             y_train = task_data.objective_values(metric).mean(axis=1)[:, -1]
@@ -125,7 +127,7 @@ class ZeroShotTransfer(TransferLearningMixin, BaseSearcher):
         }
 
     def _update_ranks(self) -> pd.DataFrame:
-        return ((-1 if self._mode == 'max' else 1) * self._scores).rank(axis=1)
+        return self._scores.rank(axis=1)
 
     def _update(self, trial_id: str, config: Dict, result: Dict) -> None:
         pass
