@@ -17,7 +17,7 @@ import pytest
 from numpy.testing import assert_allclose, assert_almost_equal
 from pytest import approx
 
-from syne_tune.search_space import uniform, randint, choice, loguniform, \
+from syne_tune.config_space import uniform, randint, choice, loguniform, \
     lograndint, finrange, logfinrange
 from syne_tune.optimizer.schedulers.searchers.bayesopt.datatypes.hp_ranges_factory \
     import make_hyperparameter_ranges
@@ -202,10 +202,10 @@ def test_get_ndarray_bounds():
         '5': choice(['a', 'b', 'c'])}
     hp_ranges = make_hyperparameter_ranges(config_space)
     for epochs, val_last_pos in ((3, 1), (9, 3), (81, 81), (27, 1), (27, 9)):
-        configspace_ext = ExtendedConfiguration(
+        config_space_ext = ExtendedConfiguration(
             hp_ranges=hp_ranges, resource_attr_key='epoch',
             resource_attr_range=(1, epochs))
-        hp_ranges_ext = configspace_ext.hp_ranges_ext
+        hp_ranges_ext = config_space_ext.hp_ranges_ext
         hp_ranges_ext.value_for_last_pos = val_last_pos
         bounds = hp_ranges_ext.get_ndarray_bounds()
         val_enc = _int_encode(val_last_pos, lower=1, upper=epochs)
@@ -317,3 +317,19 @@ def test_config_to_match_string(config1, config2, match):
     match_str2 = hp_ranges.config_to_match_string(_config2)
     assert (match_str1 == match_str2) == match, \
         f"match = {match}\nmatch_str1 = {match_str1}\nmatch_str2 = {match_str2}"
+
+
+def test_config_space_for_sampling():
+    config_space = {'0': uniform(0.0, 2.0)}
+    active_space = {'0': uniform(0.5, 1.5)}
+    hp_ranges = make_hyperparameter_ranges(
+        config_space=config_space, active_config_space=active_space
+    )
+    assert hp_ranges.config_space_for_sampling == active_space, \
+        "Active space should be used for sampling when specified."
+
+    hp_ranges = make_hyperparameter_ranges(
+        config_space=config_space
+    )
+    assert hp_ranges.config_space_for_sampling == config_space, \
+        "Incorrect config space is used for sampling."

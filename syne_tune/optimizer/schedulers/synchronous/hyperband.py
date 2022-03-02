@@ -24,7 +24,7 @@ from syne_tune.optimizer.scheduler import TrialSuggestion, \
     SchedulerDecision
 from syne_tune.optimizer.schedulers.fifo import ResourceLevelsScheduler
 from syne_tune.backend.trial_status import Trial
-from syne_tune.search_space import cast_config_values
+from syne_tune.config_space import cast_config_values
 from syne_tune.optimizer.schedulers.searchers.utils.default_arguments \
     import check_and_merge_defaults, Categorical, String, \
     assert_no_invalid_options, Integer
@@ -163,7 +163,7 @@ class SynchronousHyperbandScheduler(ResourceLevelsScheduler):
         else:
             search_options = search_options.copy()
         search_options.update({
-            'configspace': self.config_space.copy(),
+            'config_space': self.config_space.copy(),
             'metric': self.metric,
             'points_to_evaluate': kwargs.get('points_to_evaluate'),
             'scheduler_mode': kwargs['mode'],
@@ -192,6 +192,15 @@ class SynchronousHyperbandScheduler(ResourceLevelsScheduler):
         self._trial_to_pending_slot = dict()
         # Maps trial_id (active) to config
         self._trial_to_config = dict()
+        # Maps (bracket_id, level), level a rung level in the bracket, to
+        # the previous rung level (or 0)
+        self._level_to_prev_level = dict()
+        for bracket_id, rungs in enumerate(bracket_rungs):
+            _, levels = zip(*rungs)
+            levels = (0,) + levels
+            self._level_to_prev_level.update(
+                ((bracket_id, lv), plv) for (lv, plv) in zip(
+                    levels[1:], levels[:-1]))
 
     def _suggest(self, trial_id: int) -> Optional[TrialSuggestion]:
         do_debug_log = self.searcher.debug_log is not None
@@ -276,6 +285,7 @@ class SynchronousHyperbandScheduler(ResourceLevelsScheduler):
                 f"'{self._resource_attr}' field"
             resource = int(result[self._resource_attr])
             milestone = slot_in_rung.level
+            prev_level = self._level_to_prev_level[(bracket_id, milestone)]
             trial_decision = SchedulerDecision.CONTINUE
             if resource >= milestone:
                 assert resource == milestone, \
@@ -289,7 +299,11 @@ class SynchronousHyperbandScheduler(ResourceLevelsScheduler):
                 del self._trial_to_pending_slot[trial_id]
                 # Trial should be paused
                 trial_decision = SchedulerDecision.PAUSE
-            if call_searcher:
+            if call_searcher and resource > prev_level:
+                # If the training script does not implement checkpointing, each
+                # trial starts from scratch. In this case, the condition
+                # `resource > prev_level` ensures that the searcher does not
+                # receive multiple reports for the same resource
                 update = self.searcher_data == 'all' or resource == milestone
                 self.searcher.on_trial_result(
                     trial_id=str(trial_id), config=self._trial_to_config[trial_id],

@@ -18,7 +18,7 @@ from benchmarking.blackbox_repository.blackbox_tabular import serialize, Blackbo
 from benchmarking.blackbox_repository.conversion_scripts.utils import repository_path
 
 from syne_tune.util import catchtime
-import syne_tune.search_space as sp
+import syne_tune.config_space as sp
 
 
 BLACKBOX_NAME = 'fcnet'
@@ -101,13 +101,13 @@ def convert_dataset(dataset_path: Path, max_rows: int = None):
     configuration_space = {
         "hp_activation_fn_1": sp.choice(["tanh", "relu"]),
         "hp_activation_fn_2": sp.choice(["tanh", "relu"]),
-        "hp_batch_size": sp.choice([8, 16, 32, 64]),
-        "hp_dropout_1": sp.choice([0.0, 0.3, 0.6]),
-        "hp_dropout_2": sp.choice([0.0, 0.3, 0.6]),
+        "hp_batch_size": sp.logfinrange(8, 64, 4, cast_int=True),
+        "hp_dropout_1": sp.finrange(0.0, 0.6, 3),
+        "hp_dropout_2": sp.finrange(0.0, 0.6, 3),
         "hp_init_lr": sp.choice([0.0005, 0.001, 0.005, 0.01, 0.05, 0.1]),
         'hp_lr_schedule': sp.choice(["cosine", "const"]),
-        'hp_n_units_1': sp.choice([16, 32, 64, 128, 256, 512]),
-        'hp_n_units_2': sp.choice([16, 32, 64, 128, 256, 512]),
+        'hp_n_units_1': sp.logfinrange(16, 512, 6, cast_int=True),
+        'hp_n_units_2': sp.logfinrange(16, 512, 6, cast_int=True),
     }
     fidelity_space = {
         RESOURCE_ATTR: sp.randint(lower=1, upper=100)
@@ -130,12 +130,12 @@ def convert_dataset(dataset_path: Path, max_rows: int = None):
 def generate_fcnet(s3_root: Optional[str] = None):
     blackbox_name = BLACKBOX_NAME
     fcnet_file = repository_path / "fcnet_tabular_benchmarks.tar.gz"
-    if not (repository_path / "fcnet_tabular_benchmarks.tar.gz").exists():
+    if not fcnet_file.exists():
         src = "http://ml4aad.org/wp-content/uploads/2019/01/fcnet_tabular_benchmarks.tar.gz"
         print(f"did not find {fcnet_file}, downloading {src}")
         urllib.request.urlretrieve(src, fcnet_file)
 
-    with tarfile.open(repository_path / "fcnet_tabular_benchmarks.tar.gz") as f:
+    with tarfile.open(fcnet_file) as f:
         f.extractall(path=repository_path)
 
     with catchtime("converting"):

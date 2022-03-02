@@ -15,7 +15,7 @@ from typing import Tuple, List, Iterable, Dict, Optional
 import numpy as np
 from numpy.random import RandomState
 
-from syne_tune.search_space import Domain, Categorical, \
+from syne_tune.config_space import Domain, Categorical, \
     non_constant_hyperparameter_keys, is_log_space, config_to_match_string
 from syne_tune.optimizer.schedulers.searchers.bayesopt.datatypes.common \
     import Hyperparameter, Configuration
@@ -122,6 +122,10 @@ class HyperparameterRanges(ABC):
     @property
     def internal_keys(self) -> List[str]:
         return self._internal_keys
+    
+    @property
+    def config_space_for_sampling(self) -> Dict:
+        return self._config_space_for_sampling
 
     @abstractmethod
     def to_ndarray(self, config: Configuration) -> np.ndarray:

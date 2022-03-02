@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from botocore.exceptions import ClientError
 
 from syne_tune.constants import ST_TUNER_TIME, ST_TUNER_CREATION_TIMESTAMP
-from syne_tune.tuner import Tuner
+from syne_tune import Tuner
 from syne_tune.util import experiment_path, s3_experiment_path
 
 
@@ -221,9 +221,16 @@ def load_experiments_df(
         df = experiment.results
         df["tuner_name"] = experiment.name
         df["scheduler"] = scheduler_name(experiment.tuner.scheduler)
-        df["backend"] = experiment.tuner.backend.__class__.__name__
+        df["backend"] = experiment.tuner.trial_backend.__class__.__name__
         for k, v in experiment.metadata.items():
-            df[k] = v
+            if isinstance(v, List):
+                if len(v) > 1:
+                    for i, x in enumerate(v):
+                        df[f"{k}-{i}"] = x
+                else:
+                    df[k] = v[0]
+            else:
+                df[k] = v
         metrics = experiment.tuner.scheduler.metric_names()
         if len(metrics) == 1:
             df["metric"] = experiment.tuner.scheduler.metric_names()[0]

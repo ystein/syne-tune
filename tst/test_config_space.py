@@ -13,8 +13,8 @@
 import pytest
 import numpy as np
 
-from syne_tune.search_space import randint, lograndint, uniform, \
-    loguniform, choice, search_space_size, randn, to_dict, from_dict, \
+from syne_tune.config_space import randint, lograndint, uniform, \
+    loguniform, choice, config_space_size, randn, to_dict, from_dict, \
     finrange, logfinrange
 
 
@@ -73,17 +73,23 @@ def test_serialization():
         loguniform(7.5, 8.5),
         choice(['a', 'b', 'c']),
         randn(2.0, 1.0),
+        finrange(0.0, 1.0, 4),
+        finrange(0, 6, 4, cast_int=True),
+        logfinrange(0.001, 1.0, 4),
+        logfinrange(2, 64, 7, cast_int=True),
     ]
 
     for x in config_space:
         x2 = from_dict(to_dict(x))
         assert type(x) == type(x2)
-        assert x.sampler.__dict__ == x2.sampler.__dict__
-        assert type(x.sampler) == type(x2.sampler)
-        assert {k: v for k, v in x.__dict__.items() if k != "sampler"} == {k: v for k, v in x2.__dict__.items() if k != "sampler"}
+        if x.sampler is not None:
+            assert x.sampler.__dict__ == x2.sampler.__dict__
+            assert type(x.sampler) == type(x2.sampler)
+        assert {k: v for k, v in x.__dict__.items() if k != "sampler"} \
+                == {k: v for k, v in x2.__dict__.items() if k != "sampler"}
 
 
-def test_search_space_size():
+def test_config_space_size():
     upper_limit = 2 ** 20
     config_space = {
         'a': randint(1, 6),
@@ -103,9 +109,9 @@ def test_search_space_size():
         (dict(config_space, f=lograndint(1, upper_limit / 10)), None),
     ]
     for cs, size in cases:
-        _size = search_space_size(cs)
+        _size = config_space_size(cs)
         assert _size == size, \
-            f"search_space_size(cs) = {_size} != {size}\n{cs}"
+            f"config_space_size(cs) = {_size} != {size}\n{cs}"
 
 
 @pytest.mark.parametrize('domain,value_set', [
@@ -116,7 +122,11 @@ def test_search_space_size():
     (logfinrange(np.exp(0.1), np.exp(1.0), 10),
      np.exp(np.arange(0.1, 1.1, 0.1))),
     (logfinrange(0.0001, 1.0, 5),
-     np.array([0.0001, 0.001, 0.01, 0.1, 1.0]))
+     np.array([0.0001, 0.001, 0.01, 0.1, 1.0])),
+    (finrange(0, 8, 5, cast_int=True),
+     np.array([0, 2, 4, 6, 8])),
+    (logfinrange(8, 512, 7, cast_int=True),
+     np.array([8, 16, 32, 64, 128, 256, 512])),
 ])
 def test_finrange_domain(domain, value_set):
     seed = 31415927
@@ -136,7 +146,9 @@ def test_finrange_domain(domain, value_set):
     (randint(0, 10), int),
     (lograndint(1, 10), int),
     (finrange(0.1, 1.0, 10), float),
-    (logfinrange(np.exp(0.1), np.exp(1.0), 10), float)
+    (logfinrange(np.exp(0.1), np.exp(1.0), 10), float),
+    (finrange(0, 8, 5, cast_int=True), int),
+    (logfinrange(8, 512, 7, cast_int=True), int),
 ])
 def test_type_of_sample(domain, tp):
     num_samples = 5

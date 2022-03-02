@@ -17,7 +17,7 @@ import logging
 
 from gluonts.evaluation import make_evaluation_predictions, Evaluator
 
-from syne_tune.report import Reporter
+from syne_tune import Reporter
 from argparse import ArgumentParser
 from gluonts.model.simple_feedforward import SimpleFeedForwardEstimator
 from gluonts.mx.trainer import Trainer
@@ -51,7 +51,7 @@ class GluontsTuneReporter(Callback):
 
     def on_validation_epoch_end(self, epoch_no: int, epoch_loss: float, training_network, trainer) -> bool:
         metrics = {
-            "epoch_no": epoch_no,
+            "epoch_no": epoch_no + 1,
             "epoch_loss": epoch_loss,
         }
         predictor = self.estimator.create_predictor(
