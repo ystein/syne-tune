@@ -39,6 +39,7 @@ class Methods:
     SGPT = 'SGPT'
     TPE = 'TPE'
     RUSH = 'RUSH'
+    RUSH5 = 'RUSH5'
 
     
 methods = {
@@ -172,6 +173,16 @@ methods = {
         metric=method_arguments.metric,
         max_t=method_arguments.max_t,
         resource_attr=method_arguments.resource_attr,
+        random_seed=method_arguments.random_seed,
+    ),
+    Methods.RUSH5: lambda method_arguments: RUSHScheduler(
+        config_space=method_arguments.config_space,
+        transfer_learning_evaluations=method_arguments.transfer_learning_evaluations,
+        mode=method_arguments.mode,
+        metric=method_arguments.metric,
+        max_t=method_arguments.max_t,
+        resource_attr=method_arguments.resource_attr,
+        num_hyperparameters_per_task=5,
         random_seed=method_arguments.random_seed,
     ),
 }

@@ -16,7 +16,6 @@ from typing import Dict
 import numpy as np
 import pandas as pd
 import xgboost
-from sklearn.neighbors import KNeighborsRegressor
 
 from benchmarking.blackbox_repository.blackbox_surrogate import BlackboxSurrogate
 from syne_tune.optimizer.schedulers.searchers.searcher import BaseSearcher
@@ -56,7 +55,7 @@ class ZeroShotTransfer(TransferLearningMixin, BaseSearcher):
         """
         super().__init__(config_space=config_space, configspace=config_space,
                          transfer_learning_evaluations=transfer_learning_evaluations, metric=metric,
-                         metric_names=[metric], mode=mode)
+                         metric_names=[metric])
         self._mode = mode
         self._random_state = np.random.RandomState(random_seed)
         if use_surrogates:
@@ -73,7 +72,12 @@ class ZeroShotTransfer(TransferLearningMixin, BaseSearcher):
             if sort_transfer_learning_evaluations:
                 hyperparameters = task_data.hyperparameters.sort_values(list(task_data.hyperparameters.columns))
             idx = hyperparameters.index.values
-            scores.append(task_data.objective_values(metric).mean(axis=1)[idx, -1])
+            avg_scores = task_data.objective_values(metric).mean(axis=1)
+            if self._mode == 'max':
+                avg_scores = avg_scores.max(axis=1)[idx]
+            else:
+                avg_scores = avg_scores.min(axis=1)[idx]
+            scores.append(avg_scores)
         if not use_surrogates:
             logger.warning(warning_message + 'If this is not the case, this searcher fails without a warning.')
             if not sort_transfer_learning_evaluations:
@@ -93,10 +97,14 @@ class ZeroShotTransfer(TransferLearningMixin, BaseSearcher):
             estimator = BlackboxSurrogate.make_model_pipeline(
                 configuration_space=config_space,
                 fidelity_space={},
-                model=KNeighborsRegressor(),
+                model=xgboost.XGBRegressor(),
             )
             X_train = task_data.hyperparameters
-            y_train = task_data.objective_values(metric).mean(axis=1)[:, -1]
+            y_train = task_data.objective_values(metric).mean(axis=1)
+            if self._mode == 'max':
+                y_train = y_train.max(axis=1)
+            else:
+                y_train = y_train.min(axis=1)
             estimator.fit(X_train, y_train)
 
             num_candidates = 10000 if len(config_space) >= 6 else 5 ** len(config_space)

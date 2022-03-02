@@ -20,9 +20,9 @@ if __name__ == '__main__':
         sm_args = dict(
             entry_point="benchmark_main.py",
             source_dir=str(Path(__file__).parent),
-            instance_type="local",
-            #checkpoint_s3_uri=s3_experiment_path(tuner_name=experiment_tag),
-            #instance_type='ml.c4.xlarge',
+            #instance_type="local",
+            checkpoint_s3_uri=s3_experiment_path(tuner_name=experiment_tag),
+            instance_type='ml.c5.4xlarge',
             instance_count=1,
             py_version="py3",
             framework_version='1.6',

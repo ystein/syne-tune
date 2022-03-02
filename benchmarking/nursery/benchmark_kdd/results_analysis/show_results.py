@@ -41,16 +41,18 @@ if __name__ == '__main__':
     plot_results(benchmarks_to_df, method_styles)
 
     methods_to_show = [
-        Methods.RS,
-        Methods.TPE,
-        Methods.REA,
-        Methods.GP,
-        Methods.MSR,
-        Methods.BOHB,
-        Methods.ASHA,
-        Methods.MOBSTER,
-        Methods.ASHA_BB,
+        #Methods.RS,
+        #Methods.TPE,
+        #Methods.REA,
+        #Methods.GP,
+        #Methods.MSR,
+        #Methods.BOHB,
+        #Methods.ASHA,
+        #Methods.MOBSTER,
+        #Methods.ASHA_BB,
         Methods.ASHA_CTS,
-        Methods.ZEROSHOT,
+        #Methods.ZEROSHOT,
+        Methods.RUSH,
+        Methods.RUSH5,
     ]
     print_rank_table(benchmarks_to_df, methods_to_show)

@@ -40,18 +40,20 @@ class MethodSyle:
 
 show_seeds = False
 method_styles = {
-    Methods.RS: MethodSyle(rs_color, fifo_style),
-    Methods.TPE: MethodSyle(tpe_color, fifo_style),
-    Methods.GP: MethodSyle(gp_color, fifo_style),
-    Methods.REA: MethodSyle(rea_color, fifo_style),
-    Methods.ASHA: MethodSyle(rs_color, multifidelity_style),
-    Methods.MSR: MethodSyle(rs_color, multifidelity_style2),
-    Methods.BOHB: MethodSyle(tpe_color, multifidelity_style),
-    Methods.MOBSTER: MethodSyle(gp_color, multifidelity_style),
+    #Methods.RS: MethodSyle(rs_color, fifo_style),
+    #Methods.TPE: MethodSyle(tpe_color, fifo_style),
+    #Methods.GP: MethodSyle(gp_color, fifo_style),
+    #Methods.REA: MethodSyle(rea_color, fifo_style),
+    #Methods.ASHA: MethodSyle(rs_color, multifidelity_style),
+    #Methods.MSR: MethodSyle(rs_color, multifidelity_style2),
+    #Methods.BOHB: MethodSyle(tpe_color, multifidelity_style),
+    #Methods.MOBSTER: MethodSyle(gp_color, multifidelity_style),
     # transfer learning
-    Methods.ASHA_BB: MethodSyle(hb_bb_color, multifidelity_style, "."),
+    #Methods.ASHA_BB: MethodSyle(hb_bb_color, multifidelity_style, "."),
     Methods.ASHA_CTS: MethodSyle(hb_ts_color, multifidelity_style, "."),
-    Methods.ZEROSHOT: MethodSyle(zero_shot_color, fifo_style, "."),
+    #Methods.ZEROSHOT: MethodSyle(zero_shot_color, fifo_style, "."),
+    Methods.RUSH: MethodSyle(rs_color, multifidelity_style, "."),
+    Methods.RUSH5: MethodSyle(tpe_color, multifidelity_style, "."),
 }
 
 
