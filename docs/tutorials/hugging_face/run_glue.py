@@ -110,35 +110,19 @@ class SyneTuneArguments:
         metadata={"help": "The checkpoint directory for SyneTune. Overwrites `output_dir`."},
     )
 
-    st_train_valid_fraction: float = field(  # [1]
+    train_valid_fraction: float = field(  # [1]
         default=0.7,
         metadata={"help": "Fraction of training set used for training, rest used for evaluation."},
     )
 
-    st_latency_attr: Optional[str] = field(  # [3]
+    latency_attribute: Optional[str] = field(  # [3]
         default=None,
         metadata={"help": "If given, prediction latency is estimated and reported"},
     )
 
-    st_num_model_params_attr: Optional[int] = field(  # [3]
+    num_model_params_attribute: Optional[int] = field(  # [3]
         default=None,
         metadata={"help": "If given, number of model parameters is reported"},
-    )
-
-    # TODO: Remove them, and check what happens!
-    trial_id: Optional[int] = field(
-        default=None,
-        metadata={"help": "The id of the trial. Not being used by anything.."},
-    )
-
-    st_instance_type: Optional[str] = field(
-        default=None,
-        metadata={"help": ""},
-    )
-
-    st_instance_count: Optional[int] = field(
-        default=None,
-        metadata={"help": ""},
     )
 
 
@@ -199,11 +183,11 @@ def additional_syne_tune_metrics(
 
     """
     additional_metrics = dict()
-    if syne_tune_args.st_num_model_params_attr is not None:
+    if syne_tune_args.num_model_params_attribute is not None:
         # Total number of parameters
         n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-        additional_metrics[syne_tune_args.st_num_model_params_attr] = n_params
-    if syne_tune_args.st_latency_attr is not None:
+        additional_metrics[syne_tune_args.num_model_params_attribute] = n_params
+    if syne_tune_args.latency_attribute is not None:
         # Compute inference time (i.e latency)
         import torch
         device = torch.device("cuda")
@@ -228,7 +212,7 @@ def additional_syne_tune_metrics(
                 torch.cuda.synchronize()
                 curr_time = starter.elapsed_time(ender)
                 timings.append(curr_time)
-        additional_metrics[syne_tune_args.st_latency_attr] = np.mean(timings)
+        additional_metrics[syne_tune_args.latency_attribute] = np.mean(timings)
     return additional_metrics
 
 # *** END SYNE TUNE INSERT ***
@@ -655,7 +639,7 @@ def main():
     # `eval_dataset` is used as test set.
 
     split = train_dataset.train_test_split(
-        train_size=syne_tune_args.st_train_valid_fraction, seed=0)  # fix seed, all trials have the same data split
+        train_size=syne_tune_args.train_valid_fraction, seed=0)  # fix seed, all trials have the same data split
     train_dataset = split['train']
     valid_dataset = split['test']
 

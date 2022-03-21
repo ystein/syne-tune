@@ -1,4 +1,4 @@
-from pathlib import Path
+import logging
 
 from syne_tune.backend.local_backend import LocalBackend
 from syne_tune.tuner import Tuner
@@ -6,6 +6,11 @@ from syne_tune.config_space import uniform, loguniform, randint
 from syne_tune.stopping_criterion import StoppingCriterion
 from syne_tune.optimizer.baselines import ASHA
 from syne_tune.remote.remote_launcher import RemoteLauncher
+
+logger = logging.getLogger(__name__)
+
+
+logging.getLogger().setLevel(logging.INFO)
 
 
 # For different GLUE tasks: Metric to optimize (prefix 'eval_'), and whether
@@ -28,11 +33,8 @@ model_type = 'bert-base-cased'  # pre-trained model
 
 experiment_name = 'hpo-glue-basic-' + dataset
 max_runtime = 1800  # Run HPO for this many seconds
-num_train_epochs = 3  # Maximum number of training epochs
-# instance_type = 'ml.g4dn.xlarge'  # AWS instance type
-# n_workers = 1  # Number of HPO evaluations in parallel (needs sufficient GPUs)
-instance_type = 'ml.g4dn.12xlarge'  # AWS instance type
-n_workers = 4  # Number of HPO evaluations in parallel (needs sufficient GPUs)
+instance_type = 'ml.g4dn.xlarge'  # AWS instance type
+n_workers = 1  # Limited by number GPUs for local backend
 seed = 1234
 
 
@@ -43,6 +45,9 @@ entry_point = "./run_glue.py"
 metric = 'eval_' + TASK2METRICSMODE[dataset]['metric']
 mode = TASK2METRICSMODE[dataset]['mode']
 resource_attr = 'epoch'
+
+num_train_epochs = 3  # Maximum number of training epochs
+train_valid_fraction = 0.7  # 0.7 for training, 0.3 for validation
 
 
 # The configuration space contains all hyperparameters we would like to optimize,
@@ -55,7 +60,7 @@ hyperparameter_space = {
     'warmup_ratio': uniform(0, 0.5),
 }
 
-# This is the default configuration provided by Hugging Face. This will always
+# This is the default configuration provided by Hugging Face. It will always
 # be evaluated first
 default_configuration = {
     'learning_rate': 2e-5,
@@ -72,14 +77,14 @@ fixed_parameters = {
     'seed': seed,
     'output_dir': 'tmp/' + dataset,
     'evaluation_strategy': 'epoch',
+    'train_valid_fraction': train_valid_fraction,
 }
 
 config_space = {**hyperparameter_space, **fixed_parameters}
 
 
 # The backend is responsible to start and stop training evaluations. Here, we
-# use the local backend, which runs on a single instance. Later examples will
-# showcase a more powerful backend
+# use the local backend, which runs on a single instance
 backend = LocalBackend(entry_point=entry_point)
 
 
@@ -95,7 +100,7 @@ scheduler = ASHA(
     resource_attr=resource_attr,
     max_t=num_train_epochs,
     random_seed=seed,
-    points_to_evalute=[default_configuration],
+    points_to_evaluate=[default_configuration],
 )
 
 
@@ -107,6 +112,7 @@ local_tuner = Tuner(
     stop_criterion=stop_criterion,
     n_workers=n_workers,
     tuner_name=experiment_name,
+    metadata=fixed_parameters,
 )
 
 #local_tuner.run()  # would run experiment locally
@@ -115,7 +121,6 @@ local_tuner = Tuner(
 # Instead of running the experiment locally, we'll launch a SageMaker training
 # job. This allows us to launch from anywhere without having to worry about
 # GPUs or dependencies being installed.
-
 # `RemoteLauncher` is one of the ways Syne Tune offers to run experiments
 # remotely. It requires some setup work and allows to use a single SM
 # estimator type (`PyTorch`), but is easy to use, since only a single
@@ -130,4 +135,5 @@ remote_tuner = RemoteLauncher(
     **estimator_kwargs,
 )
 
+logger.info(f"Launching {local_tuner.name}")
 remote_tuner.run(wait=False)
