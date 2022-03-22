@@ -10,6 +10,8 @@
 # on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
 # express or implied. See the License for the specific language governing
 # permissions and limitations under the License.
+import logging
+
 from syne_tune.optimizer.scheduler import TrialScheduler
 from syne_tune.optimizer.schedulers import FIFOScheduler, HyperbandScheduler
 from syne_tune.optimizer.schedulers.synchronous import \
@@ -19,6 +21,8 @@ from syne_tune.constants import ST_WORKER_TIME
 
 from benchmarking.cli.launch_utils import make_searcher_and_scheduler
 from benchmarking.utils import dict_get
+
+logger = logging.getLogger(__name__)
 
 __all__ = ['scheduler_factory',
            'supported_schedulers',
@@ -103,6 +107,7 @@ def scheduler_factory(
 
         # Searcher and scheduler options from params
         search_options, scheduler_options = make_searcher_and_scheduler(params)
+
         for k in ('metric', 'mode', 'max_resource_attr'):
             if k in benchmark:
                 scheduler_options[k] = benchmark[k]
@@ -157,6 +162,27 @@ def scheduler_factory(
                     rung_system_kwargs[name] = tp(v)
             if rung_system_kwargs:
                 scheduler_options['rung_system_kwargs'] = rung_system_kwargs
+
+        # If the benchmark defines `random_seed_attr`, this is a key name
+        # in `config_space` for a random seed passed to the training code.
+        # If this is not yet set in `config_space`, the (master) random seed
+        # of the scheduler is written there. This means that it will be
+        # different for each run_id, but the same for all evaluations.
+        random_seed_attr = benchmark.get('random_seed_attr')
+        if random_seed_attr is not None:
+            if random_seed_attr not in config_space:
+                scheduler_seed = scheduler_options['random_seed']
+                config_space = dict(
+                    config_space, **{random_seed_attr: scheduler_seed})
+                logger.info(
+                    f"Benchmark defines random_seed_attr = {random_seed_attr}, "
+                    "not set in config_space. Setting to scheduler_seed = "
+                    + str(scheduler_seed))
+            else:
+                logger.info(
+                    f"Benchmark defines random_seed_attr = {random_seed_attr}, "
+                    f"and config_space[{random_seed_attr}] = {config_space[random_seed_attr]}")
+
         # Build scheduler and searcher
         scheduler_cls = schedulers_with_search_options[scheduler]
         myscheduler = scheduler_cls(
