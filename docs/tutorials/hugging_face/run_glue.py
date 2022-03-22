@@ -125,6 +125,23 @@ class SyneTuneArguments:
         metadata={"help": "If given, number of model parameters is reported"},
     )
 
+    # The following arguments are passed by Syne Tune, but not needed
+
+    trial_id: Optional[int] = field(
+        default=None,
+        metadata={"help": ""},
+    )
+
+    st_instance_type: Optional[str] = field(
+        default=None,
+        metadata={"help": ""},
+    )
+
+    st_instance_count: Optional[int] = field(
+        default=None,
+        metadata={"help": ""},
+    )
+
 
 # [2]
 class ReportBackMetrics(transformers.trainer_callback.TrainerCallback):
