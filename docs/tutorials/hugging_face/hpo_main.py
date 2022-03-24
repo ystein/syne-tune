@@ -93,7 +93,6 @@ if __name__ == '__main__':
         'max_seq_length': 128,
         'output_dir': 'tmp/' + dataset,
         'evaluation_strategy': 'epoch',
-        'load_best_model_at_end': True,
         'save_strategy': 'epoch',
         'save_total_limit': 1,
     }

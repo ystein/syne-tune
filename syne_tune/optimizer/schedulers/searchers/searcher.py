@@ -349,7 +349,7 @@ class SearcherWithRandomSeed(BaseSearcher):
         self.random_state = np.random.RandomState(random_seed)
         # For all categorical HPs: Count how often each value is suggested
         self.histogram_categorical = dict()
-        for name, hp_range in configspace.items():
+        for name, hp_range in config_space.items():
             if isinstance(hp_range, Categorical):
                 self.histogram_categorical[name] = [0] * len(hp_range)
 
@@ -370,7 +370,7 @@ class SearcherWithRandomSeed(BaseSearcher):
         config = self._get_config(**kwargs)
         for name, histogram in self.histogram_categorical.items():
             value = config[name]
-            hp_range = self.configspace[name]
+            hp_range = self.config_space[name]
             histogram[hp_range.categories.index(value)] += 1
         return config
 

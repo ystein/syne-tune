@@ -211,7 +211,7 @@ def scheduler_name(scheduler):
         searcher = scheduler.searcher.__class__.__name__
         return "-".join([scheduler_name, searcher])
     else:
-        from syne_tune.optimizer.schedulers import RayTuneScheduler
+        from syne_tune.optimizer.schedulers.ray_scheduler import RayTuneScheduler
 
         if isinstance(scheduler, RayTuneScheduler):
             scheduler_name = f"Ray-{scheduler.scheduler.__class__.__name__}"
