@@ -18,9 +18,12 @@ if __name__ == '__main__':
     random_seed_offset = 31415627
     num_runs = 10
     optimizers = ['rs', 'bo', 'asha', 'mobster']
-    model_selection = [False, True]
+    #model_selection = [False, True]
+    model_selection = [True]
     run_ids = list(range(num_runs))
     num_experiments = len(model_selection) * len(optimizers) * num_runs
+    # Useful if not all experiments could be started:
+    skip_initial_experiments = 0
 
     dataset_name = 'rte'  # GLUE task
     model_type = 'bert-base-cased'  # Default model used if not selected
@@ -35,6 +38,8 @@ if __name__ == '__main__':
 
     for exp_id, (choose_model, optimizer, run_id) in enumerate(
             itertools.product(model_selection, optimizers, run_ids)):
+        if exp_id < skip_initial_experiments:
+            continue
         print(f"Experiment {exp_id} (of {num_experiments})")
         choose_model = str(choose_model)  # convert bool -> str
         # Append date time-stamp postfix. This is done here (and not when `Tuner`

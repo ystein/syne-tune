@@ -7,6 +7,8 @@ from syne_tune.config_space import uniform, loguniform, choice, randint
 from syne_tune.stopping_criterion import StoppingCriterion
 from syne_tune.optimizer.baselines import ASHA, MOBSTER, BayesianOptimization, \
     RandomSearch
+from syne_tune.optimizer.schedulers.searchers.searcher_callback import \
+    StoreResultsAndModelParamsCallback
 
 
 TASK2METRICSMODE = {
@@ -116,11 +118,13 @@ if __name__ == '__main__':
     backend = LocalBackend(entry_point=entry_point)
 
     # HPO algorithm
-    # We use the same random seed as passed to the training function
+    # We use the same random seed as passed to the training function. And
+    # `default_configuration` is the first config to be evaluated
     scheduler_kwargs = dict(
         metric=metric,
         mode=mode,
-        random_seed=seed)
+        random_seed=seed,
+        points_to_evaluate=[default_configuration])
     if optimizer in {'asha', 'mobster'}:
         # The multi-fidelity methods need extra information
         scheduler_kwargs['resource_attr'] = resource_attribute
@@ -137,16 +141,15 @@ if __name__ == '__main__':
     # Note `args.tuner_name` already has the date time-stamp postfix (so that
     # SageMaker job name coincides with where results are stored), so `Tuner`
     # must not append it again
-
-    # TODO:
-    # - Log info about how often each model is chosen!
     stop_criterion = StoppingCriterion(max_wallclock_time=args.max_runtime)
+    callbacks = [StoreResultsAndModelParamsCallback()]
     tuner = Tuner(
         trial_backend=backend,
         scheduler=scheduler,
         stop_criterion=stop_criterion,
         n_workers=args.n_workers,
         metadata=vars(args),
+        callbacks=callbacks,
         tuner_name=args.tuner_name,
         tuner_name_add_postfix=False,  # do not append date time-stamp again
     )

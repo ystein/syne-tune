@@ -90,7 +90,7 @@ class RegularizedEvolution(SearcherWithRandomSeed):
           for k, v in self.config_space.items()
         }
 
-    def get_config(self, **kwargs):
+    def _get_config(self, **kwargs):
 
         initial_config = self._next_initial_config()
 

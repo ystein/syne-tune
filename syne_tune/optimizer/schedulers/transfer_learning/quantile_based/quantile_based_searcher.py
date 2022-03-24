@@ -143,7 +143,7 @@ class QuantileBasedSurrogateSearcher(SearcherWithRandomSeed):
     def clone_from_state(self, state):
         pass
 
-    def get_config(self, **kwargs):
+    def _get_config(self, **kwargs):
         samples = self.random_state.normal(loc=self.mu_pred, scale=self.sigma_pred)
         if self.mode == 'max':
             samples *= -1
