@@ -50,6 +50,7 @@ class Tuner:
             asynchronous_scheduling: bool = True,
             callbacks: Optional[List[TunerCallback]] = None,
             metadata: Optional[Dict] = None,
+            tuner_name_add_postfix: bool = True,
     ):
         """
         Allows to run an tuning job, call `run` after initializing.
@@ -65,8 +66,9 @@ class Tuner:
         :param results_update_interval: frequency at which results are updated and stored in seconds
         :param max_failures: max failures allowed,
         :param tuner_name: name associated with the tuning experiment, default to the name of the entrypoint.
-        It can only consists in alpha-digits characters, possibly separated by '-'. A postfix with a date time-stamp
-        is added to ensure unicity.
+            It can only consists in alpha-digits characters, possibly separated by '-'.
+            If `tuner_name_add_postfix` is true, a postfix with a date time-stamp is
+            added to ensure unicity.
         :param asynchronous_scheduling: whether to use asynchronous scheduling when scheduling new trials. If `True`,
         trials are scheduled as soon as a worker is available, if `False`, the tuner waits that all trials are finished
          before scheduling a new batch.
@@ -75,7 +77,14 @@ class Tuner:
         :param metadata: dictionary of user-metadata that will be persistend in {tuner_path}/metadata.json, in addition
         to the metadata provided by the user, `SMT_TUNER_CREATION_TIMESTAMP` is always included which measures
         the time-stamp when the tuner started to run.
+        :param tuner_name_add_postfix: By default, a postfix with a date time-stamp
+            is appended to `tuner_name`. This ensures that the tuner name is unique
+            and results or job names of different experiments do not collide.
+            If this argument is false, `tuner_name` is used as is (no postfix
+            added), so unicity has to be ensured from the outside.
         """
+        assert tuner_name_add_postfix or tuner_name is not None, \
+            "If tuner_name_add_postfix = False, tuner_name must be given"
         self.trial_backend = trial_backend
         self.scheduler = scheduler
         self.n_workers = n_workers
@@ -92,7 +101,9 @@ class Tuner:
             check_valid_sagemaker_name(tuner_name)
         else:
             tuner_name = Path(self.trial_backend.entrypoint_path()).stem.replace("_", "-")
-        self.name = name_from_base(tuner_name, default="st-tuner")
+        if tuner_name_add_postfix:
+            tuner_name= name_from_base(tuner_name, default="st-tuner")
+        self.name = tuner_name
 
         # we keep track of the last result seen to send it to schedulers when trials complete.
         self.last_seen_result_per_trial = {}
