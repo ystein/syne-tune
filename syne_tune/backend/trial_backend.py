@@ -60,6 +60,16 @@ class TrialBackend:
         """
         raise NotImplementedError()
 
+    def delete_checkpoint(self, trial_id: int):
+        """
+        Removes checkpoint folder for a trial. It is OK for the folder not to
+        exist.
+
+        :param trial_id:
+        :return:
+        """
+        raise NotImplementedError()
+
     def resume_trial(
             self, trial_id: int, new_config: Optional[dict] = None):
         """
@@ -114,6 +124,8 @@ class TrialBackend:
         # todo assert trial_id is valid
         # todo assert trial_id has not been stopped or paused before
         self._stop_trial(trial_id=trial_id)
+        # TODO: Make this optional
+        self.delete_checkpoint(trial_id=trial_id)  # checkpoint not needed anymore
 
     def _stop_trial(self, trial_id: int):
         """
@@ -157,6 +169,9 @@ class TrialBackend:
                     position_last_seen = self._last_metric_seen_index[trial_result.trial_id]
                     new_metrics = trial_result.metrics[position_last_seen:]
                     self._last_metric_seen_index[trial_result.trial_id] += len(new_metrics)
+                    # TODO: Make this optional!
+                    if trial_result.status == Status.completed:
+                        self.delete_checkpoint(trial_id=trial_result.trial_id)
                 for new_metric in new_metrics:
                     results.append((trial_result.trial_id, new_metric))
 

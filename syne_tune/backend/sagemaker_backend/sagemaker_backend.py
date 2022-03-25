@@ -253,9 +253,13 @@ class SageMakerBackend(TrialBackend):
     def copy_checkpoint(self, src_trial_id: int, tgt_trial_id: int):
         # todo sync checkpoint path with s3 sync
         logger.warning(
-            "Starting trials with a previous checkpoint is not supported yet in Sagemaker. "
+            "Starting trials with a previous checkpoint is not supported yet in SageMaker. "
             "The trial will run from scratch."
         )
+
+    def delete_checkpoint(self, trial_id: int):
+        # TODO
+        logger.warning("Deleting checkpoints not yet supported for SageMaker backend")
 
     def set_path(self, results_root: Optional[str] = None, tuner_name: Optional[str] = None):
         # we use the tuner-name to set the checkpoint directory
