@@ -51,6 +51,7 @@ class Tuner:
             callbacks: Optional[List[TunerCallback]] = None,
             metadata: Optional[Dict] = None,
             tuner_name_add_postfix: bool = True,
+            tuner_path_strip_name_on_sagemaker: bool = False,
     ):
         """
         Allows to run an tuning job, call `run` after initializing.
@@ -82,6 +83,16 @@ class Tuner:
             and results or job names of different experiments do not collide.
             If this argument is false, `tuner_name` is used as is (no postfix
             added), so unicity has to be ensured from the outside.
+        :param tuner_path_strip_name_on_sagemaker: Results, logs, and checkpoints
+            are written to `self.tuner_path`. By default, the tuner name is the
+            postfix for this path. If this flag is True and we are running on
+            SageMaker (i.e., not locally), this postfix is not used.
+            The rationale is that in this case, we append the tuner name as postfix
+            to `checkpoint_s3_uri` passed to the SageMaker training job. This
+            restricts the automatic upload and download of files to those of the
+            tuner (otherwise, files written by all tuner with the same experiment
+            name are affected, which wastes time and memory).
+            Note: The default is False, to retain old behaviour.
         """
         assert tuner_name_add_postfix or tuner_name is not None, \
             "If tuner_name_add_postfix = False, tuner_name must be given"
@@ -108,14 +119,20 @@ class Tuner:
         # we keep track of the last result seen to send it to schedulers when trials complete.
         self.last_seen_result_per_trial = {}
         self.trials_scheduler_stopped = set()
-        self.tuner_path = Path(experiment_path(tuner_name=self.name))
+        self._set_tuner_path(tuner_path_strip_name_on_sagemaker)
 
         # inform the backend to the folder of the Tuner. This allows the local backend
         # to store the logs and tuner results in the same folder.
-        self.trial_backend.set_path(results_root=self.tuner_path, tuner_name=self.name)
+        self.trial_backend.set_path(results_root=self.tuner_path,
+                                    tuner_name=self.name)
         self.callbacks = callbacks if callbacks is not None else [self._default_callback()]
 
         self.tuning_status = None
+
+    def _set_tuner_path(self, tuner_path_strip_name_on_sagemaker: bool):
+        self.tuner_path = Path(experiment_path(
+            tuner_name=self.name,
+            ignore_tuner_name_on_sagemaker=tuner_path_strip_name_on_sagemaker))
 
     def run(self):
         """
@@ -212,17 +229,19 @@ class Tuner:
                 mode=self.scheduler.metric_mode(),
             )
 
+            # First, make sure that callbacks are properly terminated. For
+            # example, final results are to be written
+            for callback in self.callbacks:
+                callback.on_tuning_end()
+            # Store the tuner state
+            self.save()
+
             logger.info("Tuner finished, stopping trials that may still be running.")
             self.trial_backend.stop_all()
 
             # notify tuning status that jobs were stopped without having to query their status in the backend since
             # we know that all trials were stopped
             self.tuning_status.mark_running_job_as_stopped()
-
-            self.save()
-
-            for callback in self.callbacks:
-                callback.on_tuning_end()
 
             # in case too many errors were triggered, show log of last failed job and terminates with an error
             if self.tuning_status.num_trials_failed > self.max_failures:
@@ -371,10 +390,11 @@ class Tuner:
                 self.trial_backend.initialize_sagemaker_session()
 
     @staticmethod
-    def load(tuner_path: Optional[str]):
+    def load(tuner_path: Optional[str],
+             tuner_path_strip_name_on_sagemaker: bool = False):
         with open(Path(tuner_path) / "tuner.dill", "rb") as f:
             tuner = dill.load(f)
-            tuner.tuner_path = Path(experiment_path(tuner_name=tuner.name))
+            tuner._set_tuner_path(tuner_path_strip_name_on_sagemaker)
             return tuner
 
     def _update_running_trials(

@@ -368,10 +368,11 @@ class SearcherWithRandomSeed(BaseSearcher):
 
     def get_config(self, **kwargs):
         config = self._get_config(**kwargs)
-        for name, histogram in self.histogram_categorical.items():
-            value = config[name]
-            hp_range = self.config_space[name]
-            histogram[hp_range.categories.index(value)] += 1
+        if config is not None:
+            for name, histogram in self.histogram_categorical.items():
+                value = config[name]
+                hp_range = self.config_space[name]
+                histogram[hp_range.categories.index(value)] += 1
         return config
 
 

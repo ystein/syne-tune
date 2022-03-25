@@ -14,10 +14,11 @@ from syne_tune.optimizer.baselines import RandomSearch, BayesianOptimization, \
     ASHA, MOBSTER, REA, SyncHyperband, SyncBOHB, SyncMOBSTER
 from syne_tune.optimizer.scheduler import SchedulerDecision
 from syne_tune.optimizer.schedulers import FIFOScheduler, MedianStoppingRule, \
-    HyperbandScheduler, PopulationBasedTraining, RayTuneScheduler
+    HyperbandScheduler, PopulationBasedTraining
 from syne_tune.optimizer.schedulers.multiobjective import MOASHA
 from syne_tune.optimizer.schedulers.transfer_learning import \
     TransferLearningTaskEvaluations, BoundingBox, RUSHScheduler
+from syne_tune.optimizer.schedulers.ray_scheduler import RayTuneScheduler
 from syne_tune.optimizer.schedulers.transfer_learning.quantile_based.quantile_based_searcher import \
     QuantileBasedSurrogateSearcher
 from syne_tune.config_space import randint, uniform, choice

@@ -195,7 +195,14 @@ class LocalBackend(TrialBackend):
             # (which allows to write a time-stamp when the process finishes) but it is probably OK if all_results
             # is called every few seconds.
             if os.path.exists(trial_path / "end"):
-                training_end_time = self._read_time_stamp(trial_id=trial_id, name="end")
+                try:
+                    training_end_time = self._read_time_stamp(
+                        trial_id=trial_id, name="end")
+                except ValueError as exc:
+                    # File is present, but empty
+                    training_end_time = datetime.now()
+                    logger.warning(
+                        f"Timestamp file {str(trial_path / 'end')} exists, but is empty:\n{exc}")
             else:
                 training_end_time = datetime.now()
 
@@ -243,8 +250,12 @@ class LocalBackend(TrialBackend):
 
     def _write_time_stamp(self, trial_id: int, name: str):
         time_stamp_path = self._file_path(trial_id=trial_id, filename=name)
-        with open(time_stamp_path, 'w') as f:
-            f.write(str(datetime.now().timestamp()))
+        try:
+            with open(time_stamp_path, 'w') as f:
+                f.write(str(datetime.now().timestamp()))
+        except OSError as exc:
+            logger.warning(
+                f"Failed to write timestamp file {str(time_stamp_path)}:\n{exc}")
 
     def _read_time_stamp(self, trial_id: int, name: str):
         time_stamp_path = self._file_path(trial_id=trial_id, filename=name)

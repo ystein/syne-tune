@@ -1,5 +1,6 @@
 import logging
 import argparse
+from pathlib import Path
 
 from syne_tune.backend.local_backend import LocalBackend
 from syne_tune.tuner import Tuner
@@ -37,6 +38,30 @@ PRETRAINED_MODELS = [
 ]
 
 
+def decode_bool(hp: str) -> bool:
+    # Sagemaker encodes hyperparameters in estimators as literals which are compatible with Python,
+    # except for true and false that are respectively encoded as 'True' and 'False'.
+    assert hp in ['True', 'False']
+    return hp == 'True'
+
+
+# Technical comments:
+# - By default, `Tuner` is passed an experiment name for `tuner_name`, and
+#   appends a date time-stamp in order to make it unique. Here, since we
+#   want to use the tuner name (with postfix) also as SageMaker job name,
+#   the postfix is already appended in the `tuner_name` argument. By
+#   creating `Tuner` with `tuner_name_add_postfix=False`, the tuner does
+#   not append a postfix.
+# - We use the SageMaker checkpoint mechanism to write results (optionally
+#   also logs and checkpoints) to S3. Namely, anything written to
+#   `opt/ml/checkpoints` is synced to S3.
+#   By default, `checkpoint_s3_uri` passed to the SM training job does not
+#   depend on `tuner_name`, which leads to potentially many files from
+#   other experiments being downloaded when the job starts.
+#   To avoid this, we append `tuner_name` to `checkpoint_s3_uri` already.
+#   We then create `Tuner` with `tuner_path_strip_name_on_sagemaker=True`,
+#   to avoid the tuner name to be appended once more.
+#   Note: This should probably become the default!
 if __name__ == '__main__':
     logging.getLogger().setLevel(logging.INFO)
 
@@ -57,9 +82,13 @@ if __name__ == '__main__':
     parser.add_argument('--choose_model', type=str, default='False')
     parser.add_argument('--seed', type=int)
     parser.add_argument('--train_valid_fraction', type=float, default=0.7)
+    parser.add_argument('--store_logs_checkpoints_to_s3', type=str,
+                        default='False')
 
     args, _ = parser.parse_known_args()
-    args.choose_model = (args.choose_model.upper() == 'TRUE')
+    args.choose_model = decode_bool(args.choose_model)
+    args.store_logs_checkpoints_to_s3 = decode_bool(
+        args.store_logs_checkpoints_to_s3)
 
     dataset = args.dataset
     model_type = args.model_type
@@ -151,6 +180,14 @@ if __name__ == '__main__':
         callbacks=callbacks,
         tuner_name=args.tuner_name,
         tuner_name_add_postfix=False,  # do not append date time-stamp again
+        tuner_path_strip_name_on_sagemaker=True,
     )
+
+    # Set path for logs and checkpoints
+    if args.store_logs_checkpoints_to_s3:
+        backend.set_path(results_root=tuner.tuner_path)
+    else:
+        backend.set_path(
+            results_root=str(Path('~/').expanduser()), tuner_name=tuner.name)
 
     tuner.run()

@@ -19,7 +19,8 @@ if __name__ == '__main__':
     num_runs = 10
     optimizers = ['rs', 'bo', 'asha', 'mobster']
     model_selection = [False, True]
-    run_ids = list(range(num_runs))
+    # run_ids = list(range(num_runs))
+    run_ids = [9]
     num_experiments = len(model_selection) * len(optimizers) * len(run_ids)
     # Useful if not all experiments could be started:
     skip_initial_experiments = 0
@@ -35,9 +36,6 @@ if __name__ == '__main__':
     else:
         n_workers = 1
 
-    # Results written to S3 under this path
-    checkpoint_s3_uri = s3_experiment_path(experiment_name=experiment_name)
-    print(f"Results stored to {checkpoint_s3_uri}")
     first_tuner_name = None
     last_tuner_name = None
     for exp_id, (choose_model, optimizer, run_id) in enumerate(
@@ -53,6 +51,14 @@ if __name__ == '__main__':
         if first_tuner_name is None:
             first_tuner_name = tuner_name
         last_tuner_name = tuner_name
+        # Results written to S3 under this path
+        # Note: The S3 path has `tuner_name` as postfix, so that only files
+        # related to this particular experiment run are covered by the sync
+        # mechanism. This is NOT the default, and we need further changes in
+        # `hpo_main.py`.
+        checkpoint_s3_uri = s3_experiment_path(
+            experiment_name=experiment_name, tuner_name=tuner_name)
+        print(f"Results stored to {checkpoint_s3_uri}")
         # We use a different seed for each `run_id`
         seed = (random_seed_offset + run_id) % (2 ** 32)
 
@@ -83,26 +89,46 @@ if __name__ == '__main__':
         #    py_version="py38",
         #    pytorch_version='1.9',
         #    transformers_version='4.12',
+        #    volume_size=125,
         #    max_run=int(1.25 * max_runtime),
         #    role=get_execution_role(),
         #    dependencies=dependencies,
         #    disable_profiler=True,
         #    hyperparameters=hyperparameters,
         #)
+        # Latest PyTorch version:
         est = PyTorch(
             entry_point=entry_point,
             source_dir=source_dir,
             checkpoint_s3_uri=checkpoint_s3_uri,
             instance_type=instance_type,
             instance_count=1,
-            py_version="py3",
-            framework_version='1.6',
+            py_version="py38",
+            framework_version='1.10',
+            volume_size=125,
             max_run=int(1.25 * max_runtime),
             role=get_execution_role(),
             dependencies=dependencies,
             disable_profiler=True,
             hyperparameters=hyperparameters,
         )
+        # Old PyTorch version (worked for Aaron,
+        # but "torch=1.10.0" in requirements.txt)
+        #est = PyTorch(
+        #    entry_point=entry_point,
+        #    source_dir=source_dir,
+        #    checkpoint_s3_uri=checkpoint_s3_uri,
+        #    instance_type=instance_type,
+        #    instance_count=1,
+        #    py_version="py3",
+        #    framework_version='1.6',
+        #    volume_size = 125,
+        #    max_run=int(1.25 * max_runtime),
+        #    role=get_execution_role(),
+        #    dependencies=dependencies,
+        #    disable_profiler=True,
+        #    hyperparameters=hyperparameters,
+        #)
 
         print(f"Launching choose_model = {choose_model}, optimizer = {optimizer}, "
               f"run_id = {run_id} as {tuner_name}")
@@ -110,4 +136,4 @@ if __name__ == '__main__':
         #if exp_id == 0:
         #    break
 
-    print(f"\nFor the record: {first_tuner_name} .. {last_tuner_name}")
+    print(f"\nFor the record:\n{first_tuner_name} .. {last_tuner_name}")

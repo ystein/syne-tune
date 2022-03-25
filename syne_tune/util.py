@@ -46,12 +46,16 @@ class RegularCallback:
 
 def experiment_path(
         tuner_name: Optional[str] = None,
-        local_path: Optional[str] = None) -> Path:
+        local_path: Optional[str] = None,
+        ignore_tuner_name_on_sagemaker: bool = False) -> Path:
     f"""
     :param tuner_name: name of a tuning experiment
     :param local_path: local path where results should be saved when running
         locally outside of Sagemaker, if not specified, then
         `~/{SYNE_TUNE_FOLDER}/` is used.
+    :param ignore_tuner_name_on_sagemaker: If `tuner_name` is given, it is
+        the postfix of the path returned. If this flag is True and we are
+        on SageMaker, it is not used as postfix.
     :return: path where to write logs and results for Syne Tune tuner.
 
     On Sagemaker, results are written under "/opt/ml/checkpoints/" so that files are persisted
@@ -59,18 +63,21 @@ def experiment_path(
     """
     is_sagemaker = "SM_MODEL_DIR" in os.environ
     if is_sagemaker:
-        # if SM_MODEL_DIR is present in the environment variable, this means that we are running on Sagemaker
-        # we use this path to store results as it is persisted by Sagemaker.
-        return Path('/opt/ml/checkpoints') / tuner_name
+        # if SM_MODEL_DIR is present in the environment variable, this means
+        # that we are running on Sagemaker. We use this path to store results
+        # as it is persisted by Sagemaker.
+        res_path = Path('/opt/ml/checkpoints')
     else:
         # means we are running on a local machine, we store results in a local path
         if local_path is None:
-            local_path = Path(f"~/{SYNE_TUNE_FOLDER}").expanduser()
+            res_path = Path(f"~/{SYNE_TUNE_FOLDER}").expanduser()
         else:
-            local_path = Path(local_path)
-        if tuner_name is not None:
-            local_path = local_path / tuner_name
-        return local_path
+            res_path = Path(local_path)
+    append_postfix = tuner_name is not None and not (
+        is_sagemaker and ignore_tuner_name_on_sagemaker)
+    if append_postfix:
+        res_path = res_path / tuner_name
+    return res_path
 
 
 def s3_experiment_path(
