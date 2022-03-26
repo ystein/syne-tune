@@ -2,7 +2,7 @@ from pathlib import Path
 import itertools
 
 from sagemaker.pytorch import PyTorch
-from sagemaker.huggingface import HuggingFace
+# from sagemaker.huggingface import HuggingFace
 import syne_tune
 
 from syne_tune.backend.sagemaker_backend.sagemaker_utils import get_execution_role
@@ -14,13 +14,12 @@ if __name__ == '__main__':
     # - Compare selecting the model to fixing it to a default choice
     # - Compare 4 different HPO algorithms
     # - Repeat each experiment 10 times
-    experiment_name = 'glue-2'
+    experiment_name = 'glue-3'
     random_seed_offset = 31415627
     num_runs = 10
     optimizers = ['rs', 'bo', 'asha', 'mobster']
     model_selection = [False, True]
-    # run_ids = list(range(num_runs))
-    run_ids = [9]
+    run_ids = list(range(num_runs))
     num_experiments = len(model_selection) * len(optimizers) * len(run_ids)
     # Useful if not all experiments could be started:
     skip_initial_experiments = 0
@@ -43,7 +42,6 @@ if __name__ == '__main__':
         if exp_id < skip_initial_experiments:
             continue
         print(f"Experiment {exp_id} (of {num_experiments})")
-        choose_model = str(choose_model)  # convert bool -> str
         # Append date time-stamp postfix. This is done here (and not when `Tuner`
         # is created), so that the SM job name coincides with the path name where
         # results are stored
