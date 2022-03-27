@@ -80,7 +80,23 @@ if __name__ == '__main__':
         # Pass Syne Tune sources as dependencies
         source_dir = str(Path(__file__).parent)
         dependencies = syne_tune.__path__ + [source_dir]
-        # Latest PyTorch version (1.10):
+        #est = HuggingFace(
+        #    entry_point=entry_point,
+        #    source_dir=source_dir,
+        #    checkpoint_s3_uri=checkpoint_s3_uri,
+        #    instance_type=instance_type,
+        #    instance_count=1,
+        #    py_version="py38",
+        #    pytorch_version='1.9',
+        #    transformers_version='4.12',
+        #    volume_size=125,
+        #    max_run=int(1.25 * max_runtime),
+        #    role=get_execution_role(),
+        #    dependencies=dependencies,
+        #    disable_profiler=True,
+        #    hyperparameters=hyperparameters,
+        #)
+        # Latest PyTorch version:
         est = PyTorch(
             entry_point=entry_point,
             source_dir=source_dir,
@@ -96,9 +112,28 @@ if __name__ == '__main__':
             disable_profiler=True,
             hyperparameters=hyperparameters,
         )
+        # Old PyTorch version (worked for Aaron,
+        # but "torch=1.10.0" in requirements.txt)
+        #est = PyTorch(
+        #    entry_point=entry_point,
+        #    source_dir=source_dir,
+        #    checkpoint_s3_uri=checkpoint_s3_uri,
+        #    instance_type=instance_type,
+        #    instance_count=1,
+        #    py_version="py3",
+        #    framework_version='1.6',
+        #    volume_size = 125,
+        #    max_run=int(1.25 * max_runtime),
+        #    role=get_execution_role(),
+        #    dependencies=dependencies,
+        #    disable_profiler=True,
+        #    hyperparameters=hyperparameters,
+        #)
 
         print(f"Launching choose_model = {choose_model}, optimizer = {optimizer}, "
               f"run_id = {run_id} as {tuner_name}")
         est.fit(wait=False, job_name=tuner_name)
+        #if exp_id == 0:
+        #    break
 
     print(f"\nFor the record:\n{first_tuner_name} .. {last_tuner_name}")

@@ -77,25 +77,25 @@ logger = logging.getLogger(__name__)
 # which fine-tunes library models for text classification on GLUE. We make the
 # following modifications:
 #
-# [1] We split the training dataset into a part for training and one for
-#     validation. The evaluation dataset (if given) is used as test set. This
-#     means the metrics 'eval_*' are computed on the validation split, not on
-#     the test set. This is what HPO operates on.
-#     If the evaluation dataset is given, we also compute test set metrics
-#     along with the others and report them as 'test_*'. This is for results
-#     analysis only, HPO must not access them.
+# [ 1] We split the training dataset into a part for training and one for
+#      validation. The evaluation dataset (if given) is used as test set. This
+#      means the metrics 'eval_*' are computed on the validation split, not on
+#      the test set. This is what HPO operates on.
+#      If the evaluation dataset is given, we also compute test set metrics
+#      along with the others and report them as 'test_*'. This is for results
+#      analysis only, HPO must not access them.
 #
-# [2] We use a custom `TrainerCallback` in order to report metrics to Syne Tune,
-#     using the `on_evaluate` method. This needs `evaluation_strategy` to be set
-#     to 'epoch', which we do here.
-#     For convenience, test metrics are computed and reported alongside.
+# [ 2] We use a custom `TrainerCallback` in order to report metrics to Syne Tune,
+#      using the `on_evaluate` method. This needs `evaluation_strategy` to be set
+#      to 'epoch', which we do here.
+#      For convenience, test metrics are computed and reported alongside.
 #
-# [3] Optionally, we estimate prediction latency by running a few forward
-#     passes. This is done at the start, and the same metrics are reported with
-#     each `on_evaluate`.
+# [ 3] Optionally, we estimate prediction latency by running a few forward
+#      passes. This is done at the start, and the same metrics are reported with
+#      each `on_evaluate`.
 #
-# [4] If Syne Tune passes a checkpoint directory, this overwrites `output_dir`,
-#     where checkpoints are written.
+# [ 4] If Syne Tune passes a checkpoint directory, this overwrites `output_dir`,
+#      where checkpoints are written.
 
 
 @dataclass
@@ -105,22 +105,22 @@ class SyneTuneArguments:
     kept separately from the ones in the default script.
     """
 
-    st_checkpoint_dir: Optional[str] = field(  # [4]
+    st_checkpoint_dir: Optional[str] = field(
         default=None,
         metadata={"help": "The checkpoint directory for SyneTune. Overwrites `output_dir`."},
     )
 
-    train_valid_fraction: float = field(  # [1]
+    train_valid_fraction: float = field(
         default=0.7,
         metadata={"help": "Fraction of training set used for training, rest used for evaluation."},
     )
 
-    latency_attribute: Optional[str] = field(  # [3]
+    latency_attribute: Optional[str] = field(
         default=None,
         metadata={"help": "If given, prediction latency is estimated and reported"},
     )
 
-    num_model_params_attribute: Optional[int] = field(  # [3]
+    num_model_params_attribute: Optional[int] = field(
         default=None,
         metadata={"help": "If given, number of model parameters is reported"},
     )
@@ -143,7 +143,7 @@ class SyneTuneArguments:
     )
 
 
-# [2]
+# [ 2]
 class ReportBackMetrics(transformers.trainer_callback.TrainerCallback):
     """
     This callback is used in order to report metrics back to Syne Tune, using a
@@ -170,7 +170,6 @@ class ReportBackMetrics(transformers.trainer_callback.TrainerCallback):
         # Metrics on train and validation set:
         results = kwargs['metrics'].copy()
         results['step'] = state.global_step
-        # TODO: 1 or 0 for first epoch??
         results['epoch'] = int(state.epoch)
         # Compute metrics on test set (if given)
         if self.test_dataloader is not None:
@@ -187,7 +186,7 @@ class ReportBackMetrics(transformers.trainer_callback.TrainerCallback):
         self.report(**results)
 
 
-# [3]
+# [ 3]
 def additional_syne_tune_metrics(
         model, tokenizer, train_dataset, data_args, syne_tune_args) -> dict:
     """
@@ -370,7 +369,7 @@ def main():
     else:
         model_args, data_args, training_args, syne_tune_args = parser.parse_args_into_dataclasses()
 
-    # *** SYNE TUNE INSERT [4] ***
+    # *** SYNE TUNE INSERT [ 4] ***
 
     assert training_args.do_train, \
         "Need do_train=True in order to be used with Syne Tune"
@@ -649,7 +648,7 @@ def main():
     else:
         data_collator = None
 
-    # *** SYNE TUNE INSERT [1] ***
+    # *** SYNE TUNE INSERT [ 1] ***
 
     # Split `train_dataset` into training part (new `train_dataset`) and
     # validation part `valid_dataset`. These two are used for HPO, while
@@ -670,13 +669,13 @@ def main():
         model=model,
         args=training_args,
         train_dataset=train_dataset if training_args.do_train else None,
-        eval_dataset=valid_dataset,  # SYNE TUNE INSERT [1]
+        eval_dataset=valid_dataset,  # SYNE TUNE INSERT [ 1]
         compute_metrics=compute_metrics,
         tokenizer=tokenizer,
         data_collator=data_collator,
     )
 
-    # *** SYNE TUNE INSERT [2] ***
+    # *** SYNE TUNE INSERT [ 2] ***
 
     # Compute additional metrics (optional)
     additional_info = additional_syne_tune_metrics(
@@ -685,7 +684,7 @@ def main():
     # Callback to report metrics back to Syne Tune at the end of each epoch
     trainer.add_callback(ReportBackMetrics(
         trainer=trainer,
-        test_dataset=eval_dataset,
+        test_dataset=eval_dataset if training_args.do_eval else None,
         additional_info=additional_info))
 
     # *** END SYNE TUNE INSERT ***

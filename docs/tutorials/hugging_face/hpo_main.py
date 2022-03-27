@@ -8,10 +8,11 @@ from syne_tune.config_space import uniform, loguniform, choice, randint
 from syne_tune.stopping_criterion import StoppingCriterion
 from syne_tune.optimizer.baselines import ASHA, MOBSTER, BayesianOptimization, \
     RandomSearch
-from syne_tune.optimizer.schedulers.searchers.searcher_callback import \
-    StoreResultsAndModelParamsCallback
+# from syne_tune.optimizer.schedulers.searchers.searcher_callback import \
+#     StoreResultsAndModelParamsCallback
 
 
+# Different GLUE tasks and their metric names
 TASK2METRICSMODE = {
     "cola": {'metric': 'matthews_correlation', 'mode': 'max'},
     "mnli": {'metric': 'accuracy', 'mode': 'max'},
@@ -25,6 +26,7 @@ TASK2METRICSMODE = {
 }
 
 
+# Pre-trained models from HuggingFace zoo considered here
 PRETRAINED_MODELS = [
     'bert-base-cased',
     'bert-base-uncased',
@@ -103,15 +105,16 @@ if __name__ == '__main__':
     mode = TASK2METRICSMODE[dataset]['mode']
     resource_attribute = 'epoch'
 
+    # [1]
     # The configuration space contains all hyperparameters we would like to optimize,
-    # and their search ranges. Additionally, it contains fixed parameters passed to
-    # the training script
+    # and their search ranges.
     hyperparameter_space = {
         'learning_rate': loguniform(1e-6, 1e-4),
         'per_device_train_batch_size': randint(16, 48),
         'warmup_ratio': uniform(0, 0.5),
     }
 
+    #  Additionally, it contains fixed parameters passed to the training script
     fixed_parameters = {
         'num_train_epochs': num_train_epochs,
         'model_name_or_path': model_type,
@@ -128,6 +131,7 @@ if __name__ == '__main__':
 
     config_space = {**hyperparameter_space, **fixed_parameters}
 
+    # [2]
     # This is the default configuration provided by Hugging Face. It will always
     # be evaluated first
     default_configuration = {
@@ -136,8 +140,10 @@ if __name__ == '__main__':
         'warmup_ratio': 0.0,
     }
 
+    # [3]
+    # Combine HPO with model selection:
+    # Just another categorical hyperparameter
     if args.choose_model:
-        # In this variant, we also choose the pre-trained model
         config_space['model_name_or_path'] = choice(PRETRAINED_MODELS)
         default_configuration['model_name_or_path'] = model_type
 
@@ -145,42 +151,39 @@ if __name__ == '__main__':
     # use the local backend, which runs on a single instance
     backend = LocalBackend(entry_point=entry_point)
 
+    # [4]
     # HPO algorithm
-    # We use the same random seed as passed to the training function. And
-    # `default_configuration` is the first config to be evaluated
-    scheduler_kwargs = dict(
-        metric=metric,
-        mode=mode,
-        random_seed=seed,
-        points_to_evaluate=[default_configuration])
-    if optimizer in {'asha', 'mobster'}:
-        # The multi-fidelity methods need extra information
-        scheduler_kwargs['resource_attr'] = resource_attribute
-        # Maximum resource level information in `config_space`:
-        scheduler_kwargs['max_resource_attr'] = 'num_train_epochs'
+    # We can choose from these optimizers:
     schedulers = {
         'rs': RandomSearch,
         'bo': BayesianOptimization,
         'asha': ASHA,
         'mobster': MOBSTER}
+    scheduler_kwargs = dict(
+        metric=metric,
+        mode=mode,
+        random_seed=seed,  # same seed passed to training function
+        points_to_evaluate=[default_configuration],  # evaluate this one first
+    )
+    if optimizer in {'asha', 'mobster'}:
+        # The multi-fidelity methods need extra information
+        scheduler_kwargs['resource_attr'] = resource_attribute
+        # Maximum resource level information in `config_space`:
+        scheduler_kwargs['max_resource_attr'] = 'num_train_epochs'
     scheduler = schedulers[optimizer](config_space, **scheduler_kwargs)
 
+    # [5]
     # All parts come together in the tuner, which runs the experiment
-    # Note `args.tuner_name` already has the date time-stamp postfix (so that
-    # SageMaker job name coincides with where results are stored), so `Tuner`
-    # must not append it again
     stop_criterion = StoppingCriterion(max_wallclock_time=args.max_runtime)
-    callbacks = [StoreResultsAndModelParamsCallback()]
     tuner = Tuner(
         trial_backend=backend,
         scheduler=scheduler,
         stop_criterion=stop_criterion,
         n_workers=args.n_workers,
-        metadata=vars(args),
-        callbacks=callbacks,
+        metadata=vars(args),  # metadata is stored along with results
         tuner_name=args.tuner_name,
-        tuner_name_add_postfix=False,  # do not append date time-stamp again
-        tuner_path_strip_name_on_sagemaker=True,
+        tuner_name_add_postfix=False,  # see "Technical comments"
+        tuner_path_strip_name_on_sagemaker=True,  # see "Technical comments"
     )
 
     # Set path for logs and checkpoints
@@ -190,4 +193,4 @@ if __name__ == '__main__':
         backend.set_path(
             results_root=str(Path('~/').expanduser()), tuner_name=tuner.name)
 
-    tuner.run()
+    tuner.run()  # off we go!
