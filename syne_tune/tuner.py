@@ -113,7 +113,7 @@ class Tuner:
         else:
             tuner_name = Path(self.trial_backend.entrypoint_path()).stem.replace("_", "-")
         if tuner_name_add_postfix:
-            tuner_name= name_from_base(tuner_name, default="st-tuner")
+            tuner_name = name_from_base(tuner_name, default="st-tuner")
         self.name = tuner_name
 
         # we keep track of the last result seen to send it to schedulers when trials complete.
