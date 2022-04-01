@@ -21,6 +21,7 @@ class MethodArguments:
     resource_attr: str
     transfer_learning_evaluations: Optional[Dict] = None
     use_surrogates: bool = False
+    search_options: Optional[dict] = None
 
 
 class Methods:
@@ -34,6 +35,7 @@ class Methods:
     REA = 'REA'
     MOBSTER = 'MOB'
     TPE = 'TPE'
+    TURBO = 'TURBO'
 
     
 methods = {
@@ -143,6 +145,16 @@ methods = {
         resource_attr=method_arguments.resource_attr,
         random_seed=method_arguments.random_seed,
     ),
+    Methods.TURBO: lambda method_arguments: FIFOScheduler(
+        method_arguments.config_space,
+        searcher="turbo",
+        search_options=dict(
+            dict() if method_arguments.search_options is None else method_arguments.search_options,
+            debug_log=False),
+        metric=method_arguments.metric,
+        mode=method_arguments.mode,
+        random_seed=method_arguments.random_seed,
+    ),
 }
 
 
@@ -161,8 +173,12 @@ if __name__ == '__main__':
         )
         for method_name, method_fun in methods.items():
             print(f"checking initialization of: {method_name}, {benchmark_name}")
+            config_space = benchmark.config_space
+            if config_space is None:
+                # Use default of blackbox
+                config_space = backend.blackbox.configuration_space
             scheduler = method_fun(MethodArguments(
-                config_space=backend.blackbox.configuration_space,
+                config_space=config_space,
                 metric=benchmark.metric,
                 mode=benchmark.mode,
                 random_seed=0,
@@ -173,6 +189,7 @@ if __name__ == '__main__':
                     test_task=benchmark.dataset_name,
                     datasets=benchmark.datasets,
                 ),
+                search_options=benchmark.search_options,
             ))
             scheduler.suggest(0)
             scheduler.suggest(1)

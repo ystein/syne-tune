@@ -13,8 +13,6 @@
 from typing import List, Optional
 import numpy as np
 import logging
-from collections import Counter
-from operator import itemgetter
 
 from syne_tune.optimizer.schedulers.searchers.bayesopt.datatypes.tuning_job_state \
     import TuningJobState
@@ -76,15 +74,17 @@ class BaseSurrogateModel(SurrogateModel):
             self._current_best = [
                 np.min(means, axis=0) for means in all_means]
             self._current_best_trial_id = []
+            num_observed = len(self.state.trials_evaluations)
             for means in all_means:
-                min_pos = np.argmin(means, axis=0)
-                if min_pos.size == 1:
-                    min_pos = min_pos.item()
-                else:
-                    # Use majority vote over columns
-                    histogram = Counter(min_pos)
-                    min_pos, _ = max(histogram.items(), key=itemgetter(1))
-                self._current_best_trial_id.append(trial_ids[min_pos])
+                avg_means = np.mean(means, axis=1)
+                # Pending should only be chosen as `current_best_trial_id` if
+                # significant
+                if avg_means.size > num_observed:
+                    shift = 0.01 * np.abs(np.mean(avg_means[num_observed:]))
+                    avg_means[num_observed:] += shift
+                min_pos = np.argmin(avg_means)
+                trial_id = trial_ids[min_pos]
+                self._current_best_trial_id.append(trial_id)
 
     def current_best(self) -> List[np.ndarray]:
         self._current_best_internal()

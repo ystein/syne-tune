@@ -145,9 +145,8 @@ class SurrogateModel(ABC):
         attained. If hyperparameters are averaged over by MCMC, the returned list has one
         entry per MCMC sample.
 
-        If the model supports fantasizing, so that `current_best` returns
-        vectors, the trial_id returned corresponds to the majority vote over
-        incumbents corresponding to fantasy samples.
+        If the model supports fantasizing, the argmin is taken on the average
+        (over fantasies) of predictive means.
 
         :return: trial_id(s) at which incumbent is attained
         """
