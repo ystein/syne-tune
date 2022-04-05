@@ -269,6 +269,8 @@ def parse_args(allow_lists_as_values=True):
                         help='DEBUG: Use old code for gp_issm, gp_expdecay')
     parser.add_argument('--searcher_no_fantasizing', action='store_true',
                         help='Ignore pending evaluations, do not use fantasizing')
+    parser.add_argument('--searcher_use_mcmc', action='store_true',
+                        help='MCMC over surrogate model parameters')
     # Arguments for kde searcher
     parser.add_argument('--searcher_num_min_data_points', type=int,
                         help='KDE: Minimum number of datapoints needed to fit models',
@@ -384,6 +386,7 @@ def make_searcher_and_scheduler(params) -> (dict, dict):
             ('use_new_code', bool, False),
             ('num_init_candidates_for_batch', int, False),
             ('no_fantasizing', bool, False),
+            ('use_mcmc', bool, False),
         )
         gp_add_models = {'gp_issm', 'gp_expdecay'}
         for name, tp, warn in searcher_args:

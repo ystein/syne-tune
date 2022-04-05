@@ -63,6 +63,10 @@ from syne_tune.optimizer.schedulers.searchers.utils.warmstarting import \
     create_base_gp_kernel_for_warmstarting
 from syne_tune.optimizer.schedulers.searchers.searcher import \
     extract_random_seed
+from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.gpr_mcmc \
+    import GPRegressionMCMC
+from syne_tune.optimizer.schedulers.searchers.bayesopt.models.gp_mcmc_model \
+    import GaussProcMCMCModelFactory
 
 __all__ = ['gp_fifo_searcher_factory',
            'gp_multifidelity_searcher_factory',
@@ -127,6 +131,19 @@ def _create_gp_common(hp_ranges: HyperparameterRanges, **kwargs):
     }
 
 
+def _create_gp_mcmc_components(hp_ranges: HyperparameterRanges, **kwargs):
+    def build_kernel():
+        return Matern52(dimension=hp_ranges.ndarray_size, ARD=True)
+
+    filter_observed_data = create_filter_observed_data_for_warmstarting(
+        **kwargs)
+    return {
+        'build_kernel': build_kernel,
+        'debug_log': None,
+        'filter_observed_data': filter_observed_data,
+    }
+
+
 def _create_gp_standard_model(
         hp_ranges: HyperparameterRanges, active_metric: Optional[str],
         random_seed: int, is_hyperband: bool, **kwargs):
@@ -151,6 +168,26 @@ def _create_gp_standard_model(
         num_fantasy_samples=kwargs['num_fantasy_samples'],
         normalize_targets=kwargs.get('normalize_targets', True),
         profiler=result['profiler'],
+        debug_log=result['debug_log'],
+        filter_observed_data=filter_observed_data,
+        no_fantasizing=kwargs.get('no_fantasizing', False))
+    return {
+        'model_factory': model_factory,
+        'filter_observed_data': filter_observed_data}
+
+
+def _create_gp_mcmc_model(
+        hp_ranges: HyperparameterRanges, active_metric: Optional[str],
+        random_seed: int, **kwargs):
+    result = _create_gp_mcmc_components(hp_ranges, **kwargs)
+    gpmodel = GPRegressionMCMC(
+        build_kernel=result['build_kernel'],
+        random_seed=random_seed)
+    filter_observed_data = result['filter_observed_data']
+    model_factory = GaussProcMCMCModelFactory(
+        gpmodel=gpmodel,
+        active_metric=active_metric,
+        normalize_targets=kwargs.get('normalize_targets', True),
         debug_log=result['debug_log'],
         filter_observed_data=filter_observed_data,
         no_fantasizing=kwargs.get('no_fantasizing', False))
@@ -284,6 +321,68 @@ def _create_common_objects(model=None, **kwargs):
     return result
 
 
+def _create_mcmc_objects(**kwargs):
+    assert kwargs['scheduler'] == 'fifo', \
+        "MCMC implemented for FIFOScheduler only"
+    hp_ranges = create_hp_ranges_for_warmstarting(**kwargs)
+    random_seed, _kwargs = extract_random_seed(kwargs)
+    # Skip optimization predicate for GP surrogate model
+    if kwargs.get('opt_skip_period', 1) > 1:
+        skip_optimization = SkipPeriodicallyPredicate(
+            init_length=kwargs['opt_skip_init_length'],
+            period=kwargs['opt_skip_period'])
+    else:
+        skip_optimization = None
+    # Conversion from reward to metric (strictly decreasing) and back.
+    # This is done only if the scheduler mode is 'max'.
+    scheduler_mode = kwargs.get('scheduler_mode', 'min')
+    if scheduler_mode == 'max':
+        _map_reward = kwargs.get('map_reward', '1_minus_x')
+        if isinstance(_map_reward, str):
+            _map_reward_name = _map_reward
+            assert _map_reward_name.endswith('minus_x'), \
+                f"map_reward = {_map_reward_name} is not supported (use " + \
+                "'minus_x' or '*_minus_x')"
+            if _map_reward_name == 'minus_x':
+                const = 0.0
+            else:
+                # Allow strings '*_minus_x', parse const for *
+                # Example: '1_minus_x' => const = 1
+                offset = len(_map_reward_name) - len('_minus_x')
+                const = float(_map_reward_name[:offset])
+            _map_reward: Optional[MapReward] = map_reward_const_minus_x(
+                const=const)
+        else:
+            assert isinstance(_map_reward, MapReward), \
+                "map_reward must either be string or of MapReward type"
+    else:
+        assert scheduler_mode == 'min', \
+            f"scheduler_mode = {scheduler_mode}, must be in ('max', 'min')"
+        _map_reward = kwargs.get('map_reward')
+        if _map_reward is not None:
+            logger.warning(
+                f"Since scheduler_mode == 'min', map_reward = {_map_reward} is ignored")
+            _map_reward = None
+    result = {
+        'hp_ranges': hp_ranges,
+        'map_reward': _map_reward,
+        'skip_optimization': skip_optimization,
+    }
+
+    # Create model factory
+    result.update(_create_gp_mcmc_model(
+        hp_ranges=hp_ranges,
+        active_metric=INTERNAL_METRIC_NAME,
+        random_seed=random_seed,
+        **_kwargs))
+    result['num_initial_candidates'] = kwargs['num_init_candidates']
+    result['num_initial_random_choices'] = kwargs['num_init_random']
+    for k in ('initial_scoring', 'cost_attr', 'skip_local_optimization'):
+        result[k] = kwargs[k]
+
+    return result
+
+
 def gp_fifo_searcher_factory(**kwargs) -> Dict:
     """
     Returns kwargs for `GPFIFOSearcher._create_internal`, based on kwargs
@@ -305,7 +404,10 @@ def gp_fifo_searcher_factory(**kwargs) -> Dict:
         "This factory needs scheduler = 'fifo' (instead of '{}')".format(
             kwargs['scheduler'])
     # Common objects
-    result = _create_common_objects(**kwargs)
+    if kwargs.get('use_mcmc', False):
+        result = _create_mcmc_objects(**kwargs)
+    else:
+        result = _create_common_objects(**kwargs)
 
     return dict(**result, acquisition_class=EIAcquisitionFunction)
 
@@ -555,7 +657,8 @@ def _common_defaults(is_hyperband: bool, is_multi_output: bool) -> (Set[str], di
         'debug_log': True,
         'cost_attr': 'elapsed_time',
         'normalize_targets': True,
-        'no_fantasizing': False}
+        'no_fantasizing': False,
+        'use_mcmc': False}
     if is_hyperband:
         default_options['model'] = 'gp_multitask'
         default_options['opt_skip_num_max_resource'] = False
@@ -587,7 +690,8 @@ def _common_defaults(is_hyperband: bool, is_multi_output: bool) -> (Set[str], di
             choices=tuple(SUPPORTED_INITIAL_SCORING)),
         'skip_local_optimization': Boolean(),
         'debug_log': Boolean(),
-        'normalize_targets': Boolean()}
+        'normalize_targets': Boolean(),
+        'use_mcmc': Boolean()}
 
     if is_hyperband:
         constraints['model'] = Categorical(

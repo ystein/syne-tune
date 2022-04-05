@@ -34,7 +34,8 @@ class GaussProcMCMCModelFactory(GaussProcModelFactory):
             normalize_targets: bool = True,
             profiler: Optional[SimpleProfiler] = None,
             debug_log: Optional[DebugLogPrinter] = None,
-            filter_observed_data: Optional[ConfigurationFilter] = None):
+            filter_observed_data: Optional[ConfigurationFilter] = None,
+            no_fantasizing: bool = False):
         """
         We support pending evaluations via fantasizing. Note that state does
         not contain the fantasy values, but just the pending configs. Fantasy
@@ -52,7 +53,8 @@ class GaussProcMCMCModelFactory(GaussProcModelFactory):
         super().__init__(
             gpmodel=gpmodel, active_metric=active_metric,
             normalize_targets=normalize_targets, profiler=profiler,
-            debug_log=debug_log, filter_observed_data=filter_observed_data)
+            debug_log=debug_log, filter_observed_data=filter_observed_data,
+            no_fantasizing=no_fantasizing)
 
     def get_params(self):
         return dict()  # Model has no parameters to be fit

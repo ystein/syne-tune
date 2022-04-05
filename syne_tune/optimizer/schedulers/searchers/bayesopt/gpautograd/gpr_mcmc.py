@@ -14,6 +14,7 @@ from typing import Callable, Optional, List
 import autograd.numpy as anp
 from autograd.builtins import isinstance
 from numpy.random import RandomState
+import logging
 
 from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.constants \
     import DEFAULT_MCMC_CONFIG, MCMCConfig
@@ -33,6 +34,8 @@ from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.posterior_stat
     import GaussProcPosteriorState
 from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.slice \
     import SliceSampler
+
+logger = logging.getLogger(__name__)
 
 
 class GPRegressionMCMC(GaussianProcessModel):
@@ -54,7 +57,11 @@ class GPRegressionMCMC(GaussianProcessModel):
 
     @property
     def number_samples(self) -> int:
-        return self.mcmc_config.n_samples
+        # Dumb, but works
+        lst = [0] * self.mcmc_config.n_samples
+        burn = self.mcmc_config.n_burnin
+        thin = self.mcmc_config.n_thinning
+        return len(lst[burn::thin])
 
     def fit(self, features, targets, **kwargs):
         features, targets = self._check_features_targets(features, targets)
@@ -85,6 +92,7 @@ class GPRegressionMCMC(GaussianProcessModel):
         self.samples = slice_sampler.sample(
             init_hp_values, self.mcmc_config.n_samples,
             self.mcmc_config.n_burnin, self.mcmc_config.n_thinning)
+        logger.info(f"MCMC done. Created {len(self.samples)} samples")
         self._states = self._create_posterior_states(self.samples, features, targets)
 
     def recompute_states(self, features, targets, **kwargs):
