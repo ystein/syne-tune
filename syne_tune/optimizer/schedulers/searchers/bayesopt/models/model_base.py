@@ -91,6 +91,19 @@ class BaseSurrogateModel(SurrogateModel):
         return self._current_best
 
     def current_best_trial_id(self) -> List[int]:
+        """
+        Argmin for `current_best`, returns trial_id for which incumbent is
+        attained. If hyperparameters are averaged over by MCMC, the returned
+        list has one entry per MCMC sample.
+
+        If the model supports fantasizing, the argmin is taken on the average
+        (over fantasies) of predictive means. Here, means for pending
+        evaluations are slightly increased, so that a pending trial_id is
+        selected only if it is significantly smaller than means for all
+        observed trial_id's.
+
+        :return: trial_id(s) at which incumbent is attained
+        """
         self._current_best_internal()
         return self._current_best_trial_id
 

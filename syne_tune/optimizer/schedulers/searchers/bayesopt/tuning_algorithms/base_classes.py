@@ -139,20 +139,6 @@ class SurrogateModel(ABC):
         pass
 
     @abstractmethod
-    def current_best_trial_id(self) -> List[int]:
-        """
-        Argmin for `current_best`, returns trial_id for which incumbent is
-        attained. If hyperparameters are averaged over by MCMC, the returned list has one
-        entry per MCMC sample.
-
-        If the model supports fantasizing, the argmin is taken on the average
-        (over fantasies) of predictive means.
-
-        :return: trial_id(s) at which incumbent is attained
-        """
-        pass
-
-    @abstractmethod
     def backward_gradient(
             self, input: np.ndarray,
             head_gradients: List[Dict[str, np.ndarray]]) -> List[np.ndarray]:

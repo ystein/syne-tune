@@ -24,8 +24,10 @@ from syne_tune.optimizer.schedulers.searchers.gp_searcher_factory import \
     gp_turbo_fifo_searcher_defaults, gp_turbo_fifo_searcher_factory
 from syne_tune.optimizer.schedulers.searchers.utils.default_arguments \
     import check_and_merge_defaults
+from syne_tune.optimizer.schedulers.searchers.bayesopt.models.model_base \
+    import BaseSurrogateModel
 from syne_tune.optimizer.schedulers.searchers.bayesopt.tuning_algorithms.base_classes \
-    import SurrogateOutputModel, SurrogateModel
+    import SurrogateOutputModel
 from syne_tune.optimizer.schedulers.searchers.bayesopt.datatypes.hp_ranges_impl \
     import HyperparameterRangesImpl
 from syne_tune.optimizer.schedulers.searchers.bayesopt.datatypes.hp_ranges \
@@ -141,6 +143,8 @@ class TuRBOFIFOSearcher(GPFIFOSearcher):
         self._thresholds = [self.threshold_failure, self.threshold_success]
         # See `_is_trust_region_too_narrow`
         self._fallback_initial_candidates = None
+        # See `_process_running_trials`
+        self._labeled_pending_trials = set()
 
     @property
     def counter_success(self) -> int:
@@ -175,7 +179,7 @@ class TuRBOFIFOSearcher(GPFIFOSearcher):
         super()._call_create_internal(kwargs_int)
 
     def _process_running_trials(
-            self, model: SurrogateOutputModel,
+            self, model: BaseSurrogateModel,
             exclusion_candidates: ExclusionList):
         """
         Called by `_get_config_modelbased_prepare_bo` before bounds are
@@ -196,14 +200,18 @@ class TuRBOFIFOSearcher(GPFIFOSearcher):
                     model, trial_id, incumbent_trial_id, exclusion_candidates)
             else:
                 if trial_id in labeled_trial_ids:
-                    # Happens only if (a) the incumbent trial was pending (very
-                    # unlikely), and (b) it is still pending when the suggested
-                    # trial_id is already labeled. If this happens, maybe
-                    # something else is wrong?
-                    logger.warning(
-                        f"TuRBO: trial_id {trial_id} is labeled now, but "
-                        f"incumbent_trial_id {incumbent_trial_id} is still "
-                        "pending. Success/failure test will be delayed")
+                    labeled_pending = (trial_id, incumbent_trial_id)
+                    if labeled_pending not in self._labeled_pending_trials:
+                        # Happens only if (a) the incumbent trial was pending and
+                        # (b) it is still pending when the suggested
+                        # trial_id is already labeled. If this happens, maybe
+                        # something else is wrong?
+                        logger.warning(
+                            f"TuRBO: trial_id {trial_id} is labeled now, but "
+                            f"incumbent_trial_id {incumbent_trial_id} is still "
+                            "pending. Success/failure test will be delayed")
+                        # Don't show this warning again
+                        self._labeled_pending_trials.add(labeled_pending)
                 new_running_trials.append((trial_id, incumbent_trial_id))
         self._running_trials = new_running_trials
 
@@ -212,7 +220,7 @@ class TuRBOFIFOSearcher(GPFIFOSearcher):
         return 'success' if is_success else 'failure'
 
     def _process_running_trial(
-            self, model: SurrogateOutputModel, trial_id: str,
+            self, model: BaseSurrogateModel, trial_id: str,
             incumbent_trial_id: str, exclusion_candidates: ExclusionList):
         # Determine success/failure by comparing posterior means. If there are
         # fantasy samples, we average the means over that
@@ -269,7 +277,7 @@ class TuRBOFIFOSearcher(GPFIFOSearcher):
         self.basic_sidelength = new_basic_sidelength
 
     def _is_trust_region_too_narrow(
-            self, model: SurrogateOutputModel,
+            self, model: BaseSurrogateModel,
             new_basic_sidelength: int,
             exclusion_candidates: ExclusionList) -> bool:
         """
@@ -309,7 +317,7 @@ class TuRBOFIFOSearcher(GPFIFOSearcher):
         return False
 
     def _bounds_with_trust_region(
-            self, model: SurrogateOutputModel,
+            self, model: BaseSurrogateModel,
             verbose: bool = True) -> (List[Tuple[float, float]], int):
         """
         Determine the bounds for
@@ -375,8 +383,9 @@ class TuRBOFIFOSearcher(GPFIFOSearcher):
             exclusion_candidates: ExclusionList,
             hp_ranges: Optional[HyperparameterRanges] = None,
             **kwargs) -> dict:
-        assert isinstance(model, SurrogateModel), \
-            "Multi-output models are not supported"
+        assert isinstance(model, BaseSurrogateModel), \
+            "TuRBOFIFOSearcher does not support multi-output models, " +\
+            "and model must be BaseSurrogateModel"
         assert hp_ranges is None, \
             "hp_ranges is internal parameter"
         trial_id = kwargs.get('trial_id')

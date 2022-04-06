@@ -95,6 +95,11 @@ if __name__ == '__main__':
         np.random.seed(seed)
         benchmark = benchmark_definitions[benchmark_name]
 
+        if benchmark.exclude_baselines is not None and \
+                method in benchmark.exclude_baselines:
+            print(f"Method {method} excluded for benchmark {benchmark_name}. Skipping.")
+            continue
+
         print(f"Starting experiment ({method}/{benchmark_name}/{seed}) of {experiment_tag}")
 
         backend = BlackboxRepositoryBackend(

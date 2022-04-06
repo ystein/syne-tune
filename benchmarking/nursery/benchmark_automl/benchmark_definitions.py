@@ -3,6 +3,7 @@ from typing import Optional, List
 
 from benchmarking.blackbox_repository.conversion_scripts.scripts.fcnet_import \
     import CONFIGURATION_SPACE
+from benchmarking.nursery.benchmark_automl.baselines import Methods
 
 
 @dataclass
@@ -20,6 +21,7 @@ class BenchmarkDefinition:
     datasets: Optional[List[str]] = None
     search_options: Optional[dict] = None
     config_space: Optional[dict] = None  # overrides blackbox default
+    exclude_baselines: Optional[List[str]] = None
 
 
 # We override `config_space` here, in order to avoid errors if the
@@ -38,6 +40,7 @@ def fcnet_benchmark(dataset_name):
     )
 
 
+# Methods.TURBO baseline does not work for many categorical variables
 def nas201_benchmark(dataset_name):
     return BenchmarkDefinition(
         max_wallclock_time=3600 * 6,
@@ -48,10 +51,7 @@ def nas201_benchmark(dataset_name):
         mode="min",
         blackbox_name="nasbench201",
         dataset_name=dataset_name,
-        search_options={'sidelength_init': 1.5,
-                        'sidelength_max': 2.0,
-                        'sidelength_min': 0.25,
-                        'threshold_failure': 15},
+        exclude_baselines=[Methods.TURBO],
     )
 
 

@@ -13,9 +13,11 @@ from syne_tune.util import s3_experiment_path, random_string
 if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument("--experiment_tag", type=str, required=False, default=generate_slug(2))
+    parser.add_argument("--method", type=str, required=False, help='a method to run from baselines.py')
     args, _ = parser.parse_known_args()
     experiment_tag = args.experiment_tag
     hash = random_string(4)
+    method_names = [args.method] if args.method is not None else list(methods.keys())
     for method in methods.keys():
         sm_args = dict(
             entry_point="benchmark_main.py",
