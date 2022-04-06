@@ -21,10 +21,11 @@ from syne_tune.optimizer.schedulers.searchers.bayesopt.datatypes.tuning_job_stat
 
 logger = logging.getLogger(__name__)
 
-__all__ = ['DebugLogPrinter']
+__all__ = ['DebugLogPrinter',
+           'param_dict_to_str']
 
 
-def _param_dict_to_str(params: dict) -> str:
+def param_dict_to_str(params: dict) -> str:
     parts = []
     for name, param in params.items():
         if isinstance(param, float):
@@ -106,7 +107,7 @@ class DebugLogPrinter(object):
 
     def set_model_params(self, params: dict):
         assert self.get_config_type == 'BO', "Need to be in 'BO' block"
-        msg = 'Model params: ' + _param_dict_to_str(params)
+        msg = 'Model params: ' + param_dict_to_str(params)
         self.block_info['params'] = msg
 
     def set_fantasies(self, fantasies: np.ndarray):

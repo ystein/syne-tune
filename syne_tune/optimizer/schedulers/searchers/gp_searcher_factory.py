@@ -135,11 +135,15 @@ def _create_gp_mcmc_components(hp_ranges: HyperparameterRanges, **kwargs):
     def build_kernel():
         return Matern52(dimension=hp_ranges.ndarray_size, ARD=True)
 
+    if kwargs.get('debug_log', False):
+        debug_log = DebugLogPrinter()
+    else:
+        debug_log = None
     filter_observed_data = create_filter_observed_data_for_warmstarting(
         **kwargs)
     return {
         'build_kernel': build_kernel,
-        'debug_log': None,
+        'debug_log': debug_log,
         'filter_observed_data': filter_observed_data,
     }
 

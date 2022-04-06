@@ -34,6 +34,8 @@ from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.posterior_stat
     import GaussProcPosteriorState
 from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.slice \
     import SliceSampler
+from syne_tune.optimizer.schedulers.searchers.bayesopt.utils.debug_log \
+    import param_dict_to_str
 
 logger = logging.getLogger(__name__)
 
@@ -92,8 +94,18 @@ class GPRegressionMCMC(GaussianProcessModel):
         self.samples = slice_sampler.sample(
             init_hp_values, self.mcmc_config.n_samples,
             self.mcmc_config.n_burnin, self.mcmc_config.n_thinning)
-        logger.info(f"MCMC done. Created {len(self.samples)} samples")
+        self._log_samples()  # DEBUG
         self._states = self._create_posterior_states(self.samples, features, targets)
+
+    def _log_samples(self):
+        msg_parts = [f"MCMC done. Drew {len(self.samples)} samples"]
+        for ind, sample in enumerate(self.samples):
+            likelihood = _create_likelihood(
+                self.build_kernel, random_state=self._random_state)
+            _set_gp_hps(sample, likelihood)
+            params = likelihood.get_params()
+            msg_parts.append(f"{ind}: " + param_dict_to_str(params))
+        logger.info('\n'.join(msg_parts))
 
     def recompute_states(self, features, targets, **kwargs):
         """
@@ -101,6 +113,8 @@ class GPRegressionMCMC(GaussianProcessModel):
         ycols = targets.shape[1] must be a multiple of self.number_samples.
 
         """
+        assert self.samples is not None, \
+            "No posterior samples available. Run `fit` first."
         features, targets = self._check_features_targets(features, targets)
         ycols = targets.shape[1]
         if ycols > 1:
@@ -109,7 +123,6 @@ class GPRegressionMCMC(GaussianProcessModel):
                 f" = {self.number_samples}"
         else:
             assert ycols == 1, "targets must not be empty"
-        assert len(self.samples) > 0
         self._states = self._create_posterior_states(
             self.samples, features, targets)
 

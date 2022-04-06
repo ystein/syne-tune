@@ -167,7 +167,7 @@ class GaussianProcessRegression(GaussianProcessModel):
             test_intermediates=self._test_intermediates)]
         if profiler is not None:
             profiler.stop('posterstate')
-    
+
     def get_params(self):
         return self.likelihood.get_params()
 
