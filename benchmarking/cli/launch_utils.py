@@ -76,6 +76,10 @@ def parse_args(allow_lists_as_values=True):
     parser.add_argument('--num_runs', type=int,
                         help='Number of repetitions, with run_id 0, 1, ...'
                              'Only if run_id not given (ignored otherwise)')
+    parser.add_argument('--remote_sequential_runs', action='store_true',
+                        help='Run experiments with different run_ids '
+                             'sequentially instead of in parallel (only '
+                             'for remote launching)')
     parser.add_argument('--random_seed_offset', type=int,
                         help='Master random seed is this plus run_id, modulo '
                              '2 ** 32. Drawn at random if not given')

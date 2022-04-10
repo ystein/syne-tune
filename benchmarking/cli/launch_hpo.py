@@ -22,6 +22,7 @@ from syne_tune.optimizer.schedulers.searchers.searcher_callback import \
 from syne_tune import StoppingCriterion
 from syne_tune import Tuner
 from syne_tune.remote.remote_launcher import RemoteLauncher
+from syne_tune.remote.remote_sequential_launcher import RemoteSequentialLauncher
 from syne_tune.util import s3_experiment_path, repository_root_path
 
 from benchmarking.cli.estimator_factory import sagemaker_estimator_factory
@@ -197,6 +198,17 @@ if __name__ == '__main__':
         list_values.append(v)
         num_experiments *= len(v)
 
+    # If 'run_id' has a list value, it must be last, so that it is the
+    # innermost iteration. This is relevant in case we run experiments
+    # sequentially when they only differ in `run_id`.
+    try:
+        pos = keys.index('run_id')
+        keys = keys[:pos] + keys[(pos + 1):] + ['run_id']
+        list_values = list_values[:pos] + list_values[(pos + 1):] + \
+                      [list_values[pos]]
+    except ValueError:
+        pass
+
     skip_initial_experiments = orig_params['skip_initial_experiments']
     assert skip_initial_experiments >= 0, \
         "--skip_initial_experiments must be nonnegative"
@@ -222,8 +234,23 @@ if __name__ == '__main__':
 
     if not list_values:
         list_values = [None]
-    first_tuner_name, last_tuner_name = None, None
+    first_job_name, last_job_name = None, None
     is_first_iteration = True
+
+    # If `run_id` has a list value, we group local tuners in the innermost
+    # loop, so that they can be run sequentially (optional)
+    remote_sequential_runs = orig_params['remote_sequential_runs']
+    if orig_params['local_tuner']:
+        remote_sequential_runs = False
+    list_local_tuners = None
+    if keys[-1] == 'run_id':
+        first_run_id = list_values[-1][0]
+        last_run_id = list_values[-1][-1]
+    else:
+        # `run_id` does not have list value
+        first_run_id, last_run_id = None, None
+        remote_sequential_runs = False
+
     for exp_id, values in enumerate(itertools.product(*list_values)):
         if exp_id < skip_initial_experiments:
             continue
@@ -386,9 +413,10 @@ if __name__ == '__main__':
             print_update_interval=params['print_update_interval'],
             callbacks=callbacks,
         )
-        last_tuner_name = local_tuner.name
+        if not remote_sequential_runs:
+            last_job_name = local_tuner.name
         if is_first_iteration:
-            first_tuner_name = copy.copy(last_tuner_name)
+            first_job_name = copy.copy(local_tuner.name)
             is_first_iteration = False
 
         if params['local_tuner']:
@@ -398,6 +426,7 @@ if __name__ == '__main__':
                     logging.ERROR)
             local_tuner.run()
         else:
+            # Tuning experiment is run remotely
             if backend_name != 'sagemaker':
                 # Local backend: Configure SageMaker estimator to what the
                 # benchmark needs
@@ -417,8 +446,7 @@ if __name__ == '__main__':
                 else logging.INFO
             root_path = repository_root_path()
             dependencies = [str(root_path / "benchmarking")]
-            tuner = RemoteLauncher(
-                tuner=local_tuner,
+            remote_launcher_kwargs = dict(
                 dependencies=dependencies,
                 instance_type=instance_type,
                 log_level=log_level,
@@ -426,6 +454,30 @@ if __name__ == '__main__':
                 no_tuner_logging=params['no_tuner_logging'],
                 **estimator_kwargs,
             )
-            tuner.run(wait=False)
+            if not remote_sequential_runs:
+                # Each experiment is launched as its own job
+                tuner = RemoteLauncher(
+                    tuner=local_tuner,
+                    **remote_launcher_kwargs)
+                tuner.run(wait=False)
+            else:
+                # We group experiments of the innermost loop in order to be
+                # able to run them sequentially
+                if params['run_id'] == first_run_id:
+                    list_local_tuners = []
+                    # For remote sequential, the job name is the name of
+                    # the first tuner
+                    last_job_name = local_tuner.name
+                list_local_tuners.append(local_tuner)
+                if params['run_id'] == last_run_id:
+                    # Execute experiment for all tuners in `list_local_tuners`
+                    # sequentially in a single job
+                    tuner = RemoteSequentialLauncher(
+                        tuners=list_local_tuners,
+                        **remote_launcher_kwargs)
+                    logger.info(
+                        f"Launching {len(list_local_tuners)} experiments to "
+                        "be run sequentially")
+                    tuner.run(wait=False)
 
-    logger.info(f"For the record:\n{first_tuner_name} .. {last_tuner_name}")
+    logger.info(f"For the record:\n{first_job_name} .. {last_job_name}")

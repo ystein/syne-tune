@@ -108,13 +108,32 @@ class RemoteLauncher:
         once the tuning job is scheduled on Sagemaker.
         :return:
         """
+        self._run(wait=wait)
+
+    def _run(self, wait: bool = True, entry_point: Optional[str] = None):
         self.prepare_upload()
 
         if boto3.Session().region_name is None:
             # launching in this is needed to send a default configuration on the tuning loop running on Sagemaker
             # todo restore the env variable if present to avoid a side effect
             os.environ['AWS_DEFAULT_REGION'] = 'us-west-2'
-        self.launch_tuning_job_on_sagemaker(wait=wait)
+        self.launch_tuning_job_on_sagemaker(wait=wait, entry_point=entry_point)
+
+    def save_tuner_for_upload(self):
+        self._save_tuner_for_upload(
+            upload_dir=str(self.upload_dir()), tuner=self.tuner)
+
+    def _save_tuner_for_upload(self, upload_dir: str, tuner: Tuner):
+        backup = str(tuner.trial_backend.entrypoint_path())
+
+        # update the path of the endpoint script so that it can be found when launching remotely
+        self.update_backend_with_remote_paths(tuner)
+
+        # save tuner
+        tuner.save(upload_dir)
+
+        # avoid side effect
+        tuner.trial_backend.set_entrypoint(backup)
 
     def prepare_upload(self):
         """
@@ -132,16 +151,8 @@ class RemoteLauncher:
         logger.info(f"copy endpoint files from {source_dir} to {upload_dir}")
         shutil.copytree(source_dir, upload_dir)
 
-        backup = str(self.tuner.trial_backend.entrypoint_path())
-
-        # update the path of the endpoint script so that it can be found when launching remotely
-        self.update_backend_with_remote_paths()
-
-        # save tuner
-        self.tuner.save(upload_dir)
-
-        # avoid side effect
-        self.tuner.trial_backend.set_entrypoint(backup)
+        # Save tuner to upload directory
+        self.save_tuner_for_upload()
 
         # todo clean copy of remote dir
         tgt_requirement = self.remote_script_dir() / "requirements.txt"
@@ -149,32 +160,40 @@ class RemoteLauncher:
             os.remove(tgt_requirement)
         except OSError:
             pass
-        endpoint_requirements = self.tuner.trial_backend.entrypoint_path().parent / "requirements.txt"
+        endpoint_requirements = self.entrypoint_path().parent / "requirements.txt"
         if endpoint_requirements.exists():
             logger.info(f"copy endpoint script requirements to {self.remote_script_dir()}")
             shutil.copy(endpoint_requirements, tgt_requirement)
             pass
+
+    def entrypoint_path(self) -> Path:
+        """
+        :return: Entrypoint path of trial backend of tuner
+        """
+        return self.tuner.trial_backend.entrypoint_path()
 
     def get_source_dir(self) -> Path:
         # note: this logic would be better moved to the backend.
         if self.is_source_dir_specified():
             return Path(self.tuner.trial_backend.source_dir)
         else:
-            return Path(self.tuner.trial_backend.entrypoint_path()).parent
+            return self.entrypoint_path().parent
 
     def is_source_dir_specified(self) -> bool:
         return hasattr(self.tuner.trial_backend, "source_dir") and self.tuner.trial_backend.sm_estimator.source_dir is not None
 
-    def update_backend_with_remote_paths(self):
+    def update_backend_with_remote_paths(self, tuner: Optional[Tuner] = None):
         """
         Update the paths of the backend of the endpoint script and source dir with their remote location.
         """
+        if tuner is None:
+            tuner = self.tuner
         if self.is_source_dir_specified():
             # the source_dir is deployed to `upload_dir`
-            self.tuner.trial_backend.sm_estimator.source_dir = str(Path(self.upload_dir().name))
+            tuner.trial_backend.sm_estimator.source_dir = str(Path(self.upload_dir().name))
         else:
-            self.tuner.trial_backend.set_entrypoint(
-                f"{self.upload_dir().name}/{self.tuner.trial_backend.entrypoint_path().name}")
+            tuner.trial_backend.set_entrypoint(
+                f"{self.upload_dir().name}/{self.entrypoint_path().name}")
 
     def upload_dir(self) -> Path:
         return Path(syne_tune.__path__[0]).parent / ST_REMOTE_UPLOAD_DIR_NAME
@@ -182,7 +201,10 @@ class RemoteLauncher:
     def remote_script_dir(self) -> Path:
         return Path(__file__).parent
 
-    def launch_tuning_job_on_sagemaker(self, wait: bool):
+    def launch_tuning_job_on_sagemaker(
+            self, wait: bool, entry_point: Optional[str] = None):
+        if entry_point is None:
+            entry_point = "remote_main.py"
         # todo add Sagemaker cloudwatch metrics to visualize live results of tuning best results found over time.
         if self.instance_type != "local":
             checkpoint_s3_root = f"{self.s3_path}/{self.tuner.name}"
@@ -208,7 +230,7 @@ class RemoteLauncher:
         # the choice of the estimator is arbitrary here since we use a base image of Syne Tune.
         tuner_estimator = PyTorch(
             # path which calls the tuner
-            entry_point="remote_main.py",
+            entry_point=entry_point,
             source_dir=str(self.remote_script_dir()),
             instance_type=self.instance_type,
             instance_count=1,
