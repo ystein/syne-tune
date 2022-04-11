@@ -189,6 +189,7 @@ def _create_sgpt_model(
         bandwidth=kwargs['bandwidth'],
         active_metric=active_metric,
         metric=kwargs['metric'],
+        mode=kwargs['scheduler_mode'],
         gpmodel=gp_models[0],
         source_gp_models=gp_models[1:],
         num_fantasy_samples=kwargs['num_fantasy_samples'],

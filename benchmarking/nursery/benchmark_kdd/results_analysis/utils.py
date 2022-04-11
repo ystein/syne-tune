@@ -25,6 +25,9 @@ rea_color = "brown"
 hb_bb_color = "green"
 hb_ts_color = "yellow"
 zero_shot_color = "purple"
+sgpt_color = "cyan"
+rush_color = "black"
+rush5_color = "magenta"
 fifo_style = 'solid'
 multifidelity_style = 'dashed'
 multifidelity_style2 = 'dashdot'
@@ -47,11 +50,14 @@ method_styles = {
     Methods.ASHA: MethodSyle(rs_color, multifidelity_style),
     Methods.MSR: MethodSyle(rs_color, multifidelity_style2),
     Methods.BOHB: MethodSyle(tpe_color, multifidelity_style),
-    Methods.MOBSTER: MethodSyle(gp_color, multifidelity_style),
+    #Methods.MOBSTER: MethodSyle(gp_color, multifidelity_style),
     # transfer learning
     Methods.ASHA_BB: MethodSyle(hb_bb_color, multifidelity_style, "."),
     Methods.ASHA_CTS: MethodSyle(hb_ts_color, multifidelity_style, "."),
     Methods.ZEROSHOT: MethodSyle(zero_shot_color, fifo_style, "."),
+    Methods.SGPT: MethodSyle(sgpt_color, fifo_style, "."),
+    Methods.RUSH: MethodSyle(rush_color, multifidelity_style, "."),
+    Methods.RUSH5: MethodSyle(rush5_color, multifidelity_style, "."),
 }
 
 
@@ -64,6 +70,7 @@ class PlotArgs:
 
 
 plot_range = {
+    """
     "fcnet-naval": PlotArgs(50, 1200, 0.0, 4e-3),
     "fcnet-parkinsons": PlotArgs(0, 1200, 0.0, 0.1),
     "fcnet-protein": PlotArgs(xmin=0, xmax=1200, ymin=0.225, ymax=0.35),
@@ -73,6 +80,7 @@ plot_range = {
     "nas201-cifar100": PlotArgs(3000, 21000, 0.26, 0.35),
     "lcbench-bank-marketing": PlotArgs(0, 2000, 82, 89),
     "lcbench-KDDCup09-appetency": PlotArgs(0, 2000, 96, 100),
+    """
 }
 
 
@@ -137,6 +145,7 @@ def generate_df_dict(tag=None, date_min=None, date_max=None, methods_to_show=Non
 def plot_result_benchmark(
         df_task,
         title: str,
+        ylabel: str,
         show_seeds: bool = False,
         method_styles: Optional[Dict] = None,
 ):
@@ -202,7 +211,7 @@ def plot_result_benchmark(
             agg_results[algorithm] = mean
 
         ax.set_xlabel("wallclock time")
-        ax.set_ylabel("validation error")
+        ax.set_ylabel(ylabel)
         ax.legend()
         ax.set_title(title)
     return ax, t_range, agg_results
@@ -212,8 +221,10 @@ def plot_results(benchmarks_to_df, method_styles: Optional[Dict] = None, prefix:
     agg_results = {}
 
     for benchmark, df_task in benchmarks_to_df.items():
+        mode = 'max' if benchmark.startswith('lcbench') else 'min'
         ax, t_range, agg_result = plot_result_benchmark(
-            df_task=df_task, title=benchmark, method_styles=method_styles, show_seeds=show_seeds
+            df_task=df_task, title=benchmark, method_styles=method_styles, show_seeds=show_seeds,
+            ylabel='accuracy' if mode == 'max' else 'error'
         )
         if title is not None:
             ax.set_title(title)
@@ -223,10 +234,19 @@ def plot_results(benchmarks_to_df, method_styles: Optional[Dict] = None, prefix:
             ax.set_ylim([plotargs.ymin, plotargs.ymax])
             ax.set_xlim([plotargs.xmin, plotargs.xmax])
 
+        ylim_min = min([curve[int(len(curve) * 0.1)] for curve in agg_result.values()])
+        ylim_max = max([curve[int(len(curve) * 0.1)] for curve in agg_result.values()])
+        if mode == 'max':
+            ylim_max = max([np.max(curve) for curve in agg_result.values()]) + 0.1
+        else:
+            ylim_min = max(min([np.min(curve) for curve in agg_result.values()]) - 0.02, 0)
+        ax.set_ylim([ylim_min, ylim_max])
+
         plt.tight_layout()
         os.makedirs("figures/", exist_ok=True)
         plt.savefig(f"figures/{prefix}{benchmark}.pdf")
-        plt.show()
+        # plt.show()
+        plt.close()
 
 
 def compute_best_value_over_time(benchmarks_to_df, methods_to_show):
@@ -335,6 +355,7 @@ def print_rank_table(benchmarks_to_df, methods_to_show: Optional[List[str]]):
     df_ranks.columns = df_ranks.columns.map(lambda s: "\\" + s.replace("-", "") + "{}")
     print(df_ranks.to_string())
     print(df_ranks.to_latex(float_format="%.2f", na_rep="-", escape=False))
+    return df_ranks
 
 def load_and_cache(experiment_tag: Union[str, List[str]], load_cache_if_exists: bool = True, methods_to_show=None):
 

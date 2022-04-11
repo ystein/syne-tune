@@ -10,13 +10,15 @@ import syne_tune
 import benchmarking
 from syne_tune.util import s3_experiment_path, random_string
 
+
 if __name__ == '__main__':
+    num_seeds = 30
     parser = ArgumentParser()
     parser.add_argument("--experiment_tag", type=str, required=False, default=generate_slug(2))
     args, _ = parser.parse_known_args()
     experiment_tag = args.experiment_tag
     hash = random_string(4)
-    for method in methods.keys():
+    for method in ['ZS', 'RUSH', 'RUSH5', 'ASHA-BB', 'ASHA-CTS', 'RS', 'ASHA', 'BOHB', 'REA', 'TPE']:  # methods.keys():
         sm_args = dict(
             entry_point="benchmark_main.py",
             source_dir=str(Path(__file__).parent),
@@ -27,18 +29,18 @@ if __name__ == '__main__':
             py_version="py3",
             framework_version='1.6',
             max_run=3600 * 72,
-            role=get_execution_role(),
+            role='arn:aws:iam::XXX:role/AmazonSageMakerServiceCatalogProductsUseRole',
             dependencies=syne_tune.__path__ + benchmarking.__path__,
             disable_profiler=True,
         )
-        if method != Methods.MOBSTER:
+        if method not in [Methods.MOBSTER, Methods.SGPT]:
             print(f"{experiment_tag}-{method}")
-            sm_args["hyperparameters"] = {"experiment_tag": experiment_tag, 'num_seeds': 30, 'method': method}
+            sm_args["hyperparameters"] = {"experiment_tag": experiment_tag, 'num_seeds': num_seeds, 'method': method}
             est = PyTorch(**sm_args)
             est.fit(job_name=f"{experiment_tag}-{method}-{hash}", wait=False)
         else:
-            # For mobster, we schedule one job per seed as the method takes much longer
-            for seed in range(30):
+            # For mobster and sgpt, we schedule one job per seed as the method takes much longer
+            for seed in range(num_seeds):
                 print(f"{experiment_tag}-{method}-{seed}")
                 sm_args["hyperparameters"] = {
                     "experiment_tag": experiment_tag, 'num_seeds': seed, 'run_all_seed': 0,

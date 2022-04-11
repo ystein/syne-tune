@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from typing import Optional
 
+from benchmarking.blackbox_repository import load
+
 
 @dataclass
 class BenchmarkDefinition:
@@ -16,9 +18,25 @@ class BenchmarkDefinition:
     surrogate: Optional[str] = None
 
 
+def wallclock_time(benchmark_name, dataset_name):
+    runtime = {
+        'fcnet': 'metric_elapsed_time',
+        'nasbench201': 'metric_runtime',
+        'lcbench': 'time'
+    }
+    benchmark = load(benchmark_name)
+    task = benchmark[dataset_name]
+    time_idx = task.objectives_names.index(runtime[benchmark_name])
+    factor = 10
+    if benchmark_name == 'nasbench201':
+        return factor * task.objectives_evaluations[..., time_idx].sum(axis=2).mean()
+    else:
+        return factor * task.objectives_evaluations[:, :, -1, time_idx].mean()
+
+
 def fcnet_benchmark(dataset_name):
     return BenchmarkDefinition(
-        max_wallclock_time=1200,
+        max_wallclock_time=wallclock_time('fcnet', dataset_name),  # 1200,
         n_workers=4,
         elapsed_time_attr="metric_elapsed_time",
         metric="metric_valid_loss",
@@ -30,7 +48,7 @@ def fcnet_benchmark(dataset_name):
 
 def nas201_benchmark(dataset_name):
     return BenchmarkDefinition(
-        max_wallclock_time=3600 * 6,
+        max_wallclock_time=wallclock_time('nasbench201', dataset_name),  # 3600 * 6,
         n_workers=4,
         elapsed_time_attr="metric_elapsed_time",
         time_this_resource_attr='metric_runtime',
@@ -43,7 +61,7 @@ def nas201_benchmark(dataset_name):
 
 def lcbench_benchmark(dataset_name):
     return BenchmarkDefinition(
-        max_wallclock_time=7200,
+        max_wallclock_time=wallclock_time('lcbench', dataset_name),  # 7200,
         n_workers=4,
         elapsed_time_attr="time",
         metric="val_accuracy",
@@ -66,25 +84,25 @@ benchmark_definitions = {
 }
 
 # benchmark_definitions = {}
-# lc_bench_datasets = [
-#     "APSFailure", "Amazon_employee_access", "Australian", "Fashion-MNIST", "KDDCup09_appetency", "MiniBooNE", "adult",
-#     "airlines", "albert", "bank-marketing", "blood-transfusion-service-center", "car", "christine", "cnae-9",
-#     "connect-4", "covertype", "credit-g", "dionis", "fabert", "helena", "higgs", "jannis", "jasmine",
-#     "jungle_chess_2pcs_raw_endgame_complete", "kc1", "kr-vs-kp", "mfeat-factors", "nomao", "numerai28.6",
-#     "phoneme", "segment", "shuttle", "sylvine", "vehicle", "volkert"
-# ]
+lc_bench_datasets = [
+    "APSFailure", "Amazon_employee_access", "Australian", "Fashion-MNIST", "KDDCup09_appetency", "MiniBooNE", "adult",
+    "airlines", "albert", "bank-marketing", "blood-transfusion-service-center", "car", "christine", "cnae-9",
+    "connect-4", "covertype", "credit-g", "dionis", "fabert", "helena", "higgs", "jannis", "jasmine",
+    "jungle_chess_2pcs_raw_endgame_complete", "kc1", "kr-vs-kp", "mfeat-factors", "nomao", "numerai28.6",
+    "phoneme", "segment", "shuttle", "sylvine", "vehicle", "volkert"
+]
 # lc_bench_datasets = [
 #     "Fashion-MNIST", "KDDCup09_appetency",
 #     "airlines", "bank-marketing",
 #     # "volkert"
 # ]
 # 5 most expensive
-lc_bench_datasets = [
-    "Fashion-MNIST",
-    "airlines",
-    "albert",
-    "covertype",
-    "christine",
-]
+#lc_bench_datasets = [
+#    "Fashion-MNIST",
+#    "airlines",
+#    "albert",
+#    "covertype",
+#    "christine",
+#]
 for task in lc_bench_datasets:
     benchmark_definitions["lcbench-" + task.replace("_", "-").replace(".", "")] = lcbench_benchmark(task)

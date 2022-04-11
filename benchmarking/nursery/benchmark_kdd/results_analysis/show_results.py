@@ -24,6 +24,7 @@ if __name__ == '__main__':
 
     # benchmarks_to_df = {bench: df[] for bench, df in benchmarks_to_df.items()}
     methods_to_show = list(method_styles.keys())
+    print(methods_to_show)
     benchmarks_to_df = load_and_cache(load_cache_if_exists=load_cache_if_exists, experiment_tag=experiment_tag, methods_to_show=methods_to_show)
 
     for bench, df_ in benchmarks_to_df.items():
@@ -47,11 +48,58 @@ if __name__ == '__main__':
         Methods.MSR,
         Methods.ASHA,
         Methods.BOHB,
-        Methods.MOBSTER,
+        #Methods.MOBSTER,
         Methods.ZEROSHOT,
         Methods.ASHA_BB,
         Methods.ASHA_CTS,
+        Methods.SGPT,
+        Methods.RUSH,
+        Methods.RUSH5
     ]
     print_rank_table(benchmarks_to_df, methods_to_show)
 
     plot_results(benchmarks_to_df, method_styles)
+
+    import numpy as np
+    import matplotlib.pyplot as plt
+
+
+    def delatexfy(string):
+        rename_dict = {
+            'RSMSR': 'RS-MSR',
+            'ASHABB': 'ASHA-BB',
+            'ASHACTS': 'ASHA-CTS'
+        }
+        delatexfied = string.replace("\\", "").replace("{", "").replace("}", "")
+        return rename_dict.get(delatexfied, delatexfied)
+
+    max_time = {task_name: task_df['st_tuner_time'].max() for task_name, task_df in benchmarks_to_df.items()}
+    results = list()
+    for time_fraction in np.arange(1, 0, -0.1):
+        for task_name, task_df in benchmarks_to_df.items():
+            benchmarks_to_df[task_name] = task_df[task_df['st_tuner_time'] < time_fraction * max_time[task_name]]
+        results.append(print_rank_table(benchmarks_to_df, methods_to_show))
+    ranking = dict()
+    for result in reversed(results):
+        for method, benchmark_results in result.to_dict().items():
+            method = delatexfy(method)
+            for benchmark, rank in benchmark_results.items():
+                benchmark = delatexfy(benchmark)
+                if benchmark not in ranking:
+                    ranking[benchmark] = dict()
+                if method not in ranking[benchmark]:
+                    ranking[benchmark][method] = list()
+                ranking[benchmark][method].append(rank)
+    for benchmark, method_ranking in ranking.items():
+        plt.figure(facecolor='w')
+        for method, avg_rank in method_ranking.items():
+            method_style = method_styles[method]
+            plt.plot(np.arange(0.1, 1.1, 0.1), avg_rank, label=method, color=method_style.color,
+                     linestyle=method_style.linestyle, marker=method_style.marker,)
+        plt.title(benchmark)
+        plt.xlabel('Fraction of Total Wallclock Time')
+        plt.ylabel('Normalized Average Rank')
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig(f"figures/rank-{benchmark}.pdf")
+        plt.close()

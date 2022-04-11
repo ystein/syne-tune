@@ -58,6 +58,9 @@ class ZeroShotTransfer(TransferLearningMixin, BaseSearcher):
                          metric_names=[metric])
         self._mode = mode
         self._random_state = np.random.RandomState(random_seed)
+        if use_surrogates and len(transfer_learning_evaluations) <= 1:
+            use_surrogates = False
+            sort_transfer_learning_evaluations = False
         if use_surrogates:
             sort_transfer_learning_evaluations = False
             transfer_learning_evaluations = self._create_surrogate_transfer_learning_evaluations(
@@ -79,7 +82,8 @@ class ZeroShotTransfer(TransferLearningMixin, BaseSearcher):
                 avg_scores = avg_scores.min(axis=1)[idx]
             scores.append(avg_scores)
         if not use_surrogates:
-            logger.warning(warning_message + 'If this is not the case, this searcher fails without a warning.')
+            if len(transfer_learning_evaluations) > 1:
+                logger.warning(warning_message + 'If this is not the case, this searcher fails without a warning.')
             if not sort_transfer_learning_evaluations:
                 hyperparameters = hyperparameters.copy()
         hyperparameters.reset_index(drop=True, inplace=True)
@@ -87,6 +91,7 @@ class ZeroShotTransfer(TransferLearningMixin, BaseSearcher):
         sign = 1 if self._mode == 'min' else -1
         self._scores = sign * pd.DataFrame(scores)
         self._ranks = self._update_ranks()
+        self._counter = 0
 
     def _create_surrogate_transfer_learning_evaluations(self, config_space, transfer_learning_evaluations, metric):
         """
@@ -117,6 +122,9 @@ class ZeroShotTransfer(TransferLearningMixin, BaseSearcher):
         return surrogate_transfer_learning_evaluations
 
     def get_config(self, **kwargs) -> Dict:
+        if self._counter == 4:
+            return None
+        self._counter += 1
         if self._ranks.shape[1] == 0:
             return None
         best_idx = self._ranks.mean(axis=0).idxmin()

@@ -26,8 +26,8 @@ from syne_tune.optimizer.schedulers.transfer_learning import TransferLearningMix
 
 class ScalableGaussianProcessTransferModelFactory(TransferLearningMixin, GaussProcEmpiricalBayesModelFactory):
     def __init__(self, config_space: Dict, transfer_learning_evaluations: Dict[str, TransferLearningTaskEvaluations],
-                 metric: str, source_gp_models: List[GPModel], gpmodel: GPModel, bandwidth: float, sample_size: int,
-                 **kwargs):
+                 metric: str, mode: str, source_gp_models: List[GPModel], gpmodel: GPModel, bandwidth: float,
+                 sample_size: int, **kwargs):
         super().__init__(config_space=config_space, transfer_learning_evaluations=transfer_learning_evaluations,
                          metric_names=[metric], gpmodel=gpmodel, **kwargs)
         self._source_surrogates = list()
@@ -35,7 +35,11 @@ class ScalableGaussianProcessTransferModelFactory(TransferLearningMixin, GaussPr
         for i, task_data in enumerate(transfer_learning_evaluations.values()):
             idx = np.arange(len(task_data.hyperparameters))
             idx = np.random.choice(idx, size=sample_size, replace=False)
-            scores = task_data.objective_values(metric).mean(axis=1)[idx, -1].tolist()
+            scores = task_data.objective_values(metric).mean(axis=1)[idx]
+            if mode == 'max':
+                scores = scores.max(axis=1).tolist()
+            else:
+                scores = scores.min(axis=1).tolist()
             hp_ranges = make_hyperparameter_ranges(config_space)
             config_for_trial = {str(key): value for key, value in enumerate(task_data.hyperparameters.iloc[idx]
                                                                             .to_dict('index').values())}
