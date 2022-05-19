@@ -93,7 +93,7 @@ def scheduler_factory(
             searcher = 'random'
             params['searcher'] = searcher
         else:
-            supported_searchers = {'random', 'bayesopt', 'kde'}
+            supported_searchers = {'random', 'bayesopt', 'kde', 'bore'}
             if scheduler == 'fifo':
                 supported_searchers.update(
                     {'bayesopt_cost_coarse', 'bayesopt_cost_fine',
