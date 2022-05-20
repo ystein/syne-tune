@@ -14,13 +14,13 @@ from abc import ABC, abstractmethod
 from typing import Tuple, Dict, List, Any, Optional, Union
 import numpy as np
 
-from syne_tune.config_space import Domain, is_log_space, FiniteRange, Categorical
+from syne_tune.config_space import Domain, FiniteRange, Categorical
 from syne_tune.optimizer.schedulers.searchers.bayesopt.datatypes.common \
     import Hyperparameter, Configuration
 from syne_tune.optimizer.schedulers.searchers.bayesopt.datatypes.hp_ranges \
     import HyperparameterRanges
 from syne_tune.optimizer.schedulers.searchers.bayesopt.datatypes.scaling \
-    import Scaling, LinearScaling, LogScaling
+    import Scaling, LinearScaling, get_scaling
 
 __all__ = ['HyperparameterRangesImpl']
 
@@ -418,7 +418,6 @@ class HyperparameterRangesImpl(HyperparameterRanges):
         for name in self.internal_keys:
             hp_range = self.config_space[name]
             assert isinstance(hp_range, Domain)
-            is_log = is_log_space(hp_range)
             tp = hp_range.value_type
             if isinstance(hp_range, Categorical):
                 if name in self.active_config_space:
@@ -434,7 +433,7 @@ class HyperparameterRangesImpl(HyperparameterRanges):
                     name, choices=tuple(hp_range.categories),
                     active_choices=active_choices))
             else:
-                scaling = LogScaling() if is_log else LinearScaling()
+                scaling = get_scaling(hp_range)
                 kwargs = {
                     'name': name,
                     'lower_bound': hp_range.lower,
@@ -446,10 +445,6 @@ class HyperparameterRangesImpl(HyperparameterRanges):
                     hp_ranges.append(HyperparameterRangeFiniteRange(
                         **kwargs, size=len(hp_range), cast_int=hp_range.cast_int))
                 else:
-                    # Note: If `hp_range` is logarithmic, it has a base.
-                    # Since both the loguniform distribution and the internal
-                    # encoding are independent of this base, we can just ignore
-                    # it here (we use natural logarithms internally).
                     if name in self.active_config_space:
                         active_hp_range = self.active_config_space[name]
                         kwargs.update({
@@ -460,7 +455,10 @@ class HyperparameterRangesImpl(HyperparameterRanges):
                     else:
                         hp_ranges.append(HyperparameterRangeInteger(**kwargs))
         self._hp_ranges = hp_ranges
-        self._ndarray_size = sum(d.ndarray_size() for d in hp_ranges)
+        csum = [0] + list(np.cumsum([d.ndarray_size() for d in hp_ranges]))
+        self._ndarray_size = csum[-1]
+        self._encoded_ranges = dict(zip(
+            (d.name for d in hp_ranges), zip(csum[:-1], csum[1:])))
 
     @property
     def ndarray_size(self) -> int:
@@ -492,6 +490,10 @@ class HyperparameterRangesImpl(HyperparameterRanges):
             hps.append(hp_range.from_ndarray(enc_attr))
             start = end
         return self.tuple_to_config(tuple(hps))
+
+    @property
+    def encoded_ranges(self) -> Dict[str, Tuple[int, int]]:
+        return self._encoded_ranges
 
     def get_ndarray_bounds(self) -> List[Tuple[float, float]]:
         bounds = [x for hp_range in self._hp_ranges

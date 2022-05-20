@@ -15,13 +15,14 @@ from typing import List, Optional, Dict
 import logging
 import numpy as np
 
-from benchmarking.blackbox_repository import load, add_surrogate
-from benchmarking.blackbox_repository.blackbox import Blackbox
-from benchmarking.blackbox_repository.blackbox_tabular import BlackboxTabular
-from benchmarking.blackbox_repository.utils import metrics_for_configuration
+from syne_tune.blackbox_repository import load, add_surrogate
+from syne_tune.blackbox_repository.blackbox import Blackbox
+from syne_tune.blackbox_repository.blackbox_tabular import BlackboxTabular
+from syne_tune.blackbox_repository.utils import metrics_for_configuration
 
 from syne_tune.backend.simulator_backend.simulator_backend import SimulatorBackend
 from syne_tune.backend.trial_status import Status
+from syne_tune.config_space import to_dict, from_dict, Domain
 
 logger = logging.getLogger(__name__)
 
@@ -185,14 +186,18 @@ def make_surrogate(surrogate: Optional[str] = None, surrogate_kwargs: Optional[D
     else:
         from sklearn.neighbors import KNeighborsRegressor
         from sklearn.neural_network import MLPRegressor
+        from sklearn.ensemble import RandomForestRegressor
         import xgboost
         surrogate_dict = {
             "KNeighborsRegressor": KNeighborsRegressor,
             "MLPRegressor": MLPRegressor,
             "XGBRegressor": xgboost.XGBRegressor,
+            "RandomForestRegressor": RandomForestRegressor,
         }
         assert surrogate in surrogate_dict, f"surrogate passed {surrogate} is not supported, " \
                                             f"only {list(surrogate_dict.keys())} are available"
+        if surrogate_kwargs is None:
+            surrogate_kwargs = {}
         return surrogate_dict[surrogate](**surrogate_kwargs)
 
 
@@ -208,6 +213,7 @@ class BlackboxRepositoryBackend(_BlackboxSimulatorBackend):
             dataset: Optional[str] = None,
             surrogate: Optional[str] = None,
             surrogate_kwargs: Optional[Dict] = None,
+            config_space_surrogate: Optional[Dict] = None,
             **simulatorbackend_kwargs,
     ):
         """
@@ -229,7 +235,14 @@ class BlackboxRepositoryBackend(_BlackboxSimulatorBackend):
          X (for instance CategoricalHyperparameter are one-hot encoded).
         :param surrogate_kwargs: arguments for the scikit-learn estimator, for instance {"n_neighbors": 1} can be used
         if `surrogate="KNeighborsRegressor"` is chosen.
+        :param config_space_surrogate: if `surrogate` is given, this is the
+            configuration space for the surrogate blackbox. If not given, the
+            space of the original blackbox is used. However, if this is a tabular
+            blackbox, its numerical parameters have categorical domains, which is
+            usually not what we want for a surrogate.
         """
+        assert config_space_surrogate is None or surrogate is not None, \
+            "config_space_surrogate only together with surrogate"
         super().__init__(
             elapsed_time_attr=elapsed_time_attr,
             time_this_resource_attr=time_this_resource_attr,
@@ -244,6 +257,12 @@ class BlackboxRepositoryBackend(_BlackboxSimulatorBackend):
             make_surrogate(surrogate=surrogate, surrogate_kwargs=surrogate_kwargs)
         self._surrogate = surrogate
         self._surrogate_kwargs = surrogate_kwargs if surrogate_kwargs is not None else {}
+        if config_space_surrogate is not None:
+            self._config_space_surrogate = {
+                k: v for k, v in config_space_surrogate.items()
+                if isinstance(v, Domain)}
+        else:
+            self._config_space_surrogate = None
 
     @property
     def blackbox(self) -> Blackbox:
@@ -258,14 +277,17 @@ class BlackboxRepositoryBackend(_BlackboxSimulatorBackend):
                 self._blackbox = load(self.blackbox_name)[self.dataset]
             if self._surrogate is not None:
                 surrogate = make_surrogate(surrogate=self._surrogate, surrogate_kwargs=self._surrogate_kwargs)
-                self._blackbox = add_surrogate(self._blackbox, surrogate=surrogate)
+                self._blackbox = add_surrogate(
+                    blackbox=self._blackbox,
+                    surrogate=surrogate,
+                    configuration_space=self._config_space_surrogate)
 
         return self._blackbox
 
     def __getstate__(self):
         # we serialize only required metadata information since the blackbox data is contained in the repository and
         # its raw data does not need to be saved.
-        return {
+        state = {
             'elapsed_time_attr': self.elapsed_time_attr,
             'time_this_resource_attr': self._time_this_resource_attr,
             'max_resource_attr': self._max_resource_attr,
@@ -277,6 +299,11 @@ class BlackboxRepositoryBackend(_BlackboxSimulatorBackend):
             'surrogate': self._surrogate,
             'surrogate_kwargs': self._surrogate_kwargs,
         }
+        if self._config_space_surrogate is not None:
+            state['config_space_surrogate'] = {
+                k: to_dict(v)
+                for k, v in self._config_space_surrogate.items()}
+        return state
 
     def __setstate__(self, state):
         super().__init__(
@@ -292,6 +319,12 @@ class BlackboxRepositoryBackend(_BlackboxSimulatorBackend):
         self._surrogate = state['surrogate']
         self._surrogate_kwargs = state['surrogate_kwargs']
         self._blackbox = None
+        if 'config_space_surrogate' in state:
+            self._config_space_surrogate = {
+                k: from_dict(v)
+                for k, v in state['config_space_surrogate'].items()}
+        else:
+            self._config_space_surrogate = None
 
 
 class UserBlackboxBackend(_BlackboxSimulatorBackend):

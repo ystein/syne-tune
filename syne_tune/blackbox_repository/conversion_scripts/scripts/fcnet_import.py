@@ -14,8 +14,8 @@ import numpy as np
 import ast
 import h5py
 
-from benchmarking.blackbox_repository.blackbox_tabular import serialize, BlackboxTabular
-from benchmarking.blackbox_repository.conversion_scripts.utils import repository_path
+from syne_tune.blackbox_repository.blackbox_tabular import serialize, BlackboxTabular
+from syne_tune.blackbox_repository.conversion_scripts.utils import repository_path
 
 from syne_tune.util import catchtime
 from syne_tune.config_space import choice, logfinrange, finrange, randint
@@ -31,6 +31,10 @@ RESOURCE_ATTR = 'hp_epoch'
 
 MAX_RESOURCE_LEVEL = 100
 
+NUM_UNITS_1 = 'hp_n_units_1'
+
+NUM_UNITS_2 = 'hp_n_units_2'
+
 CONFIGURATION_SPACE = {
     "hp_activation_fn_1": choice(["tanh", "relu"]),
     "hp_activation_fn_2": choice(["tanh", "relu"]),
@@ -39,8 +43,8 @@ CONFIGURATION_SPACE = {
     "hp_dropout_2": finrange(0.0, 0.6, 3),
     "hp_init_lr": choice([0.0005, 0.001, 0.005, 0.01, 0.05, 0.1]),
     'hp_lr_schedule': choice(["cosine", "const"]),
-    'hp_n_units_1': logfinrange(16, 512, 6, cast_int=True),
-    'hp_n_units_2': logfinrange(16, 512, 6, cast_int=True),
+    NUM_UNITS_1: logfinrange(16, 512, 6, cast_int=True),
+    NUM_UNITS_2: logfinrange(16, 512, 6, cast_int=True),
 }
 
 
@@ -154,13 +158,13 @@ def generate_fcnet(s3_root: Optional[str] = None):
         serialize(bb_dict=bb_dict, path=repository_path / blackbox_name)
 
     with catchtime("uploading to s3"):
-        from benchmarking.blackbox_repository.conversion_scripts.utils import upload
+        from syne_tune.blackbox_repository.conversion_scripts.utils import upload
         upload(blackbox_name, s3_root=s3_root)
 
 
 def plot_learning_curves():
     import matplotlib.pyplot as plt
-    from benchmarking.blackbox_repository.repository import load
+    from syne_tune.blackbox_repository.repository import load
     # plot one learning-curve for sanity-check
     bb_dict = load(BLACKBOX_NAME)
 
