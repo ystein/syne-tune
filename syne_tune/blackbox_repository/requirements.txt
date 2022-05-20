@@ -5,3 +5,7 @@ s3fs
 sklearn
 xgboost
 h5py # note: only needed for fcnet
+statsmodels
+xgboost
+gpy
+torch
