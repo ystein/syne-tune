@@ -51,7 +51,7 @@ if __name__ == "__main__":
         Methods.RS,
         Methods.TPE,
         Methods.REA,
-        # Methods.BORE,
+        Methods.BORE,
         Methods.GP,
         Methods.MSR,
         Methods.ASHA,
@@ -65,10 +65,10 @@ if __name__ == "__main__":
     print_rank_table(benchmarks_to_df, methods_to_show)
 
     params = {
-        "legend.fontsize": 18,
-        "axes.labelsize": 22,
-        "xtick.labelsize": 18,
-        "ytick.labelsize": 18,
+        "legend.fontsize": 22,
+        "axes.labelsize": 26,
+        "xtick.labelsize": 22,
+        "ytick.labelsize": 22,
     }
     plt.rcParams.update(params)
 

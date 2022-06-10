@@ -20,7 +20,7 @@ from syne_tune.util import catchtime
 rs_color = "blue"
 gp_color = "orange"
 tpe_color = "red"
-bore_color = "violet"
+bore_color = "lightgreen"
 rea_color = "brown"
 hb_bb_color = "green"
 hb_ts_color = "yellow"
@@ -171,7 +171,7 @@ def plot_result_benchmark(
         mode = df_task.loc[:, "metric_mode"].values[0]
 
         if ax is None:
-            fig, ax = plt.subplots()
+            fig, ax = plt.subplots(figsize=(8, 7))
         for algorithm, method_style in method_styles.items():
             if methods_to_show is not None and algorithm not in methods_to_show:
                 continue
@@ -246,7 +246,8 @@ def plot_result_benchmark(
         elif metric == "metric_valid_error":
             y_label = "classification error"
         ax.set_ylabel(y_label)
-        ax.legend()
+        ax.legend(loc="lower center", bbox_to_anchor=(0.5, -0.5), ncol=3, frameon=False)
+        fig.tight_layout()
         # ax.set_title(title)
     return ax, t_range, agg_results
 
