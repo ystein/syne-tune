@@ -53,12 +53,13 @@ def shuffle_learning_curves(k, objectives_evaluations, rng, mode):
 
 
 def get_task_metadata(config_space, blackbox_name, source_task, test_task, rng):
-    import os
-    from pathlib import Path
     from syne_tune.experiments import load_experiment
 
     result_names = metadata[blackbox_name][source_task]['result_names']
     result_name = result_names[rng.randint(len(result_names))]
+
+    import os
+    from pathlib import Path
     if "SM_MODEL_DIR" in os.environ:
         target_folder = '/opt/ml/checkpoints/'
     else:
@@ -66,6 +67,7 @@ def get_task_metadata(config_space, blackbox_name, source_task, test_task, rng):
     Path(target_folder).mkdir(parents=True, exist_ok=True)
     os.system(
         f'aws s3 sync s3://sagemaker-us-west-2-536276317016/syne-tune/{tag}/{result_name} {target_folder}{result_name} --exclude "*" --include "*metadata.json" --include "*results.csv.zip"')
+
     result = load_experiment(result_name)
     mode = metadata[blackbox_name][test_task]['metric_mode']
     metric = metadata[blackbox_name][test_task]['metric_names'][0]

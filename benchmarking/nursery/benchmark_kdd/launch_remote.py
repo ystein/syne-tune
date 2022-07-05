@@ -29,7 +29,7 @@ if __name__ == '__main__':
             py_version="py3",
             framework_version='1.6',
             max_run=3600 * 72,
-            role='arn:aws:iam::XXX:role/AmazonSageMakerServiceCatalogProductsUseRole',
+            role='arn:aws:iam::536276317016:role/AmazonSageMakerServiceCatalogProductsUseRole',
             dependencies=syne_tune.__path__ + benchmarking.__path__,
             disable_profiler=True,
         )

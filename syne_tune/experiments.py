@@ -111,7 +111,7 @@ def download_single_experiment(
     s3 = boto3.client('s3')
     s3_bucket = s3_path.replace("s3://", "").split("/")[0]
     s3_key = "/".join(s3_path.replace("s3://", "").split("/")[1:])
-    for file in ["metadata.json", "results.csv.zip", "tuner.dill"]:
+    for file in ["metadata.json", "results.csv.zip"]:
         try:
             logging.info(f"downloading {file} on {s3_path}")
             s3.download_file(s3_bucket, f"{s3_key}/{file}", str(tgt_dir / file))

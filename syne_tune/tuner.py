@@ -143,8 +143,9 @@ class Tuner:
             running_trials_ids = set()
 
             config_space_exhausted = False
+            stop_condition_reached = self._stop_condition()
 
-            while not self._stop_condition():
+            while not stop_condition_reached or len(running_trials_ids) > 0:
                 for callback in self.callbacks:
                     callback.on_loop_start()
 
@@ -169,12 +170,18 @@ class Tuner:
                 done_trials_statuses.update(new_done_trial_statuses)
                 running_trials_ids.difference_update(new_done_trial_statuses.keys())
 
-                if config_space_exhausted:
+                if config_space_exhausted or stop_condition_reached:
                     # if the search space is exhausted, we loop until the running trials are done or until the
                     # stop condition is reached
                     if len(running_trials_ids) > 0:
-                        logger.debug(f"Configuration space exhausted, waiting for completion of running trials "
-                                     f"{running_trials_ids}")
+                        if config_space_exhausted:
+                            logger.debug(f"Configuration space exhausted, waiting for completion of running trials "
+                                         f"{running_trials_ids}")
+                        else:
+                            logger.debug(f"Stopping criterion reached, waiting for completion of running trials "
+                                         f"{running_trials_ids}")
+                            print(
+                                f"Stopping criterion reached, waiting for completion of running trials {running_trials_ids}")
                         self._sleep()
                     else:
                         break
@@ -190,6 +197,8 @@ class Tuner:
 
                 for callback in self.callbacks:
                     callback.on_loop_end()
+
+                stop_condition_reached = self._stop_condition()
 
         finally:
             # graceful termination block called when the tuner reached its stop condition, when an error happened or
