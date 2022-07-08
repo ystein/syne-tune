@@ -168,7 +168,7 @@ def _get_transfer_learning_evaluations(blackbox_name: str, test_task: str, n_eva
 if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument("--experiment_tag", type=str, required=False, default=generate_slug(2))
-    parser.add_argument("--num_seeds", type=int, required=False, default=3, help='number of seeds to run')
+    parser.add_argument("--num_seeds", type=int, required=False, default=30, help='number of seeds to run')
     parser.add_argument("--run_all_seed", type=int, default=1, help='if 1 run only `seed=num_seeds`, otherwise runs all the seeds [0, `num_seeds`-1]')
     parser.add_argument("--method", type=str, required=False, help='a method to run from baselines.py')
     parser.add_argument("--benchmark", type=str, required=False, help='a benchmark to run from benchmark_definitions.py')
