@@ -188,6 +188,7 @@ class Matern52(KernelFunction):
     d components (with d=dimension, i.e., the number of features in X)
     otherwise (ARD == True), inverse_bandwidths is (1,d)
     """
+
     def __init__(
         self,
         dimension,
@@ -209,16 +210,18 @@ class Matern52(KernelFunction):
                 constr_lower=COVARIANCE_SCALE_LOWER_BOUND,
                 constr_upper=COVARIANCE_SCALE_UPPER_BOUND,
                 dimension=1,
-                prior=LogNormal(0.0, 1.0)
+                prior=LogNormal(0.0, 1.0),
             )
             with self.name_scope():
                 self.covariance_scale_internal = register_parameter(
-                    self.params, 'covariance_scale', self.encoding)
+                    self.params, "covariance_scale", self.encoding
+                )
 
     def _covariance_scale(self):
         if self.has_covariance_scale:
             return encode_unwrap_parameter(
-                self.covariance_scale_internal, self.encoding)
+                self.covariance_scale_internal, self.encoding
+            )
         else:
             return 1.0
 
@@ -256,8 +259,10 @@ class Matern52(KernelFunction):
 
     def param_encoding_pairs(self):
         result = [
-            (self.squared_distance.inverse_bandwidths_internal,
-             self.squared_distance.encoding)
+            (
+                self.squared_distance.inverse_bandwidths_internal,
+                self.squared_distance.encoding,
+            )
         ]
         if self.has_covariance_scale:
             result.insert(0, (self.covariance_scale_internal, self.encoding))
@@ -276,10 +281,10 @@ class Matern52(KernelFunction):
     def get_params(self):
         result = self.squared_distance.get_params()
         if self.has_covariance_scale:
-            result['covariance_scale'] = self.get_covariance_scale()
+            result["covariance_scale"] = self.get_covariance_scale()
         return result
 
     def set_params(self, param_dict):
         self.squared_distance.set_params(param_dict)
         if self.has_covariance_scale:
-            self.set_covariance_scale(param_dict['covariance_scale'])
+            self.set_covariance_scale(param_dict["covariance_scale"])

@@ -35,7 +35,7 @@ from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.mean import (
     ScalarMeanFunction,
 )
 from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.likelihood import (
-    MarginalLikelihood,
+    GaussianProcessMarginalLikelihood,
 )
 from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.gpr_mcmc import (
     GPRegressionMCMC,
@@ -165,7 +165,7 @@ def test_get_gp_hps():
     kernel = Matern52(dimension=1)
     warping = Warping(dimension=1, index_to_range={0: (-4.0, 4.0)})
     warped_kernel = WarpedKernel(kernel=kernel, warping=warping)
-    likelihood = MarginalLikelihood(
+    likelihood = GaussianProcessMarginalLikelihood(
         kernel=warped_kernel, mean=mean, initial_noise_variance=1e-6
     )
     likelihood.initialize(force_reinit=True)
@@ -182,7 +182,7 @@ def test_set_gp_hps():
     kernel = Matern52(dimension=1)
     warping = Warping(dimension=1, index_to_range={0: (-4.0, 4.0)})
     warped_kernel = WarpedKernel(kernel=kernel, warping=warping)
-    likelihood = MarginalLikelihood(
+    likelihood = GaussianProcessMarginalLikelihood(
         kernel=warped_kernel, mean=mean, initial_noise_variance=1e-6
     )
     likelihood.initialize(force_reinit=True)

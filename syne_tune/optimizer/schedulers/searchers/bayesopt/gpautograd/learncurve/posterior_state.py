@@ -23,6 +23,9 @@ from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.kernel import 
 from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.mean import (
     MeanFunction,
 )
+from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.posterior_state import (
+    PosteriorState,
+)
 from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.learncurve.issm import (
     issm_likelihood_slow_computations,
     posterior_computations,
@@ -69,7 +72,7 @@ __all__ = [
 ]
 
 
-class GaussProcAdditivePosteriorState:
+class GaussProcAdditivePosteriorState(PosteriorState):
     """
     Represent posterior state for joint Gaussian model of learning curves over
     a number of configurations. The (additive) model is the sum of a Gaussian
@@ -83,7 +86,7 @@ class GaussProcAdditivePosteriorState:
 
     def __init__(
         self,
-        data: Optional[Dict],
+        data: Optional[dict],
         mean: MeanFunction,
         kernel: KernelFunction,
         noise_variance,
@@ -114,10 +117,22 @@ class GaussProcAdditivePosteriorState:
             self.r_min = kwargs["r_min"]
             self.r_max = kwargs["r_max"]
 
-    def _compute_posterior_state(self, data: Dict, noise_variance, **kwargs):
+    @property
+    def num_data(self):
+        return self.poster_state["features"].shape[0]
+
+    @property
+    def num_features(self):
+        return self.poster_state["features"].shape[1]
+
+    @property
+    def num_fantasies(self):
+        return self.poster_state["pmat"].shape[1]
+
+    def _compute_posterior_state(self, data: dict, noise_variance, **kwargs):
         raise NotImplementedError()
 
-    def neg_log_likelihood(self):
+    def neg_log_likelihood(self) -> anp.ndarray:
         assert (
             "criterion" in self.poster_state
         ), "neg_log_likelihood not defined for fantasizing posterior state"
@@ -198,19 +213,19 @@ class GaussProcAdditivePosteriorState:
 
     def _sample_curves_internal(
         self,
-        data: Dict,
-        poster_state: Dict,
+        data: dict,
+        poster_state: dict,
         num_samples: int = 1,
         random_state: Optional[RandomState] = None,
-    ) -> List[Dict]:
+    ) -> List[dict]:
         raise NotImplementedError()
 
     def sample_curves(
         self,
-        data: Dict,
+        data: dict,
         num_samples: int = 1,
         random_state: Optional[RandomState] = None,
-    ) -> List[Dict]:
+    ) -> List[dict]:
         """
         Given data from one or more configurations (as returned by
         `issm.prepare_data`), for each config, sample a curve from the
@@ -220,7 +235,7 @@ class GaussProcAdditivePosteriorState:
         independent. None of the configs in `data` must appear in the dataset
         used to compute the posterior state.
 
-        The result is a list of Dict, one for each config. If for a config,
+        The result is a list of dict, one for each config. If for a config,
         targets in `data` are given for resource values range(r_min, r_obs),
         the dict entry `y` is a joint sample [y_r], r in range(r_obs, r_max+1).
         For some subclasses (e.g., ISSM), there is also an entry `f` with a
@@ -241,7 +256,7 @@ class GaussProcAdditivePosteriorState:
         )
 
     @staticmethod
-    def has_precomputations(data: Dict) -> bool:
+    def has_precomputations(data: dict) -> bool:
         raise NotImplementedError()
 
 
@@ -256,7 +271,7 @@ class IncrementalUpdateGPAdditivePosteriorState(GaussProcAdditivePosteriorState)
 
     def __init__(
         self,
-        data: Optional[Dict],
+        data: Optional[dict],
         mean: MeanFunction,
         kernel: KernelFunction,
         noise_variance,
@@ -276,7 +291,7 @@ class IncrementalUpdateGPAdditivePosteriorState(GaussProcAdditivePosteriorState)
         """
         raise NotImplementedError()
 
-    def _update_internal(self, feature: np.ndarray, targets: np.ndarray) -> Dict:
+    def _update_internal(self, feature: np.ndarray, targets: np.ndarray) -> dict:
         """
         Update posterior state, given a single new datapoint. `feature`,
         `targets` are like one entry of `data`. The method returns a new
@@ -325,7 +340,7 @@ class IncrementalUpdateGPAdditivePosteriorState(GaussProcAdditivePosteriorState)
 
     def _sample_posterior_joint_for_config(
         self,
-        poster_state: Dict,
+        poster_state: dict,
         config: Configuration,
         feature: np.ndarray,
         targets: np.ndarray,
@@ -339,7 +354,7 @@ class IncrementalUpdateGPAdditivePosteriorState(GaussProcAdditivePosteriorState)
 
     def sample_and_update_for_pending(
         self,
-        data_pending: Dict,
+        data_pending: dict,
         sample_all_nonobserved: bool = False,
         random_state: Optional[RandomState] = None,
     ) -> (List[np.ndarray], "IncrementalUpdateGPAdditivePosteriorState"):
@@ -410,7 +425,7 @@ class GaussProcISSMPosteriorState(IncrementalUpdateGPAdditivePosteriorState):
 
     def __init__(
         self,
-        data: Optional[Dict],
+        data: Optional[dict],
         mean: MeanFunction,
         kernel: KernelFunction,
         iss_model: ISSModelParameters,
@@ -431,10 +446,10 @@ class GaussProcISSMPosteriorState(IncrementalUpdateGPAdditivePosteriorState):
         super().__init__(data, mean, kernel, noise_variance=noise_variance, **kwargs)
 
     @staticmethod
-    def has_precomputations(data: Dict) -> bool:
-        return all(k in data for k in ('ydims', 'num_configs', 'deltay', 'logr'))
+    def has_precomputations(data: dict) -> bool:
+        return all(k in data for k in ("ydims", "num_configs", "deltay", "logr"))
 
-    def _compute_posterior_state(self, data: Dict, noise_variance, **kwargs):
+    def _compute_posterior_state(self, data: dict, noise_variance, **kwargs):
         profiler = kwargs.get("profiler")
         # Compute posterior state
         issm_params = self.iss_model.get_issm_params(data["features"])
@@ -484,7 +499,7 @@ class GaussProcISSMPosteriorState(IncrementalUpdateGPAdditivePosteriorState):
         )
 
     @staticmethod
-    def data_precomputations(data: Dict):
+    def data_precomputations(data: dict):
         logger.info("Enhancing data dictionary by precomputed variables")
         data.update(
             issm_likelihood_precomputations(
@@ -494,11 +509,11 @@ class GaussProcISSMPosteriorState(IncrementalUpdateGPAdditivePosteriorState):
 
     def _sample_curves_internal(
         self,
-        data: Dict,
-        poster_state: Dict,
+        data: dict,
+        poster_state: dict,
         num_samples: int = 1,
         random_state: Optional[RandomState] = None,
-    ) -> List[Dict]:
+    ) -> List[dict]:
         if random_state is None:
             random_state = np.random
         results = []
@@ -563,7 +578,7 @@ class GaussProcExpDecayPosteriorState(IncrementalUpdateGPAdditivePosteriorState)
 
     def __init__(
         self,
-        data: Optional[Dict],
+        data: Optional[dict],
         mean: MeanFunction,
         kernel: KernelFunction,
         res_kernel: ExponentialDecayBaseKernelFunction,
@@ -589,10 +604,10 @@ class GaussProcExpDecayPosteriorState(IncrementalUpdateGPAdditivePosteriorState)
         )
 
     @staticmethod
-    def has_precomputations(data: Dict) -> bool:
-        return all(k in data for k in ('ydims', 'num_configs', 'yflat'))
+    def has_precomputations(data: dict) -> bool:
+        return all(k in data for k in ("ydims", "num_configs", "yflat"))
 
-    def _compute_posterior_state(self, data: Dict, noise_variance, **kwargs):
+    def _compute_posterior_state(self, data: dict, noise_variance, **kwargs):
         profiler = kwargs.get("profiler")
         # Compute posterior state
         if profiler is not None:
@@ -645,16 +660,16 @@ class GaussProcExpDecayPosteriorState(IncrementalUpdateGPAdditivePosteriorState)
         )
 
     @staticmethod
-    def data_precomputations(data: Dict):
+    def data_precomputations(data: dict):
         data.update(resource_kernel_likelihood_precomputations(targets=data["targets"]))
 
     def _sample_curves_internal(
         self,
-        data: Dict,
-        poster_state: Dict,
+        data: dict,
+        poster_state: dict,
         num_samples: int = 1,
         random_state: Optional[RandomState] = None,
-    ) -> List[Dict]:
+    ) -> List[dict]:
         assert "lfact_all" in poster_state
         if random_state is None:
             random_state = np.random

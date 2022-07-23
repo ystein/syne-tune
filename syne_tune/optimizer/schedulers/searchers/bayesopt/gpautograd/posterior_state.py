@@ -35,7 +35,77 @@ from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.posterior_util
 )
 
 
-class GaussProcPosteriorState:
+class PosteriorState:
+    """
+    Interface for posterior state of Gaussian-linear model.
+    """
+
+    @property
+    def num_data(self):
+        raise NotImplementedError
+
+    @property
+    def num_features(self):
+        raise NotImplementedError
+
+    @property
+    def num_fantasies(self):
+        raise NotImplementedError
+
+    def neg_log_likelihood(self) -> anp.ndarray:
+        """
+        :return: Negative log marginal likelihood
+        """
+        raise NotImplementedError
+
+    def predict(self, test_features: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Computes marginal statistics (means, variances) for a number of test
+        features.
+
+        :param test_features: Features for test configs
+        :return: posterior_means, posterior_variances
+        """
+        raise NotImplementedError
+
+    def sample_marginals(
+        self,
+        test_features: np.ndarray,
+        num_samples: int = 1,
+        random_state: Optional[RandomState] = None,
+    ) -> np.ndarray:
+        """
+        See comments of `predict`.
+
+        :param test_features: Input points for test configs
+        :param num_samples: Number of samples
+        :param random_state: PRNG
+        :return: Marginal samples, (num_test, num_samples)
+        """
+        raise NotImplementedError
+
+    def backward_gradient(
+        self,
+        input: np.ndarray,
+        head_gradients: Dict[str, np.ndarray],
+        mean_data: float,
+        std_data: float,
+    ) -> np.ndarray:
+        """
+        Implements SurrogateModel.backward_gradient, see comments there.
+        This is for a single posterior state. If the SurrogateModel uses
+        MCMC, have to call this for every sample.
+
+        :param input: Single input point x, shape (d,)
+        :param head_gradients: See SurrogateModel.backward_gradient
+        :param mean_data: Mean used to normalize targets
+        :param std_data: Stddev used to normalize targets
+        :return:
+        """
+        raise NotImplementedError
+
+
+class GaussProcPosteriorState(PosteriorState):
     """
     Represent posterior state for Gaussian process regression model.
     Note that members are immutable. If the posterior state is to be
@@ -77,7 +147,7 @@ class GaussProcPosteriorState:
             targets = anp.reshape(targets, (targets_shape[0], -1))
             self.chol_fact, self.pred_mat = cholesky_computations(
                 features=features,
-                targets=argets,
+                targets=targets,
                 mean=mean,
                 kernel=kernel,
                 noise_variance=noise_variance,
@@ -91,8 +161,7 @@ class GaussProcPosteriorState:
             self.pred_mat = kwargs["pred_mat"]
 
     @staticmethod
-    def _check_and_assign_kernel(
-            kernel: KernelFunctionWithCovarianceScale):
+    def _check_and_assign_kernel(kernel: KernelFunctionWithCovarianceScale):
         if isinstance(kernel, tuple):
             assert len(kernel) == 2
             kernel, covariance_scale = kernel
@@ -116,37 +185,31 @@ class GaussProcPosteriorState:
 
     def _state_kwargs(self) -> dict:
         return {
-            'features': self.features,
-            'mean': self.mean,
-            'kernel': self.kernel,
-            'chol_fact': self.chol_fact,
-            'pred_mat': self.pred_mat,
+            "features": self.features,
+            "mean": self.mean,
+            "kernel": self.kernel,
+            "chol_fact": self.chol_fact,
+            "pred_mat": self.pred_mat,
         }
+
+    def neg_log_likelihood(self) -> anp.ndarray:
+        """
+        Works only if fantasy samples are not used (single targets vector).
+        """
+        critval = negative_log_marginal_likelihood(self.chol_fact, self.pred_mat)
+        return critval
 
     def predict(self, test_features: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         return predict_posterior_marginals(
-            **self._state_kwargs(),
-            test_features=test_features
+            **self._state_kwargs(), test_features=test_features
         )
 
-    def sample_joint(
+    def sample_marginals(
         self,
         test_features: np.ndarray,
         num_samples: int = 1,
         random_state: Optional[RandomState] = None,
     ) -> np.ndarray:
-        if random_state is None:
-            random_state = np.random
-        return sample_posterior_joint(
-            **self._state_kwargs(),
-            test_features=test_features,
-            random_state=random_state,
-            num_samples=num_samples
-        )
-
-    def sample_marginals(
-            self, test_features: np.ndarray, num_samples: int = 1,
-            random_state: Optional[RandomState] = None) -> np.ndarray:
         if random_state is None:
             random_state = np.random
         return sample_posterior_marginals(
@@ -155,15 +218,6 @@ class GaussProcPosteriorState:
             random_state=random_state,
             num_samples=num_samples
         )
-
-    def neg_log_likelihood(self) -> anp.ndarray:
-        """
-        Works only if fantasy samples are not used (single targets vector).
-
-        :return: Negative log (marginal) likelihood
-        """
-        critval = negative_log_marginal_likelihood(self.chol_fact, self.pred_mat)
-        return critval
 
     def backward_gradient(
         self,
@@ -210,6 +264,21 @@ class GaussProcPosteriorState:
 
         test_feature_gradient = grad(diff_test_feature)
         return np.reshape(test_feature_gradient(test_feature), input.shape)
+
+    def sample_joint(
+        self,
+        test_features: np.ndarray,
+        num_samples: int = 1,
+        random_state: Optional[RandomState] = None,
+    ) -> np.ndarray:
+        if random_state is None:
+            random_state = np.random
+        return sample_posterior_joint(
+            **self._state_kwargs(),
+            test_features=test_features,
+            random_state=random_state,
+            num_samples=num_samples
+        )
 
 
 class IncrementalUpdateGPPosteriorState(GaussProcPosteriorState):
@@ -300,14 +369,13 @@ class IncrementalUpdateGPPosteriorState(GaussProcPosteriorState):
         )
         if random_state is None:
             random_state = np.random
-        chol_fact_new, pred_mat_new, features_new, target = \
-            sample_and_cholesky_update(
-                **self._state_kwargs(),
-                noise_variance=self.noise_variance,
-                feature=feature,
-                random_state=random_state,
-                mean_impute_mask=mean_impute_mask
-            )
+        chol_fact_new, pred_mat_new, features_new, target = sample_and_cholesky_update(
+            **self._state_kwargs(),
+            noise_variance=self.noise_variance,
+            feature=feature,
+            random_state=random_state,
+            mean_impute_mask=mean_impute_mask
+        )
         state_new = IncrementalUpdateGPPosteriorState(
             features=features_new,
             targets=None,

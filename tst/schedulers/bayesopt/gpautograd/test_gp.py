@@ -18,7 +18,7 @@ from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.mean import (
 )
 from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.kernel import Matern52
 from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.likelihood import (
-    MarginalLikelihood,
+    GaussianProcessMarginalLikelihood,
 )
 from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.gp_regression import (
     GaussianProcessRegression,
@@ -36,9 +36,11 @@ from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.gluon_blocks_h
 def test_likelihood_encoding():
     mean = ScalarMeanFunction()
     kernel = Matern52(dimension=1)
-    likelihood = MarginalLikelihood(mean=mean, kernel=kernel)
+    likelihood = GaussianProcessMarginalLikelihood(mean=mean, kernel=kernel)
     assert isinstance(likelihood.encoding_noise, LogarithmScalarEncoding)
-    likelihood = MarginalLikelihood(mean=mean, kernel=kernel, encoding_type="positive")
+    likelihood = GaussianProcessMarginalLikelihood(
+        mean=mean, kernel=kernel, encoding_type="positive"
+    )
     assert isinstance(likelihood.encoding_noise, PositiveScalarEncoding)
 
 

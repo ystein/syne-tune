@@ -138,6 +138,7 @@ def test_matern52_encoding():
     assert kernel.encoding.dimension == 1
     assert kernel.squared_distance.encoding.dimension == 2
 
+
 def test_fabolas_encoding():
     kernel = FabolasKernelFunction()
     assert isinstance(kernel.encoding_u12, LogarithmScalarEncoding)

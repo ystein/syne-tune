@@ -10,10 +10,16 @@
 # on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
 # express or implied. See the License for the specific language governing
 # permissions and limitations under the License.
-from typing import Union, Optional
+from typing import Union, Optional, Dict, Tuple, List
 import autograd.numpy as anp
 from numpy.random import RandomState
 
+from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.likelihood import (
+    MarginalLikelihood,
+)
+from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.posterior_state import (
+    PosteriorState,
+)
 from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.learncurve.model_params import (
     ISSModelParameters,
 )
@@ -34,7 +40,6 @@ from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.constants impo
 from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.distribution import (
     Gamma,
 )
-from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.gluon import Block
 from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.gluon_blocks_helpers import (
     encode_unwrap_parameter,
     register_parameter,
@@ -53,7 +58,7 @@ from syne_tune.optimizer.schedulers.utils.simple_profiler import SimpleProfiler
 LCModel = Union[ISSModelParameters, ExponentialDecayBaseKernelFunction]
 
 
-class MarginalLikelihood(Block):
+class GaussAdditiveMarginalLikelihood(MarginalLikelihood):
     """
     Marginal likelihood of joint learning curve model, where each curve is
     modelled as sum of a Gaussian process over x (for the value at r_max)
@@ -67,8 +72,6 @@ class MarginalLikelihood(Block):
     :param mean: Mean function mu(x)
     :param initial_noise_variance: A scalar to initialize the value of the
         residual noise variance
-    :param use_precomputations: If False, we use variants without
-        precomputation (TODO: Still needed?)
     """
 
     def __init__(
@@ -80,7 +83,7 @@ class MarginalLikelihood(Block):
         encoding_type=None,
         **kwargs
     ):
-        super(MarginalLikelihood, self).__init__(**kwargs)
+        super(GaussAdditiveMarginalLikelihood, self).__init__(**kwargs)
         assert isinstance(
             res_model, (ISSModelParameters, ExponentialDecayBaseKernelFunction)
         ), "res_model must be ISSModelParameters or ExponentialDecayBaseKernelFunction"
@@ -131,9 +134,7 @@ class MarginalLikelihood(Block):
     def set_profiler(self, profiler: Optional[SimpleProfiler]):
         self._profiler = profiler
 
-    def get_posterior_state(
-        self, data: dict
-    ) -> IncrementalUpdateGPAdditivePosteriorState:
+    def get_posterior_state(self, data: dict) -> PosteriorState:
         return self._type(
             data,
             **self._posterstate_kwargs,
@@ -142,25 +143,13 @@ class MarginalLikelihood(Block):
         )
 
     def forward(self, data: dict):
-        """
-        The criterion is the negative log marginal likelihood of `data`, which
-        is obtained from `issm.prepare_data`.
-        Depending on `self._type`, `data` may also have to contain precomputed
-        values.
-
-        :param data: Input points (features, configs), targets
-        """
         assert not data["do_fantasizing"], (
             "data must not be for fantasizing. Call prepare_data with "
             + "do_fantasizing=False"
         )
-        return self.get_posterior_state(data).neg_log_likelihood()
+        return super().forward(data)
 
-    def param_encoding_pairs(self):
-        """
-        Return a list of tuples with the Gluon parameters of the likelihood and
-        their respective encodings
-        """
+    def param_encoding_pairs(self) -> List[tuple]:
         own_param_encoding_pairs = [(self.noise_variance_internal, self.encoding)]
         return (
             own_param_encoding_pairs
@@ -168,18 +157,6 @@ class MarginalLikelihood(Block):
             + self.kernel.param_encoding_pairs()
             + self.res_model.param_encoding_pairs()
         )
-
-    def box_constraints_internal(self):
-        """
-        Collect the box constraints for all the underlying parameters
-        """
-        all_box_constraints = {}
-        for param, encoding in self.param_encoding_pairs():
-            assert (
-                encoding is not None
-            ), "encoding of param {} should not be None".format(param.name)
-            all_box_constraints.update(encoding.box_constraints_internal(param))
-        return all_box_constraints
 
     def get_noise_variance(self, as_ndarray=False):
         noise_variance = encode_unwrap_parameter(
@@ -205,40 +182,15 @@ class MarginalLikelihood(Block):
             func.set_params(stripped_dict)
         self.set_noise_variance(param_dict["noise_variance"])
 
-    def reset_params(self, random_state: RandomState):
-        """
-        Reset hyperparameters to their initial values (or resample them).
-        """
-        # Note: The `init` parameter is a default sampler which is used only
-        # for parameters which do not have initializers specified. Right now,
-        # all our parameters have such initializers (constant in general),
-        # so this is just to be safe (if `init` is not specified here, it
-        # defaults to `np.random.uniform`, whose seed we do not control).
-        self.initialize(init=random_state.uniform, force_reinit=True)
-
     def data_precomputations(self, data: dict, overwrite: bool = False):
-        """
-        For some `res_model` types, precomputations on top of `data` are
-        needed. This is done here, and the precomputed variables are appended
-        to `data` as extra entries.
-        Precomputations are done only if not already included in `data`,
-        unless `overwrite` is True.
-        """
         if overwrite or not self._type.has_precomputations(data):
             self._type.data_precomputations(data)
 
-    def on_fit_start(
-            self, data: dict, profiler: Optional[SimpleProfiler] = None):
-        """
-        Called at the beginning of `fit`.
-
-        :param data: Argument passed to `fit`
-        :param profiler: Argument passed to `fit`
-
-        """
-        assert not data['do_fantasizing'], \
-            "data must not be for fantasizing. Call prepare_data with " +\
-            "do_fantasizing=False"
+    def on_fit_start(self, data: dict, profiler: Optional[SimpleProfiler] = None):
+        assert not data["do_fantasizing"], (
+            "data must not be for fantasizing. Call prepare_data with "
+            + "do_fantasizing=False"
+        )
         self.data_precomputations(data)
         if profiler is not None:
             self.set_noise_variance(profiler)

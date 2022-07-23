@@ -24,7 +24,7 @@ from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.kernel import 
     KernelFunction,
 )
 from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.likelihood import (
-    MarginalLikelihood,
+    GaussianProcessMarginalLikelihood,
 )
 from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.mean import (
     ScalarMeanFunction,
@@ -79,10 +79,8 @@ class GaussianProcessRegression(GaussianProcessModel):
         self._states = None
         self.fit_reset_params = fit_reset_params
         self.optimization_config = optimization_config
-        self.likelihood = MarginalLikelihood(
-            kernel=kernel,
-            mean=mean,
-            initial_noise_variance=initial_noise_variance
+        self.likelihood = GaussianProcessMarginalLikelihood(
+            kernel=kernel, mean=mean, initial_noise_variance=initial_noise_variance
         )
         self.reset_params()
 
@@ -113,13 +111,14 @@ class GaussianProcessRegression(GaussianProcessModel):
             *create_lbfgs_arguments(
                 criterion=self.likelihood,
                 crit_args=[data],
-                verbose=self.optimization_config.verbose
+                verbose=self.optimization_config.verbose,
             ),
             bounds=self.likelihood.box_constraints_internal(),
             random_state=self._random_state,
             n_starts=n_starts,
             tol=self.optimization_config.lbfgs_tol,
-            maxiter=self.optimization_config.lbfgs_maxiter)
+            maxiter=self.optimization_config.lbfgs_maxiter
+        )
 
         # Logging in response to failures of optimization runs
         n_succeeded = sum(x is None for x in ret_infos)

@@ -16,7 +16,7 @@ import autograd.numpy as anp
 from typing import Optional, List, Dict
 
 from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.learncurve.likelihood import (
-    MarginalLikelihood,
+    GaussAdditiveMarginalLikelihood,
     LCModel,
 )
 from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.learncurve.posterior_state import (
@@ -102,7 +102,7 @@ class GaussianProcessLearningCurveModel:
         self._states = None
         self.fit_reset_params = fit_reset_params
         self.optimization_config = optimization_config
-        self.likelihood = MarginalLikelihood(
+        self.likelihood = GaussAdditiveMarginalLikelihood(
             kernel=kernel,
             res_model=res_model,
             mean=mean,

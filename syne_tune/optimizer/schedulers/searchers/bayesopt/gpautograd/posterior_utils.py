@@ -28,14 +28,17 @@ from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.custom_op impo
     cholesky_factorization,
     flatten_and_concat,
 )
-from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.mean \
-    import MeanFunction
-from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.kernel \
-    import KernelFunction
+from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.mean import (
+    MeanFunction,
+)
+from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.kernel import (
+    KernelFunction,
+)
 
 
 KernelFunctionWithCovarianceScale = Union[
-    KernelFunction, Tuple[KernelFunction, np.ndarray]]
+    KernelFunction, Tuple[KernelFunction, np.ndarray]
+]
 
 
 def _extract_kernel_and_scale(kernel: KernelFunctionWithCovarianceScale):
@@ -51,7 +54,7 @@ def cholesky_computations(
     mean: MeanFunction,
     kernel: KernelFunctionWithCovarianceScale,
     noise_variance,
-    debug_log: bool = False
+    debug_log: bool = False,
 ):
     """
     Given input matrix X (features), target matrix Y (targets), mean and kernel
@@ -92,7 +95,7 @@ def predict_posterior_marginals(
     kernel: KernelFunctionWithCovarianceScale,
     chol_fact,
     pred_mat,
-    test_features
+    test_features,
 ):
     """
     Computes posterior means and variances for test_features.
@@ -112,25 +115,27 @@ def predict_posterior_marginals(
     _kernel, covariance_scale = _extract_kernel_and_scale(kernel)
     k_tr_te = _kernel(features, test_features) * covariance_scale
     linv_k_tr_te = aspl.solve_triangular(chol_fact, k_tr_te, lower=True)
-    posterior_means = anp.matmul(
-        anp.transpose(linv_k_tr_te), pred_mat
-    ) + anp.reshape(mean(test_features), (-1, 1))
-    posterior_variances = _kernel.diagonal(
-        test_features
-    ) * covariance_scale - anp.sum(anp.square(linv_k_tr_te), axis=0)
-    return posterior_means, anp.reshape(anp.maximum(
-        posterior_variances, MIN_POSTERIOR_VARIANCE), (-1,))
+    posterior_means = anp.matmul(anp.transpose(linv_k_tr_te), pred_mat) + anp.reshape(
+        mean(test_features), (-1, 1)
+    )
+    posterior_variances = _kernel.diagonal(test_features) * covariance_scale - anp.sum(
+        anp.square(linv_k_tr_te), axis=0
+    )
+    return posterior_means, anp.reshape(
+        anp.maximum(posterior_variances, MIN_POSTERIOR_VARIANCE), (-1,)
+    )
 
 
 def sample_posterior_marginals(
-        features,
-        mean: MeanFunction,
-        kernel: KernelFunctionWithCovarianceScale,
-        chol_fact,
-        pred_mat,
-        test_features,
-        random_state: RandomState,
-        num_samples: int = 1):
+    features,
+    mean: MeanFunction,
+    kernel: KernelFunctionWithCovarianceScale,
+    chol_fact,
+    pred_mat,
+    test_features,
+    random_state: RandomState,
+    num_samples: int = 1,
+):
     """
     Draws num_sample samples from the product of marginals of the posterior
     over input points test_features. If pred_mat is a matrix with m columns,
@@ -192,12 +197,12 @@ def sample_posterior_joint(
     _kernel, covariance_scale = _extract_kernel_and_scale(kernel)
     k_tr_te = _kernel(features, test_features) * covariance_scale
     linv_k_tr_te = aspl.solve_triangular(chol_fact, k_tr_te, lower=True)
-    posterior_mean = anp.matmul(
-        anp.transpose(linv_k_tr_te), pred_mat
-    ) + anp.reshape(mean(test_features), (-1, 1))
-    posterior_cov = _kernel(
-        test_features, test_features
-    ) * covariance_scale - anp.dot(anp.transpose(linv_k_tr_te), linv_k_tr_te)
+    posterior_mean = anp.matmul(anp.transpose(linv_k_tr_te), pred_mat) + anp.reshape(
+        mean(test_features), (-1, 1)
+    )
+    posterior_cov = _kernel(test_features, test_features) * covariance_scale - anp.dot(
+        anp.transpose(linv_k_tr_te), linv_k_tr_te
+    )
     jitter_init = anp.ones((1,)) * (1e-5)
     sys_mat = AddJitterOp(
         flatten_and_concat(posterior_cov, jitter_init),
@@ -225,20 +230,20 @@ def sample_posterior_joint(
 
 def _compute_lvec(features, chol_fact, kernel, covariance_scale, feature):
     kvec = anp.reshape(kernel(features, feature), (-1, 1)) * covariance_scale
-    return anp.reshape(aspl.solve_triangular(
-        chol_fact, kvec, lower=True), (1, -1))
+    return anp.reshape(aspl.solve_triangular(chol_fact, kvec, lower=True), (1, -1))
 
 
 def cholesky_update(
-        features,
-        mean: MeanFunction,
-        kernel: KernelFunctionWithCovarianceScale,
-        chol_fact,
-        pred_mat,
-        noise_variance,
-        feature,
-        target,
-        lvec=None):
+    features,
+    mean: MeanFunction,
+    kernel: KernelFunctionWithCovarianceScale,
+    chol_fact,
+    pred_mat,
+    noise_variance,
+    feature,
+    target,
+    lvec=None,
+):
     """
     Incremental update of posterior state (Cholesky factor, prediction
     matrix), given one datapoint (feature, target).
@@ -264,8 +269,7 @@ def cholesky_update(
     """
     _kernel, covariance_scale = _extract_kernel_and_scale(kernel)
     if lvec is None:
-        lvec = _compute_lvec(
-            features, chol_fact, _kernel, covariance_scale, feature)
+        lvec = _compute_lvec(features, chol_fact, _kernel, covariance_scale, feature)
     kscal = anp.reshape(_kernel.diagonal(feature) * covariance_scale, (1,))
     noise_variance = anp.reshape(noise_variance, (1,))
     lsqscal = anp.maximum(
@@ -308,13 +312,19 @@ def sample_and_cholesky_update(
 ):
     _kernel, covariance_scale = _extract_kernel_and_scale(kernel)
     # Draw sample target. Also, lvec is reused below
-    lvec = _compute_lvec(
-        features, chol_fact, _kernel, covariance_scale, feature)
+    lvec = _compute_lvec(features, chol_fact, _kernel, covariance_scale, feature)
     pred_mean = anp.dot(lvec, pred_mat) + anp.reshape(mean(feature), (1, 1))
     # Note: We do not add noise_variance to the predictive variance
-    pred_std = anp.reshape(anp.sqrt(anp.maximum(
-        _kernel.diagonal(feature) * covariance_scale - anp.sum(anp.square(lvec)),
-        MIN_POSTERIOR_VARIANCE)), (1, 1))
+    pred_std = anp.reshape(
+        anp.sqrt(
+            anp.maximum(
+                _kernel.diagonal(feature) * covariance_scale
+                - anp.sum(anp.square(lvec)),
+                MIN_POSTERIOR_VARIANCE,
+            )
+        ),
+        (1, 1),
+    )
     n01mat = random_state.normal(size=getval(pred_mean.shape))
     if mean_impute_mask is not None:
         assert len(mean_impute_mask) == pred_mat.shape[1]

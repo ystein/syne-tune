@@ -10,7 +10,8 @@
 # on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
 # express or implied. See the License for the specific language governing
 # permissions and limitations under the License.
-from typing import Optional
+from typing import Optional, List, Dict, Tuple
+import numpy as np
 import autograd.numpy as anp
 from numpy.random import RandomState
 
@@ -41,6 +42,7 @@ from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.mean import (
     MeanFunction,
 )
 from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.posterior_state import (
+    PosteriorState,
     GaussProcPosteriorState,
 )
 from syne_tune.optimizer.schedulers.utils.simple_profiler import (
@@ -49,6 +51,94 @@ from syne_tune.optimizer.schedulers.utils.simple_profiler import (
 
 
 class MarginalLikelihood(Block):
+    """
+    Interface for marginal likelihood of Gaussian-linear model.
+    """
+
+    def get_posterior_state(self, data: dict) -> PosteriorState:
+        raise NotImplementedError
+
+    def forward(self, data: dict):
+        return self.get_posterior_state(data).neg_log_likelihood()
+
+    def param_encoding_pairs(self) -> List[tuple]:
+        """
+        Return a list of tuples with the Gluon parameters of the likelihood
+        and their respective encodings
+        """
+        raise NotImplementedError
+
+    def box_constraints_internal(self) -> Dict[str, Tuple[float, float]]:
+        """
+        :return: Box constraints for all the underlying parameters
+        """
+        all_box_constraints = dict()
+        for param, encoding in self.param_encoding_pairs():
+            assert (
+                encoding is not None
+            ), "encoding of param {} should not be None".format(param.name)
+            all_box_constraints.update(encoding.box_constraints_internal(param))
+        return all_box_constraints
+
+    def get_noise_variance(self, as_ndarray=False):
+        raise NotImplementedError
+
+    def set_noise_variance(self, val: float):
+        raise NotImplementedError
+
+    def get_params(self) -> Dict[str, np.ndarray]:
+        raise NotImplementedError
+
+    def set_params(self, param_dict: Dict[str, np.ndarray]):
+        raise NotImplementedError
+
+    def get_covariance_scale(self) -> float:
+        """
+        Some subclasses maintain a covariance scale parameter, which is
+        multiplied with the kernel. This is useful if several likelihoods
+        share the same kernel, but have their own covariance scales.
+
+        :return: Covariance scale
+        """
+        return 1.0
+
+    def set_covariance_scale(self, covariance_scale: float):
+        raise AssertionError("Covariance scale is fixed to 1")
+
+    def reset_params(self, random_state: RandomState):
+        """
+        Reset hyperparameters to their initial values (or resample them).
+        """
+        # Note: The `init` parameter is a default sampler which is used only
+        # for parameters which do not have initializers specified. Right now,
+        # all our parameters have such initializers (constant in general),
+        # so this is just to be safe (if `init` is not specified here, it
+        # defaults to `np.random.uniform`, whose seed we do not control).
+        self.initialize(init=random_state.uniform, force_reinit=True)
+
+    def data_precomputations(self, data: dict, overwrite: bool = False):
+        """
+        Some models require precomputations based on `data`. Precomputed
+        variables are appended to `data`. This is done only if not already
+        included in `data`, unless `overwrite` is True.
+
+        :param data:
+        :param overwrite:
+        """
+        pass
+
+    def on_fit_start(self, data: dict, profiler: Optional[SimpleProfiler] = None):
+        """
+        Called at the beginning of `fit`.
+
+        :param data: Argument passed to `fit`
+        :param profiler: Argument passed to `fit`
+
+        """
+        raise NotImplementedError
+
+
+class GaussianProcessMarginalLikelihood(MarginalLikelihood):
     """
     Marginal likelihood of Gaussian process with Gaussian likelihood
 
@@ -72,9 +162,9 @@ class MarginalLikelihood(Block):
         initial_noise_variance=None,
         encoding_type=None,
         has_covariance_scale: bool = False,
-        **kwargs
+        **kwargs,
     ):
-        super(MarginalLikelihood, self).__init__(**kwargs)
+        super(GaussianProcessMarginalLikelihood, self).__init__(**kwargs)
         if mean is None:
             mean = ScalarMeanFunction()
         if initial_noise_variance is None:
@@ -87,7 +177,7 @@ class MarginalLikelihood(Block):
             constr_lower=NOISE_VARIANCE_LOWER_BOUND,
             constr_upper=NOISE_VARIANCE_UPPER_BOUND,
             dimension=1,
-            prior=Gamma(mean=0.1, alpha=0.1)
+            prior=Gamma(mean=0.1, alpha=0.1),
         )
         self.mean = mean
         self.kernel = kernel
@@ -98,52 +188,57 @@ class MarginalLikelihood(Block):
                 constr_lower=COVARIANCE_SCALE_LOWER_BOUND,
                 constr_upper=COVARIANCE_SCALE_UPPER_BOUND,
                 dimension=1,
-                prior=LogNormal(0.0, 1.0)
+                prior=LogNormal(0.0, 1.0),
             )
         with self.name_scope():
             self.noise_variance_internal = register_parameter(
-                self.params, 'noise_variance', self.encoding_noise)
+                self.params, "noise_variance", self.encoding_noise
+            )
             if has_covariance_scale:
                 self.covariance_scale_internal = register_parameter(
-                    self.params, 'covariance_scale', self.encoding_covscale)
+                    self.params, "covariance_scale", self.encoding_covscale
+                )
 
     def _noise_variance(self):
         return encode_unwrap_parameter(
-            self.noise_variance_internal, self.encoding_noise)
+            self.noise_variance_internal, self.encoding_noise
+        )
 
     def _covariance_scale(self):
         if self.encoding_covscale is not None:
             return encode_unwrap_parameter(
-                self.covariance_scale_internal, self.encoding_covscale)
+                self.covariance_scale_internal, self.encoding_covscale
+            )
         else:
             return 1.0
 
     def _assert_data_entries(self, data: dict):
-        features = data.get('features')
-        targets = data.get('targets')
-        assert features is not None and targets is not None, \
-            "data must contain 'features' and 'targets'"
-        assert features.ndim == 2, \
-            f"features.shape = {features.shape}, must be matrix"
+        features = data.get("features")
+        targets = data.get("targets")
+        assert (
+            features is not None and targets is not None
+        ), "data must contain 'features' and 'targets'"
+        assert features.ndim == 2, f"features.shape = {features.shape}, must be matrix"
         if targets.ndim == 1:
             targets = targets.reshape((-1, 1))
-            data['targets'] = targets
-        assert features.shape[0] == targets.shape[0], \
-            f"features and targets should have the same number of points " +\
-            f"(received {features.shape[0]} and {targets.shape[0]})"
+            data["targets"] = targets
+        assert features.shape[0] == targets.shape[0], (
+            f"features and targets should have the same number of points "
+            + f"(received {features.shape[0]} and {targets.shape[0]})"
+        )
 
-    def get_posterior_state(self, data: dict):
+    def get_posterior_state(self, data: dict) -> PosteriorState:
         self._assert_data_entries(data)
         if self.encoding_covscale is not None:
             kernel = (self.kernel, self._covariance_scale())
         else:
             kernel = self.kernel
         return GaussProcPosteriorState(
-            features=data['features'],
-            targets=data['targets'],
+            features=data["features"],
+            targets=data["targets"],
             mean=self.mean,
             kernel=kernel,
-            noise_variance=self._noise_variance()
+            noise_variance=self._noise_variance(),
         )
 
     def forward(self, data: dict):
@@ -156,13 +251,8 @@ class MarginalLikelihood(Block):
         """
         return self.get_posterior_state(data).neg_log_likelihood()
 
-    def param_encoding_pairs(self):
-        """
-        Return a list of tuples with the Gluon parameters of the likelihood and their respective encodings
-        """
-        own_param_encoding_pairs = [
-            (self.noise_variance_internal, self.encoding_noise)
-        ]
+    def param_encoding_pairs(self) -> List[tuple]:
+        own_param_encoding_pairs = [(self.noise_variance_internal, self.encoding_noise)]
         if self.encoding_covscale is not None:
             own_param_encoding_pairs.append(
                 (self.covariance_scale_internal, self.encoding_covscale)
@@ -173,83 +263,47 @@ class MarginalLikelihood(Block):
             + self.kernel.param_encoding_pairs()
         )
 
-    def box_constraints_internal(self):
-        """
-        Collect the box constraints for all the underlying parameters
-        """
-        all_box_constraints = {}
-        for param, encoding in self.param_encoding_pairs():
-            assert (
-                encoding is not None
-            ), "encoding of param {} should not be None".format(param.name)
-            all_box_constraints.update(encoding.box_constraints_internal(param))
-        return all_box_constraints
-
     def get_noise_variance(self, as_ndarray=False):
         noise_variance = self._noise_variance()
         return noise_variance if as_ndarray else anp.reshape(noise_variance, (1,))[0]
 
-    def set_noise_variance(self, val):
+    def set_noise_variance(self, val: float):
         self.encoding_noise.set(self.noise_variance_internal, val)
-        
-    def get_covariance_scale(self):
+
+    def get_covariance_scale(self) -> float:
         if self.encoding_covscale is not None:
             return self._covariance_scale()[0]
         else:
             return 1.0
 
-    def set_covariance_scale(self, covariance_scale):
-        assert self.encoding_covscale is not None, \
-            "covariance_scale is fixed to 1"
-        self.encoding_covscale.set(
-            self.covariance_scale_internal, covariance_scale)
+    def set_covariance_scale(self, covariance_scale: float):
+        assert self.encoding_covscale is not None, "covariance_scale is fixed to 1"
+        self.encoding_covscale.set(self.covariance_scale_internal, covariance_scale)
 
-    def get_params(self):
-        result = {'noise_variance': self.get_noise_variance()}
+    def get_params(self) -> Dict[str, np.ndarray]:
+        result = {"noise_variance": self.get_noise_variance()}
         if self.encoding_covscale is not None:
-            result['covariance_scale'] = self.get_covariance_scale()
-        for pref, func in [('kernel_', self.kernel), ('mean_', self.mean)]:
-            result.update({
-                (pref + k): v for k, v in func.get_params().items()})
+            result["covariance_scale"] = self.get_covariance_scale()
+        for pref, func in [("kernel_", self.kernel), ("mean_", self.mean)]:
+            result.update({(pref + k): v for k, v in func.get_params().items()})
         return result
 
-    def set_params(self, param_dict):
+    def set_params(self, param_dict: Dict[str, np.ndarray]):
         for pref, func in [("kernel_", self.kernel), ("mean_", self.mean)]:
             len_pref = len(pref)
             stripped_dict = {
                 k[len_pref:]: v for k, v in param_dict.items() if k.startswith(pref)
             }
             func.set_params(stripped_dict)
-        self.set_noise_variance(param_dict['noise_variance'])
+        self.set_noise_variance(param_dict["noise_variance"])
         if self.encoding_covscale is not None:
-            self.set_covariance_scale(param_dict['covariance_scale'])
+            self.set_covariance_scale(param_dict["covariance_scale"])
 
-    def reset_params(self, random_state: RandomState):
-        """
-        Reset hyperparameters to their initial values (or resample them).
-        """
-        # Note: The `init` parameter is a default sampler which is used only
-        # for parameters which do not have initializers specified. Right now,
-        # all our parameters have such initializers (constant in general),
-        # so this is just to be safe (if `init` is not specified here, it
-        # defaults to `np.random.uniform`, whose seed we do not control).
-        self.initialize(init=random_state.uniform, force_reinit=True)
-
-    def data_precomputations(self, data: dict, overwrite: bool = False):
-        pass
-
-    def on_fit_start(
-            self, data: dict, profiler: Optional[SimpleProfiler] = None):
-        """
-        Called at the beginning of `fit`.
-
-        :param data: Argument passed to `fit`
-        :param profiler: Argument passed to `fit`
-
-        """
+    def on_fit_start(self, data: dict, profiler: Optional[SimpleProfiler] = None):
         self._assert_data_entries(data)
-        targets = data['targets']
-        assert targets.shape[1] == 1, \
-            "targets cannot be a matrix if parameters are to be fit"
+        targets = data["targets"]
+        assert (
+            targets.shape[1] == 1
+        ), "targets cannot be a matrix if parameters are to be fit"
         if isinstance(self.mean, ScalarMeanFunction):
             self.mean.set_mean_value(anp.mean(targets))

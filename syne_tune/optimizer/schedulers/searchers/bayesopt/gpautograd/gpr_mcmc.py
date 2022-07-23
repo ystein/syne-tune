@@ -32,7 +32,7 @@ from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.kernel import 
     KernelFunction,
 )
 from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.likelihood import (
-    MarginalLikelihood,
+    GaussianProcessMarginalLikelihood,
 )
 from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.mean import (
     ScalarMeanFunction,
@@ -166,7 +166,7 @@ class GPRegressionMCMC(GaussianProcessModel):
         return states
 
 
-def _get_gp_hps(likelihood: MarginalLikelihood) -> anp.ndarray:
+def _get_gp_hps(likelihood: GaussianProcessMarginalLikelihood) -> anp.ndarray:
     """Get GP hyper-parameters as numpy array for a given likelihood object."""
     hp_values = []
     for param_int, encoding in likelihood.param_encoding_pairs():
@@ -174,7 +174,9 @@ def _get_gp_hps(likelihood: MarginalLikelihood) -> anp.ndarray:
     return anp.concatenate(hp_values)
 
 
-def _set_gp_hps(params_numpy: anp.ndarray, likelihood: MarginalLikelihood):
+def _set_gp_hps(
+    params_numpy: anp.ndarray, likelihood: GaussianProcessMarginalLikelihood
+):
     """Set GP hyper-parameters from numpy array for a given likelihood object."""
     pos = 0
     for param, encoding in likelihood.param_encoding_pairs():
@@ -190,11 +192,13 @@ def _set_gp_hps(params_numpy: anp.ndarray, likelihood: MarginalLikelihood):
         pos += dim
 
 
-def _create_likelihood(build_kernel, random_state: RandomState) -> MarginalLikelihood:
+def _create_likelihood(
+    build_kernel, random_state: RandomState
+) -> GaussianProcessMarginalLikelihood:
     """
     Create a MarginalLikelihood object with default initial GP hyperparameters.
     """
-    likelihood = MarginalLikelihood(
+    likelihood = GaussianProcessMarginalLikelihood(
         kernel=build_kernel(), mean=ScalarMeanFunction(), initial_noise_variance=None
     )
     # Note: The `init` parameter is a default sampler which is used only
