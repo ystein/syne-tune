@@ -33,12 +33,14 @@ from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.learncurve.iss
     _inner_product,
     issm_likelihood_computations,
     issm_likelihood_precomputations,
-    decode_features,
     _rowvec,
     update_posterior_state,
     update_posterior_pvec,
     _flatvec,
     _colvec,
+)
+from syne_tune.optimizer.schedulers.searchers.bayesopt.datatypes.hp_ranges_impl import (
+    decode_extended_features,
 )
 from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.learncurve.issm import (
     sample_posterior_joint as sample_posterior_joint_issm,
@@ -483,7 +485,7 @@ class GaussProcISSMPosteriorState(IncrementalUpdateGPAdditivePosteriorState):
 
     def predict(self, test_features: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         resource_attr_range = (self.r_min, self.r_max)
-        features, resources = decode_features(
+        features, resources = decode_extended_features(
             test_features, resource_attr_range=resource_attr_range
         )
         issm_params = self.iss_model.get_issm_params(features)
@@ -647,7 +649,7 @@ class GaussProcExpDecayPosteriorState(IncrementalUpdateGPAdditivePosteriorState)
 
     def predict(self, test_features: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         resource_attr_range = (self.r_min, self.r_max)
-        features, resources = decode_features(
+        features, resources = decode_extended_features(
             test_features, resource_attr_range=resource_attr_range
         )
         return predict_posterior_marginals_expdecay(

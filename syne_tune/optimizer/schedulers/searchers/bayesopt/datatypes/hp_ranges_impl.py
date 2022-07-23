@@ -12,6 +12,7 @@
 # permissions and limitations under the License.
 from typing import Tuple, Dict, List, Any, Optional, Union
 import numpy as np
+from autograd import numpy as anp
 
 from syne_tune.config_space import Domain, FiniteRange, Categorical, Ordinal
 from syne_tune.optimizer.schedulers.searchers.bayesopt.datatypes.common import (
@@ -652,3 +653,25 @@ class HyperparameterRangesImpl(HyperparameterRanges):
         if isinstance(other, HyperparameterRangesImpl):
             return self._hp_ranges == other._hp_ranges
         return False
+
+
+def decode_extended_features(
+    features_ext: np.ndarray,
+    resource_attr_range: Tuple[int, int],
+) -> (np.ndarray, List[int]):
+    """
+    Given matrix of features from extended configs, corresponding to
+    `ExtendedConfiguration`, split into feature matrix from normal
+    configs and resource values.
+
+    :param features_ext: Matrix of features from extended configs
+    :param resource_attr_range: (r_min, r_max)
+    :return: (features, resources)
+    """
+    r_min, r_max = resource_attr_range
+    features = features_ext[:, :-1]
+    resources_encoded = features_ext[:, -1].reshape((-1,))
+    lower = r_min - 0.5 + EPS
+    width = r_max - r_min + 1 - 2 * EPS
+    resources = anp.clip(anp.round(resources_encoded * width + lower), r_min, r_max)
+    return features, [int(r) for r in resources]

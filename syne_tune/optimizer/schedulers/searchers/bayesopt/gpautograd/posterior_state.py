@@ -117,7 +117,7 @@ class GaussProcPosteriorState(PosteriorState):
         features: np.ndarray,
         targets: Optional[np.ndarray],
         mean: MeanFunction,
-        kernel: KernelFunction,
+        kernel: KernelFunctionWithCovarianceScale,
         noise_variance: np.ndarray,
         debug_log: bool = False,
         **kwargs
@@ -137,7 +137,6 @@ class GaussProcPosteriorState(PosteriorState):
         :param mean: Mean function m(X)
         :param kernel: Kernel function k(X, X'), or tuple (see above)
         :param noise_variance: Noise variance sigsq, shape (1,)
-        :param covariance_scale: See above
         """
         self.mean = mean
         self.kernel = self._check_and_assign_kernel(kernel)
