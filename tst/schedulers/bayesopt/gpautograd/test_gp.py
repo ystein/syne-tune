@@ -57,11 +57,12 @@ def test_gp_regression_no_noise():
 
     # to np.ndarray
     y_train_np_ndarray = anp.array(y_train)
-    x_train_np_ndarray = anp.array(x_train)
-    x_test_np_ndarray = anp.array(x_test)
+    x_train_np_ndarray = anp.array(x_train).reshape((-1, 1))
+    x_test_np_ndarray = anp.array(x_test).reshape((-1, 1))
 
     model = GaussianProcessRegression(kernel=Matern52(dimension=1))
-    model.fit(x_train_np_ndarray, y_train_np_ndarray)
+    data = {"features": x_train_np_ndarray, "targets": y_train_np_ndarray}
+    model.fit(data)
 
     # Check that the value of the residual noise variance learned by empirical Bayes is in the same order
     # as the smallest allowed value (since there is no noise)
@@ -108,11 +109,15 @@ def test_gp_regression_with_noise():
     # to anp.ndarray
     y_train_np_ndarray = anp.array(y_train)
     noise_train_np_ndarray = anp.array(noise_train)
-    x_train_np_ndarray = anp.array(x_train)
-    x_test_np_ndarray = anp.array(x_test)
+    x_train_np_ndarray = anp.array(x_train).reshape((-1, 1))
+    x_test_np_ndarray = anp.array(x_test).reshape((-1, 1))
 
     model = GaussianProcessRegression(kernel=Matern52(dimension=1))
-    model.fit(x_train_np_ndarray, y_train_np_ndarray + noise_train_np_ndarray)
+    data = {
+        "features": x_train_np_ndarray,
+        "targets": y_train_np_ndarray + noise_train_np_ndarray,
+    }
+    model.fit(data)
 
     # Check that the value of the residual noise variance learned by empirical Bayes is in the same order as std_noise^2
     noise_variance = model.likelihood.get_noise_variance()
@@ -146,7 +151,8 @@ def test_gp_regression_2d_with_ard():
     x_test_np_ndarray = anp.array(x_test)
 
     model = GaussianProcessRegression(kernel=Matern52(dimension=dimension, ARD=True))
-    model.fit(x_train_np_ndarray, y_train_np_ndarray)
+    data = {"features": x_train_np_ndarray, "targets": y_train_np_ndarray}
+    model.fit(data)
 
     # Check that the value of the residual noise variance learned by empirical Bayes is in the same order as the smallest allowed value (since there is no noise)
     noise_variance = model.likelihood.get_noise_variance()
@@ -156,7 +162,7 @@ def test_gp_regression_2d_with_ard():
     # In particular, for the useless dimensions indexed by {1,2}, the inverse bandwidths should be close to INVERSE_BANDWIDTHS_LOWER_BOUND
     # (or conversely, bandwidths should be close to their highest allowed values)
     sqd = model.likelihood.kernel.squared_distance
-    inverse_bandwidths = sqd.encoding_noise.get(sqd.inverse_bandwidths_internal.data())
+    inverse_bandwidths = sqd.encoding.get(sqd.inverse_bandwidths_internal.data())
 
     assert (
         inverse_bandwidths[0] > inverse_bandwidths[1]

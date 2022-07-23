@@ -222,7 +222,6 @@ def _create_gp_additive_model(
             r_min=1,
             normalize_inputs=kwargs.get("expdecay_normalize_inputs", False),
         )
-    use_precomputations = kwargs.get("use_new_code", True)
     gpmodel = GaussianProcessLearningCurveModel(
         kernel=result["kernel"],
         res_model=res_model,
@@ -230,7 +229,6 @@ def _create_gp_additive_model(
         optimization_config=result["optimization_config"],
         random_seed=random_seed,
         fit_reset_params=not result["opt_warmstart"],
-        use_precomputations=use_precomputations,
     )
     filter_observed_data = result["filter_observed_data"]
     no_fantasizing = kwargs.get("no_fantasizing", False)

@@ -236,7 +236,8 @@ def test_mcmc():
         )
 
     model_mcmc = GPRegressionMCMC(build_kernel=build_kernel, random_seed=1)
-    model_mcmc.fit(x_train_np_nd, y_train_np_nd)
+    data = {"features": x_train_np_nd, "targets": y_train_np_nd}
+    model_mcmc.fit(data)
     mcmc_predictions = model_mcmc.predict(x_test_np_nd)
 
     for mcmc_mean, mcmc_var in mcmc_predictions:

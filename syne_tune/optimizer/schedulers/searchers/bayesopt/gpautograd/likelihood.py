@@ -190,6 +190,8 @@ class GaussianProcessMarginalLikelihood(MarginalLikelihood):
                 dimension=1,
                 prior=LogNormal(0.0, 1.0),
             )
+        else:
+            self.encoding_covscale = None
         with self.name_scope():
             self.noise_variance_internal = register_parameter(
                 self.params, "noise_variance", self.encoding_noise

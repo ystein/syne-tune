@@ -330,14 +330,15 @@ class GaussProcModelFactory(TransformerModelFactory):
         self._std = internal_candidate_evaluations.std
 
         fit_params = fit_params and (not state.pending_evaluations)
+        data = {"features": features, "targets": targets}
         if not fit_params:
             if self._debug_log is not None:
                 logger.info("Recomputing posterior state")
-            self._gpmodel.recompute_states(features, targets, profiler=profiler)
+            self._gpmodel.recompute_states(data)
         else:
             if self._debug_log is not None:
                 logger.info(f"Fitting surrogate model for {self.active_metric}")
-            self._gpmodel.fit(features, targets, profiler=profiler)
+            self._gpmodel.fit(data, profiler=profiler)
         if self._debug_log is not None:
             self._debug_log.set_model_params(self.get_params())
             if not state.pending_evaluations:
