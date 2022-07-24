@@ -10,9 +10,10 @@
 # on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
 # express or implied. See the License for the specific language governing
 # permissions and limitations under the License.
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Optional
 import numpy as np
 import autograd.numpy as anp
+from numpy.random import RandomState
 
 from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.posterior_state import (
     PosteriorState,
@@ -129,13 +130,34 @@ class IndependentGPPerResourcePosteriorState(PosteriorState):
     def predict(self, test_features: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         features_per_resource = self._split_features(test_features)
         num_test = test_features.shape[0]
-        posterior_means = np.zeros((num_test, 1))
+        posterior_means = np.zeros((num_test, self.num_fantasies))
         posterior_variances = np.zeros((num_test,))
         for resource, (features, rows) in features_per_resource.items():
             p_means, p_vars = self._states[resource].predict(features)
+            assert (
+                p_means.ndim == 2 and p_means.shape[1] == self.num_fantasies
+            ), f"r={resource}, p_means.shape = {p_means.shape}"
             posterior_means[rows] = p_means
             posterior_variances[rows] = p_vars
         return posterior_means, posterior_variances
+
+    def sample_marginals(
+        self,
+        test_features: np.ndarray,
+        num_samples: int = 1,
+        random_state: Optional[RandomState] = None,
+    ) -> np.ndarray:
+        features_per_resource = self._split_features(test_features)
+        num_test = test_features.shape[0]
+        nf = self.num_fantasies
+        shp = (num_test, num_samples) if nf == 1 else (num_test, nf, num_samples)
+        samples = np.zeros(shp)
+        for resource, (features, rows) in features_per_resource.items():
+            s_margs = self._states[resource].sample_marginals(
+                features, num_samples, random_state
+            )
+            samples[rows] = s_margs
+        return samples
 
     def _split_features(self, features: np.ndarray):
         features, resources = decode_extended_features(
@@ -150,3 +172,37 @@ class IndependentGPPerResourcePosteriorState(PosteriorState):
             rows = np.flatnonzero(resources == resource)
             result[resource] = (features[rows], rows)
         return result
+
+    def backward_gradient(
+        self,
+        input: np.ndarray,
+        head_gradients: Dict[str, np.ndarray],
+        mean_data: float,
+        std_data: float,
+    ) -> np.ndarray:
+        input, resource = decode_extended_features(
+            input.reshape((1, -1)), self._resource_attr_range
+        )
+        assert len(resource) == 1
+        resource = resource[0]
+        return self._states[resource].backward_gradient(
+            input, head_gradients, mean_data, std_data
+        )
+
+    def sample_joint(
+        self,
+        test_features: np.ndarray,
+        num_samples: int = 1,
+        random_state: Optional[RandomState] = None,
+    ) -> np.ndarray:
+        features_per_resource = self._split_features(test_features)
+        num_test = test_features.shape[0]
+        nf = self.num_fantasies
+        shp = (num_test, num_samples) if nf == 1 else (num_test, nf, num_samples)
+        samples = np.zeros(shp)
+        for resource, (features, rows) in features_per_resource.items():
+            s_joint = self._states[resource].sample_joint(
+                features, num_samples, random_state
+            )
+            samples[rows] = s_joint
+        return samples

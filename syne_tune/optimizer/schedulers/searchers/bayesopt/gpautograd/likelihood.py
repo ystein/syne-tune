@@ -20,13 +20,9 @@ from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.constants impo
     NOISE_VARIANCE_LOWER_BOUND,
     NOISE_VARIANCE_UPPER_BOUND,
     DEFAULT_ENCODING,
-    INITIAL_COVARIANCE_SCALE,
-    COVARIANCE_SCALE_LOWER_BOUND,
-    COVARIANCE_SCALE_UPPER_BOUND,
 )
 from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.distribution import (
     Gamma,
-    LogNormal,
 )
 from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.gluon import Block
 from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.gluon_blocks_helpers import (
@@ -92,19 +88,6 @@ class MarginalLikelihood(Block):
     def set_params(self, param_dict: Dict[str, np.ndarray]):
         raise NotImplementedError
 
-    def get_covariance_scale(self) -> float:
-        """
-        Some subclasses maintain a covariance scale parameter, which is
-        multiplied with the kernel. This is useful if several likelihoods
-        share the same kernel, but have their own covariance scales.
-
-        :return: Covariance scale
-        """
-        return 1.0
-
-    def set_covariance_scale(self, covariance_scale: float):
-        raise AssertionError("Covariance scale is fixed to 1")
-
     def reset_params(self, random_state: RandomState):
         """
         Reset hyperparameters to their initial values (or resample them).
@@ -149,10 +132,6 @@ class GaussianProcessMarginalLikelihood(MarginalLikelihood):
         a scalar fitted while optimizing the likelihood)
     :param initial_noise_variance: A scalar to initialize the value of the
         residual noise variance
-    :param has_covariance_scale: If True, we maintain a `covariance_scale`
-        parameter here, which is multiplied with the kernel. This is useful
-        if several likelihoods share the same kernel, but have their own
-        covariance scales
     """
 
     def __init__(
@@ -161,7 +140,6 @@ class GaussianProcessMarginalLikelihood(MarginalLikelihood):
         mean: MeanFunction = None,
         initial_noise_variance=None,
         encoding_type=None,
-        has_covariance_scale: bool = False,
         **kwargs,
     ):
         super(GaussianProcessMarginalLikelihood, self).__init__(**kwargs)
@@ -181,40 +159,18 @@ class GaussianProcessMarginalLikelihood(MarginalLikelihood):
         )
         self.mean = mean
         self.kernel = kernel
-        if has_covariance_scale:
-            self.encoding_covscale = create_encoding(
-                encoding_name=encoding_type,
-                init_val=INITIAL_COVARIANCE_SCALE,
-                constr_lower=COVARIANCE_SCALE_LOWER_BOUND,
-                constr_upper=COVARIANCE_SCALE_UPPER_BOUND,
-                dimension=1,
-                prior=LogNormal(0.0, 1.0),
-            )
-        else:
-            self.encoding_covscale = None
         with self.name_scope():
             self.noise_variance_internal = register_parameter(
                 self.params, "noise_variance", self.encoding_noise
             )
-            if has_covariance_scale:
-                self.covariance_scale_internal = register_parameter(
-                    self.params, "covariance_scale", self.encoding_covscale
-                )
 
     def _noise_variance(self):
         return encode_unwrap_parameter(
             self.noise_variance_internal, self.encoding_noise
         )
 
-    def _covariance_scale(self):
-        if self.encoding_covscale is not None:
-            return encode_unwrap_parameter(
-                self.covariance_scale_internal, self.encoding_covscale
-            )
-        else:
-            return 1.0
-
-    def _assert_data_entries(self, data: dict):
+    @staticmethod
+    def _assert_data_entries(data: dict):
         features = data.get("features")
         targets = data.get("targets")
         assert (
@@ -231,15 +187,11 @@ class GaussianProcessMarginalLikelihood(MarginalLikelihood):
 
     def get_posterior_state(self, data: dict) -> PosteriorState:
         self._assert_data_entries(data)
-        if self.encoding_covscale is not None:
-            kernel = (self.kernel, self._covariance_scale())
-        else:
-            kernel = self.kernel
         return GaussProcPosteriorState(
             features=data["features"],
             targets=data["targets"],
             mean=self.mean,
-            kernel=kernel,
+            kernel=self.kernel,
             noise_variance=self._noise_variance(),
         )
 
@@ -255,10 +207,6 @@ class GaussianProcessMarginalLikelihood(MarginalLikelihood):
 
     def param_encoding_pairs(self) -> List[tuple]:
         own_param_encoding_pairs = [(self.noise_variance_internal, self.encoding_noise)]
-        if self.encoding_covscale is not None:
-            own_param_encoding_pairs.append(
-                (self.covariance_scale_internal, self.encoding_covscale)
-            )
         return (
             own_param_encoding_pairs
             + self.mean.param_encoding_pairs()
@@ -272,20 +220,8 @@ class GaussianProcessMarginalLikelihood(MarginalLikelihood):
     def set_noise_variance(self, val: float):
         self.encoding_noise.set(self.noise_variance_internal, val)
 
-    def get_covariance_scale(self) -> float:
-        if self.encoding_covscale is not None:
-            return self._covariance_scale()[0]
-        else:
-            return 1.0
-
-    def set_covariance_scale(self, covariance_scale: float):
-        assert self.encoding_covscale is not None, "covariance_scale is fixed to 1"
-        self.encoding_covscale.set(self.covariance_scale_internal, covariance_scale)
-
     def get_params(self) -> Dict[str, np.ndarray]:
         result = {"noise_variance": self.get_noise_variance()}
-        if self.encoding_covscale is not None:
-            result["covariance_scale"] = self.get_covariance_scale()
         for pref, func in [("kernel_", self.kernel), ("mean_", self.mean)]:
             result.update({(pref + k): v for k, v in func.get_params().items()})
         return result
@@ -298,8 +234,6 @@ class GaussianProcessMarginalLikelihood(MarginalLikelihood):
             }
             func.set_params(stripped_dict)
         self.set_noise_variance(param_dict["noise_variance"])
-        if self.encoding_covscale is not None:
-            self.set_covariance_scale(param_dict["covariance_scale"])
 
     def on_fit_start(self, data: dict, profiler: Optional[SimpleProfiler] = None):
         self._assert_data_entries(data)

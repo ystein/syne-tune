@@ -10,9 +10,8 @@
 # on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
 # express or implied. See the License for the specific language governing
 # permissions and limitations under the License.
-from typing import Union, Optional, Dict, Tuple, List
+from typing import Union, Optional, List
 import autograd.numpy as anp
-from numpy.random import RandomState
 
 from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.likelihood import (
     MarginalLikelihood,
@@ -26,7 +25,6 @@ from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.learncurve.mod
 from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.learncurve.posterior_state import (
     GaussProcISSMPosteriorState,
     GaussProcExpDecayPosteriorState,
-    IncrementalUpdateGPAdditivePosteriorState,
 )
 from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.learncurve.freeze_thaw import (
     ExponentialDecayBaseKernelFunction,
@@ -193,4 +191,4 @@ class GaussAdditiveMarginalLikelihood(MarginalLikelihood):
         )
         self.data_precomputations(data)
         if profiler is not None:
-            self.set_noise_variance(profiler)
+            self.set_profiler(profiler)
