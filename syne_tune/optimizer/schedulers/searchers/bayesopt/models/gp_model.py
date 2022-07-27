@@ -35,8 +35,11 @@ from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.gp_regression 
 from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.gpr_mcmc import (
     GPRegressionMCMC,
 )
+from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.independent.gpind_model import (
+    IndependentGPPerResourceModel,
+)
 from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.posterior_state import (
-    GaussProcPosteriorState,
+    PosteriorState,
 )
 from syne_tune.optimizer.schedulers.searchers.bayesopt.tuning_algorithms.base_classes import (
     SurrogateModel,
@@ -49,7 +52,9 @@ from syne_tune.optimizer.schedulers.utils.simple_profiler import SimpleProfiler
 logger = logging.getLogger(__name__)
 
 
-GPModel = Union[GaussianProcessRegression, GPRegressionMCMC]
+GPModel = Union[
+    GaussianProcessRegression, GPRegressionMCMC, IndependentGPPerResourceModel
+]
 
 
 class GaussProcSurrogateModel(BaseSurrogateModel):
@@ -133,7 +138,7 @@ class GaussProcSurrogateModel(BaseSurrogateModel):
         return isinstance(self._gpmodel, GPRegressionMCMC)
 
     @property
-    def posterior_states(self) -> Optional[List[GaussProcPosteriorState]]:
+    def posterior_states(self) -> Optional[List[PosteriorState]]:
         return self._gpmodel.states
 
     def _current_best_filter_candidates(self, candidates):
@@ -311,7 +316,6 @@ class GaussProcModelFactory(TransformerModelFactory):
         If state.pending_evaluations are given, these must be
         FantasizedPendingEvaluations, i.e. the fantasy values must have been
         sampled.
-
         """
         assert state.num_observed_cases(self.active_metric) > 0, (
             "Cannot compute posterior: state has no labeled datapoints "
@@ -379,9 +383,9 @@ class GaussProcModelFactory(TransformerModelFactory):
                 if num_candidates > 1
                 else self._gpmodel.sample_marginals
             )
-            targets_new = sample_func(features_new, num_samples=num_samples).reshape(
-                (num_candidates, -1)
-            )
+            targets_new = sample_func(
+                features_test=features_new, num_samples=num_samples
+            ).reshape((num_candidates, -1))
             new_pending = [
                 FantasizedPendingEvaluation(
                     trial_id=ev.trial_id,
@@ -400,11 +404,23 @@ class GaussProcModelFactory(TransformerModelFactory):
             pending_evaluations=new_pending,
         )
 
+    def configure_scheduler(self, scheduler):
+        from syne_tune.optimizer.schedulers.hyperband import HyperbandScheduler
+
+        if isinstance(self._gpmodel, IndependentGPPerResourceModel):
+            assert isinstance(scheduler, HyperbandScheduler), (
+                "gpmodel of type IndependentGPPerResourceModel requires "
+                + "HyperbandScheduler scheduler"
+            )
+            # Likelihood of internal model still has to be created (depends on
+            # rung levels of scheduler)
+            self._gpmodel.create_likelihood(scheduler.rung_levels)
+
 
 class GaussProcEmpiricalBayesModelFactory(GaussProcModelFactory):
     def __init__(
         self,
-        gpmodel: GaussianProcessRegression,
+        gpmodel: GPModel,
         num_fantasy_samples: int,
         active_metric: str = INTERNAL_METRIC_NAME,
         normalize_targets: bool = True,
@@ -426,6 +442,9 @@ class GaussProcEmpiricalBayesModelFactory(GaussProcModelFactory):
 
         """
         assert num_fantasy_samples > 0
+        assert isinstance(
+            gpmodel, (GaussianProcessRegression, IndependentGPPerResourceModel)
+        ), "gpmodel must be GaussianProcessRegression or IndependentGPPerResourceModel"
         super().__init__(
             gpmodel=gpmodel,
             active_metric=active_metric,

@@ -54,6 +54,9 @@ from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.learncurve.mod
 from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.learncurve.gpiss_model import (
     GaussianProcessLearningCurveModel,
 )
+from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.independent.gpind_model import (
+    IndependentGPPerResourceModel,
+)
 from syne_tune.optimizer.schedulers.searchers.bayesopt.models.model_skipopt import (
     SkipNoMaxResourcePredicate,
     SkipPeriodicallyPredicate,
@@ -202,6 +205,41 @@ def _create_gp_standard_model(
     }
 
 
+def _create_gp_independent_model(
+    hp_ranges: HyperparameterRanges,
+    active_metric: Optional[str],
+    random_seed: int,
+    **kwargs,
+):
+    result = _create_gp_common(hp_ranges, **kwargs)
+    kernel = result["kernel"]
+    resource_attr_range = (1, kwargs["max_epochs"])
+    mean_factory = lambda resource: ScalarMeanFunction()
+    gpmodel = IndependentGPPerResourceModel(
+        kernel=kernel,
+        mean_factory=mean_factory,
+        resource_attr_range=resource_attr_range,
+        optimization_config=result["optimization_config"],
+        random_seed=random_seed,
+        fit_reset_params=not result["opt_warmstart"],
+    )
+    filter_observed_data = result["filter_observed_data"]
+    model_factory = GaussProcEmpiricalBayesModelFactory(
+        active_metric=active_metric,
+        gpmodel=gpmodel,
+        num_fantasy_samples=kwargs["num_fantasy_samples"],
+        normalize_targets=kwargs.get("normalize_targets", True),
+        profiler=result["profiler"],
+        debug_log=result["debug_log"],
+        filter_observed_data=filter_observed_data,
+        no_fantasizing=kwargs.get("no_fantasizing", False),
+    )
+    return {
+        "model_factory": model_factory,
+        "filter_observed_data": filter_observed_data,
+    }
+
+
 def _create_gp_additive_model(
     model: str,
     hp_ranges: HyperparameterRanges,
@@ -325,6 +363,15 @@ def _create_common_objects(model=None, **kwargs):
                 active_metric=INTERNAL_METRIC_NAME,
                 random_seed=random_seed,
                 is_hyperband=is_hyperband,
+                **_kwargs,
+            )
+        )
+    elif model == "gp_independent":
+        result.update(
+            _create_gp_independent_model(
+                hp_ranges=hp_ranges,
+                active_metric=INTERNAL_METRIC_NAME,
+                random_seed=random_seed,
                 **_kwargs,
             )
         )
@@ -703,7 +750,7 @@ def _common_defaults(
 
     if is_hyperband:
         constraints["model"] = Categorical(
-            choices=("gp_multitask", "gp_issm", "gp_expdecay")
+            choices=("gp_multitask", "gp_independent", "gp_issm", "gp_expdecay")
         )
         constraints["opt_skip_num_max_resource"] = Boolean()
         constraints["gp_resource_kernel"] = Categorical(

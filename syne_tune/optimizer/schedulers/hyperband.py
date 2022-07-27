@@ -41,7 +41,11 @@ from syne_tune.optimizer.schedulers.searchers.utils.default_arguments import (
     Float,
 )
 
-__all__ = ["HyperbandScheduler", "HyperbandBracketManager"]
+__all__ = [
+    "HyperbandScheduler",
+    "HyperbandBracketManager",
+    "hyperband_rung_levels",
+]
 
 logger = logging.getLogger(__name__)
 
@@ -400,7 +404,7 @@ class HyperbandScheduler(FIFOScheduler):
                     f"{kwargs.get('grace_period')} and reduction_factor = "
                     f"{kwargs.get('reduction_factor')} are ignored!"
                 )
-        rung_levels = _get_rung_levels(
+        rung_levels = hyperband_rung_levels(
             rung_levels,
             grace_period=kwargs["grace_period"],
             reduction_factor=kwargs["reduction_factor"],
@@ -472,6 +476,10 @@ class HyperbandScheduler(FIFOScheduler):
             sense that trials can be paused and resumed later?
         """
         return self.scheduler_type != "stopping"
+
+    @property
+    def rung_levels(self) -> List[int]:
+        return self.terminator.rung_levels
 
     def _extend_search_options(self, search_options: Dict) -> Dict:
         # Note: Needs self.scheduler_type to be set
@@ -920,7 +928,7 @@ def _is_positive_int(x):
     return int(x) == x and x >= 1
 
 
-def _get_rung_levels(rung_levels, grace_period, reduction_factor, max_t):
+def hyperband_rung_levels(rung_levels, grace_period, reduction_factor, max_t):
     if rung_levels is not None:
         assert (
             isinstance(rung_levels, list) and len(rung_levels) > 1

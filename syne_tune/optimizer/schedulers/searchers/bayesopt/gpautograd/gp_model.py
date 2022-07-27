@@ -105,7 +105,7 @@ class GaussianProcessModel:
         )
         return features, targets
 
-    def predict(self, features_test):
+    def predict(self, features_test: np.ndarray):
         """
         Compute the posterior mean(s) and variance(s) for the points in features_test.
         If the posterior state is based on m target vectors, a (n, m) matrix is returned for posterior means.
@@ -124,7 +124,7 @@ class GaussianProcessModel:
             predictions.append((post_means, post_vars))
         return predictions
 
-    def _assert_check_xtest(self, features_test):
+    def _assert_check_xtest(self, features_test: np.ndarray):
         assert self.states is not None, "Posterior state does not exist (run 'fit')"
         features_test = self._check_and_format_input(features_test)
         assert features_test.shape[1] == self.states[0].num_features, (
@@ -141,7 +141,7 @@ class GaussianProcessModel:
         assert self.states is not None, "Posterior state does not exist (run 'fit')"
         return self.states[0].num_fantasies > 1
 
-    def sample_marginals(self, features_test, num_samples=1):
+    def sample_marginals(self, features_test: np.ndarray, num_samples: int = 1):
         """
         Draws marginal samples from predictive distribution at n test points.
         Notice we concat the samples for each state. Let n_states = len(self._states)
@@ -164,7 +164,7 @@ class GaussianProcessModel:
         ]
         return _concatenate_samples(samples_list)
 
-    def sample_joint(self, features_test, num_samples=1):
+    def sample_joint(self, features_test: np.ndarray, num_samples: int = 1):
         """
         Draws joint samples from predictive distribution at n test points.
         This scales cubically with n.
