@@ -172,10 +172,9 @@ class IndependentGPPerResourcePosteriorState(PosteriorStateWithSampleJoint):
         shp = (num_test, num_samples) if nf == 1 else (num_test, nf, num_samples)
         samples = np.zeros(shp)
         for resource, (features, rows) in features_per_resource.items():
-            s_margs = self._states[resource].sample_marginals(
+            samples[rows] = self._states[resource].sample_marginals(
                 features, num_samples, random_state
             )
-            samples[rows] = s_margs
         return samples
 
     def _split_features(self, features: np.ndarray, check_for_state: bool = True):
@@ -238,6 +237,11 @@ class IndependentGPPerResourcePosteriorState(PosteriorStateWithSampleJoint):
                     features, num_samples, random_state
                 )
             else:
+                assert resource in self._mean, (
+                    f"resource = {resource} not supported (keys = "
+                    + str(list(self._mean.keys()))
+                    + ")"
+                )
                 s_joint = self._mean[resource](features)
             samples[rows] = s_joint
         return samples

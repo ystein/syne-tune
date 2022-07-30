@@ -87,6 +87,9 @@ class IndependentGPPerResourceModel(GaussianProcessOptimizeModel):
         Delayed creation of likelihood, needs to know rung levels of Hyperband
         scheduler.
 
+        Note: last entry of `rung_levels` must be `max_t`, even if this is not
+        a rung level in Hyperband.
+
         :param rung_levels: Rung levels
         """
         mean = {resource: self._mean_factory(resource) for resource in rung_levels}

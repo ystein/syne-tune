@@ -413,8 +413,13 @@ class GaussProcModelFactory(TransformerModelFactory):
                 + "HyperbandScheduler scheduler"
             )
             # Likelihood of internal model still has to be created (depends on
-            # rung levels of scheduler)
-            self._gpmodel.create_likelihood(scheduler.rung_levels)
+            # rung levels of scheduler). Note that `max_t` must be included
+            max_t = scheduler.max_t
+            if scheduler.rung_levels[-1] == max_t:
+                rung_levels = scheduler.rung_levels
+            else:
+                rung_levels = scheduler.rung_levels + [max_t]
+            self._gpmodel.create_likelihood(rung_levels)
 
 
 class GaussProcEmpiricalBayesModelFactory(GaussProcModelFactory):
