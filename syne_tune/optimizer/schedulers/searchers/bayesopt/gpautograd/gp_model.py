@@ -23,7 +23,7 @@ from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.constants impo
 )
 from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.posterior_state import (
     PosteriorState,
-    GaussProcPosteriorState,
+    PosteriorStateWithSampleJoint,
 )
 from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.likelihood import (
     MarginalLikelihood,
@@ -177,7 +177,7 @@ class GaussianProcessModel:
         """
         features_test = self._assert_check_xtest(features_test)
         assert isinstance(
-            self.states[0], GaussProcPosteriorState
+            self.states[0], PosteriorStateWithSampleJoint
         ), "Implemented only for joint Gaussian process models"
         samples_list = [
             state.sample_joint(

@@ -494,7 +494,7 @@ class GaussProcISSMPosteriorState(IncrementalUpdateGPAdditivePosteriorState):
             mean=self.mean,
             kernel=self.kernel,
             test_features=features,
-            resources=resources,
+            resources=list(resources),
             issm_params=issm_params,
             r_min=self.r_min,
             r_max=self.r_max,
@@ -657,7 +657,7 @@ class GaussProcExpDecayPosteriorState(IncrementalUpdateGPAdditivePosteriorState)
             mean=self.mean,
             kernel=self.kernel,
             test_features=features,
-            resources=resources,
+            resources=list(resources),
             res_kernel=self.res_kernel,
         )
 

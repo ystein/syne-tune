@@ -131,7 +131,12 @@ def _create_base_gp_kernel(hp_ranges: HyperparameterRanges, **kwargs) -> KernelF
         # Transfer learning: Specific base kernel
         kernel = create_base_gp_kernel_for_warmstarting(hp_ranges, **kwargs)
     else:
-        kernel = Matern52(dimension=hp_ranges.ndarray_size, ARD=True)
+        has_covariance_scale = kwargs.get("has_covariance_scale", True)
+        kernel = Matern52(
+            dimension=hp_ranges.ndarray_size,
+            ARD=True,
+            has_covariance_scale=has_covariance_scale,
+        )
     return kernel
 
 
@@ -211,7 +216,7 @@ def _create_gp_independent_model(
     random_seed: int,
     **kwargs,
 ):
-    result = _create_gp_common(hp_ranges, **kwargs)
+    result = _create_gp_common(hp_ranges, has_covariance_scale=False, **kwargs)
     kernel = result["kernel"]
     resource_attr_range = (1, kwargs["max_epochs"])
     mean_factory = lambda resource: ScalarMeanFunction()
@@ -453,7 +458,7 @@ def gp_multifidelity_searcher_factory(**kwargs) -> Dict:
         resource_attr=kwargs["resource_attr"],
         acquisition_class=EIAcquisitionFunction,
     )
-    if kwargs["model"] == "gp_multitask":
+    if kwargs["model"] in {"gp_multitask", "gp_independent"}:
         kwargs_int["resource_for_acquisition"] = resource_for_acquisition_factory(
             kwargs, result["hp_ranges"]
         )

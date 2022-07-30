@@ -95,6 +95,8 @@ class IndependentGPPerResourceMarginalLikelihood(MarginalLikelihood):
             prior=LogNormal(0.0, 1.0),
         )
         self.mean = mean.copy()
+        for v in self.mean.values():
+            self.register_child(v)
         self.kernel = kernel
         self.resource_attr_range = resource_attr_range
         with self.name_scope():
@@ -135,7 +137,9 @@ class IndependentGPPerResourceMarginalLikelihood(MarginalLikelihood):
         return self.get_posterior_state(data).neg_log_likelihood()
 
     def param_encoding_pairs(self) -> List[tuple]:
-        result = [(self.noise_variance_internal, self.encoding_noise)]
+        result = [
+            (self.noise_variance_internal, self.encoding_noise)
+        ] + self.kernel.param_encoding_pairs()
         for mean in self.mean.values():
             result.extend(mean.param_encoding_pairs())
         for internal in self.covariance_scale_internal.values():
@@ -160,7 +164,7 @@ class IndependentGPPerResourceMarginalLikelihood(MarginalLikelihood):
 
     def _components(self):
         return [("kernel_", self.kernel)] + [
-            (f"mean{resource}_", mean) for resource, mean in self.mean
+            (f"mean{resource}_", mean) for resource, mean in self.mean.items()
         ]
 
     def get_params(self) -> Dict[str, np.ndarray]:

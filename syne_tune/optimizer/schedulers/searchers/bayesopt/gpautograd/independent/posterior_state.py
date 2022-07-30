@@ -16,7 +16,7 @@ import autograd.numpy as anp
 from numpy.random import RandomState
 
 from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.posterior_state import (
-    PosteriorState,
+    PosteriorStateWithSampleJoint,
     GaussProcPosteriorState,
 )
 from syne_tune.optimizer.schedulers.searchers.bayesopt.datatypes.hp_ranges_impl import (
@@ -30,7 +30,7 @@ from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.mean import (
 )
 
 
-class IndependentGPPerResourcePosteriorState(PosteriorState):
+class IndependentGPPerResourcePosteriorState(PosteriorStateWithSampleJoint):
     """
     Posterior state for model over f(x, r), where for a fixed set of resource
     levels r, each f(x, r) is represented by an independent Gaussian process.
@@ -79,6 +79,7 @@ class IndependentGPPerResourcePosteriorState(PosteriorState):
             resource_attr_range,
             debug_log,
         )
+        self._mean = mean  # See `sample_joint`
         self._num_data = features.shape[0]
         self._num_features = features.shape[1]
         self._num_fantasies = targets.shape[1]
@@ -127,19 +128,37 @@ class IndependentGPPerResourcePosteriorState(PosteriorState):
     def neg_log_likelihood(self) -> anp.ndarray:
         return anp.sum([state.neg_log_likelihood() for state in self._states.values()])
 
+    # Different to `sample_marginals`, `sample_joint`, this method supports
+    # `autograd` differentiation
     def predict(self, test_features: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        features_per_resource = self._split_features(test_features)
-        num_test = test_features.shape[0]
-        posterior_means = np.zeros((num_test, self.num_fantasies))
-        posterior_variances = np.zeros((num_test,))
-        for resource, (features, rows) in features_per_resource.items():
-            p_means, p_vars = self._states[resource].predict(features)
-            assert (
-                p_means.ndim == 2 and p_means.shape[1] == self.num_fantasies
-            ), f"r={resource}, p_means.shape = {p_means.shape}"
-            posterior_means[rows] = p_means
-            posterior_variances[rows] = p_vars
-        return posterior_means, posterior_variances
+        test_features, resources = decode_extended_features(
+            test_features, self._resource_attr_range
+        )
+        if len(set(resources)) == 1:
+            return self._states[resources[0]].predict(test_features)
+        else:
+            num_rows = resources.size
+            # Group resources together by sorting them
+            ind = np.argsort(resources)
+            test_features = test_features[ind]
+            resources = resources[ind]
+            # Find positions where resource value changes
+            change_pos = (
+                [0]
+                + list(np.flatnonzero(resources[:-1] != resources[1:]) + 1)
+                + [num_rows]
+            )
+            p_means, p_vars = zip(
+                *[
+                    self._states[resources[start]].predict(test_features[start:end])
+                    for start, end in zip(change_pos[:-1], change_pos[1:])
+                ]
+            )
+            reverse_ind = np.empty_like(ind)
+            reverse_ind[ind] = np.arange(num_rows)
+            posterior_means = anp.concatenate(p_means, axis=0)[reverse_ind]
+            posterior_variances = anp.concatenate(p_vars, axis=0)[reverse_ind]
+            return posterior_means, posterior_variances
 
     def sample_marginals(
         self,
@@ -159,16 +178,17 @@ class IndependentGPPerResourcePosteriorState(PosteriorState):
             samples[rows] = s_margs
         return samples
 
-    def _split_features(self, features: np.ndarray):
+    def _split_features(self, features: np.ndarray, check_for_state: bool = True):
         features, resources = decode_extended_features(
             features, self._resource_attr_range
         )
         result = dict()
         for resource in set(resources):
-            assert resource in self._states, (
-                f"Resource r = {resource} is not covered by data in posterior"
-                + " state"
-            )
+            if check_for_state:
+                assert resource in self._states, (
+                    f"Resource r = {resource} is not covered by data in posterior"
+                    + f" state (keys = {list(self._states.keys())}, resources = {resources})"
+                )
             rows = np.flatnonzero(resources == resource)
             result[resource] = (features[rows], rows)
         return result
@@ -180,14 +200,17 @@ class IndependentGPPerResourcePosteriorState(PosteriorState):
         mean_data: float,
         std_data: float,
     ) -> np.ndarray:
-        input, resource = decode_extended_features(
+        inner_input, resource = decode_extended_features(
             input.reshape((1, -1)), self._resource_attr_range
         )
-        assert len(resource) == 1
-        resource = resource[0]
-        return self._states[resource].backward_gradient(
-            input, head_gradients, mean_data, std_data
+        assert resource.size == 1
+        resource = resource.item()
+        inner_grad = (
+            self._states[resource]
+            .backward_gradient(inner_input, head_gradients, mean_data, std_data)
+            .reshape((-1,))
         )
+        return np.reshape(np.concatenate((inner_grad, np.zeros((1,)))), input.shape)
 
     def sample_joint(
         self,
@@ -195,14 +218,26 @@ class IndependentGPPerResourcePosteriorState(PosteriorState):
         num_samples: int = 1,
         random_state: Optional[RandomState] = None,
     ) -> np.ndarray:
-        features_per_resource = self._split_features(test_features)
+        """
+        Different to `predict`, `sample_marginals`, entries in `test_features`
+        may have resources not covered by data in posterior state. For such
+        entries, we return the prior mean. We do not sample from the prior.
+        If `sample_joint` is used to draw fantasy values, this corresponds to
+        the Kriging believer heuristic.
+        """
+        features_per_resource = self._split_features(
+            test_features, check_for_state=False
+        )
         num_test = test_features.shape[0]
         nf = self.num_fantasies
         shp = (num_test, num_samples) if nf == 1 else (num_test, nf, num_samples)
         samples = np.zeros(shp)
         for resource, (features, rows) in features_per_resource.items():
-            s_joint = self._states[resource].sample_joint(
-                features, num_samples, random_state
-            )
+            if resource in self._states:
+                s_joint = self._states[resource].sample_joint(
+                    features, num_samples, random_state
+                )
+            else:
+                s_joint = self._mean[resource](features)
             samples[rows] = s_joint
         return samples

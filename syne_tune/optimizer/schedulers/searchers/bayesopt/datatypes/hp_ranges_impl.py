@@ -658,7 +658,7 @@ class HyperparameterRangesImpl(HyperparameterRanges):
 def decode_extended_features(
     features_ext: np.ndarray,
     resource_attr_range: Tuple[int, int],
-) -> (np.ndarray, List[int]):
+) -> (np.ndarray, np.ndarray):
     """
     Given matrix of features from extended configs, corresponding to
     `ExtendedConfiguration`, split into feature matrix from normal
@@ -673,5 +673,7 @@ def decode_extended_features(
     resources_encoded = features_ext[:, -1].reshape((-1,))
     lower = r_min - 0.5 + EPS
     width = r_max - r_min + 1 - 2 * EPS
-    resources = anp.clip(anp.round(resources_encoded * width + lower), r_min, r_max)
-    return features, [int(r) for r in resources]
+    resources = anp.clip(
+        anp.round(resources_encoded * width + lower), r_min, r_max
+    ).astype("int64")
+    return features, resources

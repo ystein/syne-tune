@@ -105,7 +105,25 @@ class PosteriorState:
         raise NotImplementedError
 
 
-class GaussProcPosteriorState(PosteriorState):
+class PosteriorStateWithSampleJoint(PosteriorState):
+    def sample_joint(
+        self,
+        test_features: np.ndarray,
+        num_samples: int = 1,
+        random_state: Optional[RandomState] = None,
+    ) -> np.ndarray:
+        """
+        See comments of `predict`.
+
+        :param test_features: Input points for test configs
+        :param num_samples: Number of samples
+        :param random_state: PRNG
+        :return: Joint samples, (num_test, num_samples)
+        """
+        raise NotImplementedError
+
+
+class GaussProcPosteriorState(PosteriorStateWithSampleJoint):
     """
     Represent posterior state for Gaussian process regression model.
     Note that members are immutable. If the posterior state is to be
