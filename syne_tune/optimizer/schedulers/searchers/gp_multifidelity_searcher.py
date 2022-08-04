@@ -24,6 +24,9 @@ from syne_tune.optimizer.schedulers.searchers.gp_fifo_searcher import (
     GPFIFOSearcher,
     decode_state,
 )
+from syne_tune.optimizer.schedulers.searchers.bracket_searcher import (
+    DefaultHyperbandBracketSamplingSearcher,
+)
 from syne_tune.optimizer.schedulers.searchers.gp_searcher_utils import (
     ResourceForAcquisitionMap,
 )
@@ -40,7 +43,7 @@ logger = logging.getLogger(__name__)
 __all__ = ["GPMultiFidelitySearcher"]
 
 
-class GPMultiFidelitySearcher(GPFIFOSearcher):
+class GPMultiFidelitySearcher(GPFIFOSearcher, DefaultHyperbandBracketSamplingSearcher):
     """Gaussian process Bayesian optimization for Hyperband scheduler
 
     This searcher must be used with `HyperbandScheduler`. It provides a novel
@@ -167,6 +170,9 @@ class GPMultiFidelitySearcher(GPFIFOSearcher):
     --------
     GPFIFOSearcher
     """
+
+    def __init__(self, config_space, **kwargs):
+        super().__init__(config_space, **kwargs)
 
     def _create_kwargs_int(self, kwargs):
         _kwargs = check_and_merge_defaults(

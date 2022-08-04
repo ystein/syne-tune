@@ -38,6 +38,13 @@ def parse_args():
         help="if 1 run all the seeds [0, `num_seeds`-1], otherwise run seed `num_seeds` only",
     )
     parser.add_argument(
+        "--start_seed",
+        type=int,
+        required=False,
+        default=0,
+        help="first seed to run",
+    )
+    parser.add_argument(
         "--method", type=str, required=False, help="a method to run from baselines.py"
     )
     parser.add_argument(
@@ -54,7 +61,7 @@ def parse_args():
     )
     args, _ = parser.parse_known_args()
     if args.run_all_seed == 1:
-        seeds = list(range(args.num_seeds))
+        seeds = list(range(args.start_seed, args.num_seeds))
     else:
         seeds = [args.num_seeds]
     method_names = [args.method] if args.method is not None else list(methods.keys())

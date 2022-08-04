@@ -10,7 +10,7 @@
 # on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
 # express or implied. See the License for the specific language governing
 # permissions and limitations under the License.
-from typing import Dict, Tuple, Optional
+from typing import Dict, Tuple, Optional, Callable
 import numpy as np
 import autograd.numpy as anp
 from numpy.random import RandomState
@@ -66,7 +66,8 @@ class IndependentGPPerResourcePosteriorState(PosteriorStateWithSampleJoint):
         :param resource_attr_range: (r_min, r_max)
         """
         assert isinstance(kernel, KernelFunction), "kernel must be KernelFunction"
-        assert set(mean.keys()) == set(
+        self.rung_levels = sorted(mean.keys())
+        assert self.rung_levels == sorted(
             covariance_scale.keys()
         ), "mean, covariance_scale must have the same keys"
         self._compute_states(
@@ -112,6 +113,9 @@ class IndependentGPPerResourcePosteriorState(PosteriorStateWithSampleJoint):
                     noise_variance=noise_variance,
                     debug_log=debug_log,
                 )
+
+    def state(self, resource: int) -> GaussProcPosteriorState:
+        return self._states[resource]
 
     @property
     def num_data(self):
@@ -160,11 +164,21 @@ class IndependentGPPerResourcePosteriorState(PosteriorStateWithSampleJoint):
             posterior_variances = anp.concatenate(p_vars, axis=0)[reverse_ind]
             return posterior_means, posterior_variances
 
-    def sample_marginals(
+    def _split_features(self, features: np.ndarray):
+        features, resources = decode_extended_features(
+            features, self._resource_attr_range
+        )
+        result = dict()
+        for resource in set(resources):
+            rows = np.flatnonzero(resources == resource)
+            result[resource] = (features[rows], rows)
+        return result
+
+    def _sample_internal(
         self,
         test_features: np.ndarray,
-        num_samples: int = 1,
-        random_state: Optional[RandomState] = None,
+        sample_func: Callable[[int, np.ndarray], np.ndarray],
+        num_samples: int,
     ) -> np.ndarray:
         features_per_resource = self._split_features(test_features)
         num_test = test_features.shape[0]
@@ -172,25 +186,67 @@ class IndependentGPPerResourcePosteriorState(PosteriorStateWithSampleJoint):
         shp = (num_test, num_samples) if nf == 1 else (num_test, nf, num_samples)
         samples = np.zeros(shp)
         for resource, (features, rows) in features_per_resource.items():
-            samples[rows] = self._states[resource].sample_marginals(
-                features, num_samples, random_state
-            )
+            if resource in self._states:
+                sample_part = sample_func(resource, features)
+            else:
+                assert resource in self._mean, (
+                    f"resource = {resource} not supported (keys = "
+                    + str(list(self._mean.keys()))
+                    + ")"
+                )
+                sample_part = self._mean[resource](features)
+            samples[rows] = sample_part
         return samples
 
-    def _split_features(self, features: np.ndarray, check_for_state: bool = True):
-        features, resources = decode_extended_features(
-            features, self._resource_attr_range
+    def sample_marginals(
+        self,
+        test_features: np.ndarray,
+        num_samples: int = 1,
+        random_state: Optional[RandomState] = None,
+    ) -> np.ndarray:
+        """
+        Different to `predict`, entries in `test_features`
+        may have resources not covered by data in posterior state. For such
+        entries, we return the prior mean. We do not sample from the prior.
+        If `sample_marginals` is used to draw fantasy values, this corresponds to
+        the Kriging believer heuristic.
+        """
+
+        def sample_func(resource: int, features: np.ndarray):
+            return self._states[resource].sample_marginals(
+                features, num_samples, random_state
+            )
+
+        return self._sample_internal(
+            test_features=test_features,
+            sample_func=sample_func,
+            num_samples=num_samples,
         )
-        result = dict()
-        for resource in set(resources):
-            if check_for_state:
-                assert resource in self._states, (
-                    f"Resource r = {resource} is not covered by data in posterior"
-                    + f" state (keys = {list(self._states.keys())}, resources = {resources})"
-                )
-            rows = np.flatnonzero(resources == resource)
-            result[resource] = (features[rows], rows)
-        return result
+
+    def sample_joint(
+        self,
+        test_features: np.ndarray,
+        num_samples: int = 1,
+        random_state: Optional[RandomState] = None,
+    ) -> np.ndarray:
+        """
+        Different to `predict`, entries in `test_features`
+        may have resources not covered by data in posterior state. For such
+        entries, we return the prior mean. We do not sample from the prior.
+        If `sample_joint` is used to draw fantasy values, this corresponds to
+        the Kriging believer heuristic.
+        """
+
+        def sample_func(resource: int, features: np.ndarray):
+            return self._states[resource].sample_joint(
+                features, num_samples, random_state
+            )
+
+        return self._sample_internal(
+            test_features=test_features,
+            sample_func=sample_func,
+            num_samples=num_samples,
+        )
 
     def backward_gradient(
         self,
@@ -210,38 +266,3 @@ class IndependentGPPerResourcePosteriorState(PosteriorStateWithSampleJoint):
             .reshape((-1,))
         )
         return np.reshape(np.concatenate((inner_grad, np.zeros((1,)))), input.shape)
-
-    def sample_joint(
-        self,
-        test_features: np.ndarray,
-        num_samples: int = 1,
-        random_state: Optional[RandomState] = None,
-    ) -> np.ndarray:
-        """
-        Different to `predict`, `sample_marginals`, entries in `test_features`
-        may have resources not covered by data in posterior state. For such
-        entries, we return the prior mean. We do not sample from the prior.
-        If `sample_joint` is used to draw fantasy values, this corresponds to
-        the Kriging believer heuristic.
-        """
-        features_per_resource = self._split_features(
-            test_features, check_for_state=False
-        )
-        num_test = test_features.shape[0]
-        nf = self.num_fantasies
-        shp = (num_test, num_samples) if nf == 1 else (num_test, nf, num_samples)
-        samples = np.zeros(shp)
-        for resource, (features, rows) in features_per_resource.items():
-            if resource in self._states:
-                s_joint = self._states[resource].sample_joint(
-                    features, num_samples, random_state
-                )
-            else:
-                assert resource in self._mean, (
-                    f"resource = {resource} not supported (keys = "
-                    + str(list(self._mean.keys()))
-                    + ")"
-                )
-                s_joint = self._mean[resource](features)
-            samples[rows] = s_joint
-        return samples

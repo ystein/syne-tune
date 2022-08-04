@@ -40,6 +40,9 @@ from syne_tune.optimizer.schedulers.searchers.utils.default_arguments import (
     Dictionary,
     Float,
 )
+from syne_tune.optimizer.schedulers.searchers.bracket_searcher import (
+    SearcherWithDistributionOverBrackets,
+)
 
 __all__ = [
     "HyperbandScheduler",
@@ -393,6 +396,10 @@ class HyperbandScheduler(FIFOScheduler):
             + "config_space['epochs'], config_space['max_t'], "
             + "config_space['max_epochs']"
         )
+        assert isinstance(self.searcher, SearcherWithDistributionOverBrackets), (
+            "searcher has to be of type SearcherWithDistributionOverBrackets, "
+            f"but has type = {type(self.searcher)}"
+        )
 
         # If rung_levels is given, grace_period and reduction_factor are ignored
         rung_levels = kwargs.get("rung_levels")
@@ -429,6 +436,7 @@ class HyperbandScheduler(FIFOScheduler):
             cost_attr=self._total_cost_attr(),
             random_seed=self.random_seed_generator(),
             rung_system_kwargs=self._rung_system_kwargs,
+            scheduler=self,
         )
         self.do_snapshots = do_snapshots
         self.searcher_data = kwargs["searcher_data"]
@@ -700,10 +708,13 @@ class HyperbandScheduler(FIFOScheduler):
         do_update = False
         pending_resources = []
         if self.searcher_data == "rungs":
-            if milestone_reached:
+            resource = result[self._resource_attr]
+            if resource in self.rung_levels or resource == self.max_t:
                 # Update searcher with intermediate result
+                # Note: This condition is weaker than `milestone_reached` if
+                # more than one bracket is used
                 do_update = True
-                if task_continues and next_milestone is not None:
+                if task_continues and milestone_reached and next_milestone is not None:
                     pending_resources = [next_milestone]
         elif not task_info.get("ignore_data", False):
             # All results are reported to the searcher, except if
@@ -906,24 +917,6 @@ class HyperbandScheduler(FIFOScheduler):
         self._cleanup_trial(trial_id, trial_decision=SchedulerDecision.STOP)
 
 
-def _sample_bracket(num_brackets, rung_levels, random_state):
-    # Brackets are sampled in proportion to the number of configs started
-    # in synchronous Hyperband in each bracket
-    if num_brackets > 1:
-        smax_plus1 = len(rung_levels)
-        assert num_brackets <= smax_plus1
-        probs = np.array(
-            [
-                smax_plus1 / ((smax_plus1 - s) * rung_levels[s])
-                for s in range(num_brackets)
-            ]
-        )
-        normalized = probs / probs.sum()
-        return random_state.choice(num_brackets, p=normalized)
-    else:
-        return 0
-
-
 def _is_positive_int(x):
     return int(x) == x and x >= 1
 
@@ -996,9 +989,10 @@ class HyperbandBracketManager:
             Overrides entry in `rung_system_kwargs`
         random_seed : int
             Random seed for bracket sampling
-        rung_system_kwargs: dict
-            Dictionary of arguments passed to the rung system,
-
+        rung_system_kwargs : dict
+            Dictionary of arguments passed to the rung system
+        scheduler : HyperbandScheduler
+            The scheduler is needed in order to sample a bracket
     """
 
     def __init__(
@@ -1014,12 +1008,14 @@ class HyperbandBracketManager:
         cost_attr,
         random_seed,
         rung_system_kwargs,
+        scheduler,
     ):
         self._scheduler_type = scheduler_type
         self._resource_attr = resource_attr
         self._max_t = max_t
         self.rung_levels = copy.copy(rung_levels)
         self._rung_system_per_bracket = rung_system_per_bracket
+        self._scheduler = scheduler
         # Maps trial_id -> bracket_id
         self._task_info = dict()
         max_num_brackets = len(rung_levels)
@@ -1147,12 +1143,9 @@ class HyperbandBracketManager:
             rung_sys.on_task_remove(trial_id)
             del self._task_info[trial_id]
 
-    def _sample_bracket(self):
-        return _sample_bracket(
-            num_brackets=self.num_brackets,
-            rung_levels=self.rung_levels,
-            random_state=self.random_state,
-        )
+    def _sample_bracket(self) -> int:
+        distribution = self._scheduler.searcher.distribution_over_brackets()
+        return self.random_state.choice(a=distribution.size, p=distribution)
 
     def on_task_schedule(self) -> (Optional[str], Dict):
         """
