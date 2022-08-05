@@ -12,6 +12,7 @@
 # permissions and limitations under the License.
 from typing import Dict, Optional
 import logging
+import numpy as np
 
 from syne_tune.optimizer.schedulers.searchers.gp_searcher_factory import (
     gp_multifidelity_searcher_factory,
@@ -34,8 +35,14 @@ from syne_tune.optimizer.schedulers.searchers.bayesopt.datatypes.common import (
     PendingEvaluation,
     MetricValues,
 )
+from syne_tune.optimizer.schedulers.searchers.bayesopt.models.gp_model import (
+    GaussProcModelFactory,
+)
 from syne_tune.optimizer.schedulers.searchers.bayesopt.models.gpiss_model import (
     GaussProcAdditiveModelFactory,
+)
+from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.independent.gpind_model import (
+    IndependentGPPerResourceModel,
 )
 
 logger = logging.getLogger(__name__)
@@ -328,3 +335,14 @@ class GPMultiFidelitySearcher(GPFIFOSearcher, DefaultHyperbandBracketSamplingSea
         # Invalidate self (must not be used afterwards)
         self.state_transformer = None
         return new_searcher
+
+    def distribution_over_brackets(self) -> np.ndarray:
+        distribution = super().distribution_over_brackets()
+        model_factory = self.state_transformer.model_factory
+        if isinstance(model_factory, GaussProcModelFactory):
+            gpmodel = model_factory.gpmodel
+            if isinstance(gpmodel, IndependentGPPerResourceModel):
+                ht_distribution = gpmodel.hypertune_distribution()
+                if ht_distribution is not None:
+                    distribution = ht_distribution
+        return distribution

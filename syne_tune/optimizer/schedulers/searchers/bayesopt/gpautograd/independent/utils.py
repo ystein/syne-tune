@@ -11,18 +11,15 @@
 # express or implied. See the License for the specific language governing
 # permissions and limitations under the License.
 import numpy as np
-from typing import Optional, Tuple, List
+from typing import Optional, Tuple
 from numpy.random import RandomState
 
-from syne_tune.optimizer.schedulers.searchers.bayesopt.datatypes.tuning_job_state import (
-    TuningJobState,
+from syne_tune.optimizer.schedulers.searchers.bayesopt.datatypes.hp_ranges_impl import (
+    decode_extended_features,
+    HyperparameterRangeInteger,
 )
-from syne_tune.optimizer.schedulers.searchers.bayesopt.datatypes.common import (
-    Configuration,
-    INTERNAL_METRIC_NAME,
-)
-from syne_tune.optimizer.schedulers.searchers.bayesopt.datatypes.hp_ranges import (
-    HyperparameterRanges,
+from syne_tune.optimizer.schedulers.searchers.bayesopt.datatypes.scaling import (
+    LinearScaling,
 )
 from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.posterior_state import (
     PosteriorStateWithSampleJoint,
@@ -32,11 +29,14 @@ from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.independent.po
     IndependentGPPerResourcePosteriorState,
 )
 
+__all__ = ["hypertune_ranking_losses", "extract_data_at_resource"]
+
 
 def hypertune_ranking_losses(
     poster_state: IndependentGPPerResourcePosteriorState,
-    data: TuningJobState,
+    data: dict,
     num_samples: int,
+    resource_attr_range: Tuple[int, int],
     num_brackets: Optional[int] = None,
     random_state: Optional[RandomState] = None,
 ) -> np.ndarray:
@@ -56,6 +56,7 @@ def hypertune_ranking_losses(
     :param poster_state: Posterior state (independent across levels)
     :param data: Training data (only data at highest level is used)
     :param num_samples: Number of independent loss samples
+    :param resource_attr_range: (r_min, r_max)
     :param num_brackets: See above
     :param random_state: PRNG state
     :return: See above
@@ -69,8 +70,10 @@ def hypertune_ranking_losses(
             2 <= num_brackets <= num_rungs
         ), f"num_brackets = {num_brackets}, must be in [2, {num_rungs}]"
     max_resource = rung_levels[-1]
-    data_max_resource = _extract_data_at_resource(data, max_resource)
-    assert len(data_max_resource) < 6, (
+    data_max_resource = extract_data_at_resource(
+        data=data, resource=max_resource, resource_attr_range=resource_attr_range
+    )
+    assert data_max_resource["features"].shape[0] < 6, (
         "Must have at least six observed datapoints at maximum resource "
         f"level {max_resource}"
     )
@@ -81,61 +84,51 @@ def hypertune_ranking_losses(
         loss_values[pos] = _losses_for_rung(
             resource=resource,
             poster_state=poster_state,
-            hp_ranges=data.hp_ranges,
             data_max_resource=data_max_resource,
             num_samples=num_samples,
+            resource_attr_range=resource_attr_range,
             random_state=random_state,
         )
     if num_brackets == num_rungs:
         # Loss values for maximum rung: Five-fold cross-validation
         loss_values[-1] = _losses_for_maximum_rung_by_cross_validation(
             poster_state=poster_state,
-            hp_ranges=data.hp_ranges,
             data_max_resource=data_max_resource,
             num_samples=num_samples,
+            resource_attr_range=resource_attr_range,
             random_state=random_state,
         )
     return loss_values
 
 
-def _extract_data_at_resource(
-    data: TuningJobState, resource: int
-) -> List[Tuple[Configuration, float]]:
-    result = []
-    targets = []
+def extract_data_at_resource(
+    data: dict, resource: int, resource_attr_range: Tuple[int, int]
+) -> dict:
+    features_ext = data["features"]
+    targets = data["targets"]
+    num_fantasies = targets.shape[1] if targets.ndim == 2 else 1
     resource = str(resource)
-    for trial_evaluation in data.trials_evaluations:
-        metric_vals = trial_evaluation.metrics.get(INTERNAL_METRIC_NAME)
-        if metric_vals is not None:
-            assert isinstance(metric_vals, dict)
-            metric_val = metric_vals.get(resource)
-            if metric_val is not None:
-                result.append(
-                    (data.config_for_trial[trial_evaluation.trial_id], metric_val)
-                )
-                targets.append(metric_val)
-    # Normalize target values
-    mn = np.mean(targets).item()
-    sd = max(np.std(targets).item(), 1e-9)
-    return [(config, (target - mn) / sd) for config, target in result]
-
-
-def _features_targets_from_data(
-    data: List[Tuple[Configuration, float]],
-    hp_ranges: HyperparameterRanges,
-) -> (np.ndarray, np.ndarray):
-    return (
-        hp_ranges.to_ndarray_matrix([x[0] for x in data]),
-        np.array([x[1] for x in data]),
+    features, resources = decode_extended_features(
+        features_ext=features_ext, resource_attr_range=resource_attr_range
     )
+    ind = resources == resource
+    features_max = features[ind]
+    targets_max = targets[ind].reshape((-1, num_fantasies))
+    if num_fantasies > 1:
+        # Remove pending evaluations at highest level (they are ignored). We
+        # detect observed cases by all target values being the same.
+        ind = np.array([x == np.full(num_fantasies, x[0]) for x in targets_max])
+        features_max = features_max[ind]
+        targets_max = targets_max[ind, 0]
+    return {"features": features_max, "targets": targets_max.reshape((-1,))}
 
 
 def _losses_for_maximum_rung_by_cross_validation(
     poster_state: IndependentGPPerResourcePosteriorState,
-    hp_ranges: HyperparameterRanges,
-    data_max_resource: List[Tuple[Configuration, float]],
+    data_max_resource: dict,
     num_samples: int,
-    random_state: Optional[RandomState] = None,
+    resource_attr_range: Tuple[int, int],
+    random_state: Optional[RandomState],
 ) -> np.ndarray:
     """
     Estimates loss samples at highest rung by K-fold cross-validation, where
@@ -148,7 +141,9 @@ def _losses_for_maximum_rung_by_cross_validation(
     rung_levels = poster_state.rung_levels
     max_resource = rung_levels[-1]
     poster_state_max_resource = poster_state.state(max_resource)
-    num_data = len(data_max_resource)
+    features = data_max_resource["features"]
+    targets = data_max_resource["targets"]
+    num_data = features.shape[0]
     # Make sure each fold has at least two datapoints
     num_folds = min(num_data // 2, 5)
     fold_sizes = np.full(num_folds, num_data // num_folds)
@@ -159,28 +154,29 @@ def _losses_for_maximum_rung_by_cross_validation(
     start = 0
     for fold_size in fold_sizes:
         end = start + fold_size
-        train_data = data_max_resource[:start] + data_max_resource[end:]
-        test_data = data_max_resource[start:end]
+        train_data = {
+            "features": np.vstack((features[:start], features[end:])),
+            "targets": np.concatenate((targets[:start], targets[end:])),
+        }
+        test_data = {
+            "features": features[start:end],
+            "targets": targets[start:end],
+        }
         start = end
         # Note: If there are pending evaluations at the highest level, they
         # are not taken into account here (no fantasizing).
-        features, targets = _features_targets_from_data(
-            data=train_data, hp_ranges=hp_ranges
-        )
         poster_state_fold = GaussProcPosteriorState(
-            features=features,
-            targets=targets,
+            **train_data,
             mean=poster_state_max_resource.mean,
             kernel=poster_state_max_resource.kernel,
             noise_variance=poster_state_max_resource.noise_variance,
-            debug_log=poster_state_max_resource.debug_log,
         )
         result += _losses_for_rung(
             resource=max_resource,
             poster_state=poster_state_fold,
-            hp_ranges=hp_ranges,
             data_max_resource=test_data,
             num_samples=num_samples,
+            resource_attr_range=resource_attr_range,
             random_state=random_state,
         )
     result *= 1 / num_folds
@@ -190,21 +186,29 @@ def _losses_for_maximum_rung_by_cross_validation(
 def _losses_for_rung(
     resource: int,
     poster_state: PosteriorStateWithSampleJoint,
-    hp_ranges: HyperparameterRanges,
-    data_max_resource: List[Tuple[Configuration, float]],
+    data_max_resource: dict,
     num_samples: int,
+    resource_attr_range: Tuple[int, int],
     random_state: Optional[RandomState] = None,
 ) -> np.ndarray:
     num_data = len(data_max_resource)
     result = np.zeros(num_samples)
+    hp_range = HyperparameterRangeInteger(
+        name="resource",
+        lower_bound=resource_attr_range[0],
+        upper_bound=resource_attr_range[1],
+        scaling=LinearScaling(),
+    )
+    resource_encoded = hp_range.to_ndarray(resource)
+    features = data_max_resource["features"]
+    targets = data_max_resource["targets"]
     for j, k in ((j, k) for j in range(num_data - 1) for k in range(j + 1, num_data)):
-        yj_sub_yk = data_max_resource[j][1] - data_max_resource[k][1]
+        yj_sub_yk = targets[j] - targets[k]
         fj_sub_fk = _sample_pair_function_values(
             poster_state=poster_state,
-            hp_ranges=hp_ranges,
-            config1=data_max_resource[j][0],
-            config2=data_max_resource[k][0],
-            resource=resource,
+            features1=features[j],
+            features2=features[k],
+            resource_encoded=resource_encoded,
             num_samples=num_samples,
             random_state=random_state,
         )
@@ -215,21 +219,19 @@ def _losses_for_rung(
 
 def _sample_pair_function_values(
     poster_state: PosteriorStateWithSampleJoint,
-    hp_ranges: HyperparameterRanges,
-    config1: Configuration,
-    config2: Configuration,
-    resource: int,
+    features1: np.ndarray,
+    features2: np.ndarray,
+    resource_encoded: np.ndarray,
     num_samples: int,
-    random_state: Optional[RandomState] = None,
+    random_state: Optional[RandomState],
 ) -> np.ndarray:
+    features1 = np.reshape(features1, (1, -1))
+    features2 = np.reshape(features2, (1, -1))
     if isinstance(poster_state, IndependentGPPerResourcePosteriorState):
-        resource_attr_name = hp_ranges.name_last_pos
-        extra_dct = {resource_attr_name: resource}
-    else:
-        extra_dct = dict()
-    features = hp_ranges.to_ndarray_matrix(
-        [dict(config1, **extra_dct), dict(config2, **extra_dct)]
-    )
+        resource_encoded = np.reshape(resource_encoded, (1, 1))
+        features1 = np.concatenate((features1, resource_encoded), axis=1)
+        features2 = np.concatenate((features2, resource_encoded), axis=1)
+    features = np.concatenate((features1, features2), axis=0)
     sample = poster_state.sample_joint(
         test_features=features, num_samples=num_samples, random_state=random_state
     )

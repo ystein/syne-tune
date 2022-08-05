@@ -37,12 +37,6 @@ class SearcherWithDistributionOverBrackets(BaseSearcher):
     def distribution_over_brackets(self) -> np.ndarray:
         raise NotImplementedError
 
-    def on_update(self, trial_id: str, config: dict, result: dict):
-        pass
-
-    def _update(self, trial_id: str, config: dict, result: dict):
-        self.on_update(trial_id, config, result)
-
 
 class DefaultHyperbandBracketSamplingSearcher(SearcherWithDistributionOverBrackets):
     """

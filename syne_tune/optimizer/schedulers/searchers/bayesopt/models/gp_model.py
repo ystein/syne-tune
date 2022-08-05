@@ -253,6 +253,10 @@ class GaussProcModelFactory(TransformerModelFactory):
     def profiler(self) -> Optional[SimpleProfiler]:
         return self._profiler
 
+    @property
+    def gpmodel(self) -> GPModel:
+        return self._gpmodel
+
     def model(self, state: TuningJobState, fit_params: bool) -> SurrogateModel:
         """
         Parameters of `self._gpmodel` are optimized iff `fit_params`. This
