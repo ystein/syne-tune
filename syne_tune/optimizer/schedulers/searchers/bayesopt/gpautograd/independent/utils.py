@@ -73,7 +73,7 @@ def hypertune_ranking_losses(
     data_max_resource = extract_data_at_resource(
         data=data, resource=max_resource, resource_attr_range=resource_attr_range
     )
-    assert data_max_resource["features"].shape[0] < 6, (
+    assert data_max_resource["features"].shape[0] >= 6, (
         "Must have at least six observed datapoints at maximum resource "
         f"level {max_resource}"
     )
@@ -107,7 +107,6 @@ def extract_data_at_resource(
     features_ext = data["features"]
     targets = data["targets"]
     num_fantasies = targets.shape[1] if targets.ndim == 2 else 1
-    resource = str(resource)
     features, resources = decode_extended_features(
         features_ext=features_ext, resource_attr_range=resource_attr_range
     )
@@ -189,53 +188,54 @@ def _losses_for_rung(
     data_max_resource: dict,
     num_samples: int,
     resource_attr_range: Tuple[int, int],
-    random_state: Optional[RandomState] = None,
-) -> np.ndarray:
-    num_data = len(data_max_resource)
-    result = np.zeros(num_samples)
-    hp_range = HyperparameterRangeInteger(
-        name="resource",
-        lower_bound=resource_attr_range[0],
-        upper_bound=resource_attr_range[1],
-        scaling=LinearScaling(),
-    )
-    resource_encoded = hp_range.to_ndarray(resource)
-    features = data_max_resource["features"]
-    targets = data_max_resource["targets"]
-    for j, k in ((j, k) for j in range(num_data - 1) for k in range(j + 1, num_data)):
-        yj_sub_yk = targets[j] - targets[k]
-        fj_sub_fk = _sample_pair_function_values(
-            poster_state=poster_state,
-            features1=features[j],
-            features2=features[k],
-            resource_encoded=resource_encoded,
-            num_samples=num_samples,
-            random_state=random_state,
-        )
-        assert fj_sub_fk.size == num_samples, fj_sub_fk.shape
-        result += yj_sub_yk * fj_sub_fk.reshape((-1,)) < 0
-    return result
-
-
-def _sample_pair_function_values(
-    poster_state: PosteriorStateWithSampleJoint,
-    features1: np.ndarray,
-    features2: np.ndarray,
-    resource_encoded: np.ndarray,
-    num_samples: int,
     random_state: Optional[RandomState],
 ) -> np.ndarray:
-    features1 = np.reshape(features1, (1, -1))
-    features2 = np.reshape(features2, (1, -1))
+    joint_sample = _draw_joint_sample(
+        resource=resource,
+        poster_state=poster_state,
+        data_max_resource=data_max_resource,
+        num_samples=num_samples,
+        resource_attr_range=resource_attr_range,
+        random_state=random_state,
+    )
+    targets = data_max_resource["targets"]
+    num_data = joint_sample.shape[0]
+    result = np.zeros(num_samples)
+    # TODO: Does this need a nested loop?
+    for j, k in ((j, k) for j in range(num_data - 1) for k in range(j + 1, num_data)):
+        yj_sub_yk = targets[j] - targets[k]
+        fj_sub_fk = joint_sample[j] - joint_sample[k]
+        result += yj_sub_yk * fj_sub_fk < 0
+    result *= 2 / (num_data * (num_data - 1))
+    if poster_state.num_fantasies > 1:
+        assert result.ndim == 2 and result.shape == (
+            poster_state.num_fantasies,
+            num_samples,
+        ), result.shape
+        result = np.mean(result, axis=0)
+    return result.reshape((-1,))
+
+
+def _draw_joint_sample(
+    resource: int,
+    poster_state: PosteriorStateWithSampleJoint,
+    data_max_resource: dict,
+    num_samples: int,
+    resource_attr_range: Tuple[int, int],
+    random_state: Optional[RandomState],
+) -> np.ndarray:
+    features = data_max_resource["features"]
     if isinstance(poster_state, IndependentGPPerResourcePosteriorState):
-        resource_encoded = np.reshape(resource_encoded, (1, 1))
-        features1 = np.concatenate((features1, resource_encoded), axis=1)
-        features2 = np.concatenate((features2, resource_encoded), axis=1)
-    features = np.concatenate((features1, features2), axis=0)
-    sample = poster_state.sample_joint(
+        hp_range = HyperparameterRangeInteger(
+            name="resource",
+            lower_bound=resource_attr_range[0],
+            upper_bound=resource_attr_range[1],
+            scaling=LinearScaling(),
+        )
+        resource_encoded = hp_range.to_ndarray(resource).item()
+        features = np.concatenate(
+            (features, np.full((features.shape[0], 1), resource_encoded)), axis=1
+        )
+    return poster_state.sample_joint(
         test_features=features, num_samples=num_samples, random_state=random_state
     )
-    result = sample[0] - sample[1]
-    if poster_state.num_fantasies > 1:
-        result = np.mean(result, axis=0)  # Average over fantasies
-    return result

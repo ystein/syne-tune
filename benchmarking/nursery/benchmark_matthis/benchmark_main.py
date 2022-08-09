@@ -59,6 +59,24 @@ def parse_args():
         default=0,
         help="verbose log output?",
     )
+    parser.add_argument(
+        "--num_brackets",
+        type=int,
+        default=1,
+        help="number of brackets for Hyperband scheduling",
+    )
+    parser.add_argument(
+        "--num_samples",
+        type=int,
+        default=20,
+        help="number of samples for bracket distribution (only for HYPERTUNE_*)",
+    )
+    parser.add_argument(
+        "--max_t",
+        type=int,
+        required=False,
+        help="overrides maximum resource value of benchmark",
+    )
     args, _ = parser.parse_known_args()
     if args.run_all_seed == 1:
         seeds = list(range(args.start_seed, args.num_seeds))
@@ -107,7 +125,9 @@ if __name__ == "__main__":
         )
 
         resource_attr = next(iter(backend.blackbox.fidelity_space.keys()))
-        max_resource_level = int(max(backend.blackbox.fidelity_values))
+        max_resource_level = getattr(
+            args, "max_t", int(max(backend.blackbox.fidelity_values))
+        )
         config_space = dict(
             backend.blackbox.configuration_space,
             **{max_resource_attr: max_resource_level},
@@ -122,6 +142,8 @@ if __name__ == "__main__":
                 max_resource_attr=max_resource_attr,
                 resource_attr=resource_attr,
                 verbose=args.verbose,
+                num_brackets=args.num_brackets,
+                num_samples=args.num_samples,
             )
         )
 
@@ -144,6 +166,8 @@ if __name__ == "__main__":
                 "algorithm": method,
                 "tag": experiment_tag,
                 "benchmark": benchmark_name,
+                "num_brackets": args.num_brackets,
+                "num_samples": args.num_samples,
             },
         )
         tuner.run()

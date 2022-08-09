@@ -180,6 +180,7 @@ class GPMultiFidelitySearcher(GPFIFOSearcher, DefaultHyperbandBracketSamplingSea
 
     def __init__(self, config_space, **kwargs):
         super().__init__(config_space, **kwargs)
+        self._previous_distribution = None
 
     def _create_kwargs_int(self, kwargs):
         _kwargs = check_and_merge_defaults(
@@ -345,4 +346,10 @@ class GPMultiFidelitySearcher(GPFIFOSearcher, DefaultHyperbandBracketSamplingSea
                 ht_distribution = gpmodel.hypertune_distribution()
                 if ht_distribution is not None:
                     distribution = ht_distribution
+                    if self.debug_log is not None and (
+                        self._previous_distribution is None
+                        or np.any(distribution != self._previous_distribution)
+                    ):
+                        logger.info(f"New distribution over brackets: {distribution}")
+                        self._previous_distribution = distribution
         return distribution

@@ -43,6 +43,7 @@ from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.kernel import 
     KernelFunction,
 )
 from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.mean import (
+    MeanFunction,
     ScalarMeanFunction,
 )
 from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.learncurve.freeze_thaw import (
@@ -56,6 +57,7 @@ from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.learncurve.gpi
 )
 from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.independent.gpind_model import (
     IndependentGPPerResourceModel,
+    HyperTuneDistributionArguments,
 )
 from syne_tune.optimizer.schedulers.searchers.bayesopt.models.model_skipopt import (
     SkipNoMaxResourcePredicate,
@@ -216,10 +218,20 @@ def _create_gp_independent_model(
     random_seed: int,
     **kwargs,
 ):
+    def mean_factory(resource: int) -> MeanFunction:
+        return ScalarMeanFunction()
+
     result = _create_gp_common(hp_ranges, has_covariance_scale=False, **kwargs)
     kernel = result["kernel"]
     resource_attr_range = (1, kwargs["max_epochs"])
-    mean_factory = lambda resource: ScalarMeanFunction()
+    num_samples = kwargs.get("hypertune_distribution_num_samples")
+    if num_samples is not None:
+        hypertune_distribution_args = HyperTuneDistributionArguments(
+            num_samples=num_samples,
+            num_brackets=kwargs["hypertune_distribution_num_brackets"],
+        )
+    else:
+        hypertune_distribution_args = None
     gpmodel = IndependentGPPerResourceModel(
         kernel=kernel,
         mean_factory=mean_factory,
@@ -227,6 +239,7 @@ def _create_gp_independent_model(
         optimization_config=result["optimization_config"],
         random_seed=random_seed,
         fit_reset_params=not result["opt_warmstart"],
+        hypertune_distribution_args=hypertune_distribution_args,
     )
     filter_observed_data = result["filter_observed_data"]
     model_factory = GaussProcEmpiricalBayesModelFactory(
@@ -729,7 +742,6 @@ def _common_defaults(
         default_options["num_init_random"] = 6
         default_options["issm_gamma_one"] = False
         default_options["expdecay_normalize_inputs"] = False
-        default_options["use_new_code"] = True
     if is_multi_output:
         default_options["initial_scoring"] = "acq_func"
         default_options["exponent_cost"] = 1.0
@@ -766,7 +778,6 @@ def _common_defaults(
         )
         constraints["issm_gamma_one"] = Boolean()
         constraints["expdecay_normalize_inputs"] = Boolean()
-        constraints["use_new_code"] = Boolean()  # DEBUG
     if is_multi_output:
         constraints["initial_scoring"] = Categorical(choices=tuple({"acq_func"}))
         constraints["exponent_cost"] = Float(0.0, 1.0)

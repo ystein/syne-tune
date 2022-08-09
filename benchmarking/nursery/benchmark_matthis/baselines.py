@@ -21,16 +21,19 @@ class MethodArguments:
     resource_attr: str
     num_brackets: Optional[int] = None
     verbose: Optional[bool] = False
+    num_samples: int = 20
 
 
 class Methods:
     ASHA = "ASHA"
     MOBSTER_JOINT = "MOBSTER-JOINT"
     MOBSTER_INDEP = "MOBSTER-INDEP"
+    HYPERTUNE_INDEP = "HYPERTUNE-INDEP"
     SYNCHB = "SYNCHB"
     BOHB = "BOHB"
     MOBSTER_JOINT_ORD = "MOBSTER-JOINT-ORD"
     MOBSTER_INDEP_ORD = "MOBSTER-INDEP-ORD"
+    HYPERTUNE_INDEP_ORD = "HYPERTUNE-INDEP-ORD"
     BOHB_ORD = "BOHB-ORD"
 
 
@@ -61,6 +64,7 @@ methods = {
         max_resource_attr=method_arguments.max_resource_attr,
         resource_attr=method_arguments.resource_attr,
         random_seed=method_arguments.random_seed,
+        brackets=method_arguments.num_brackets,
     ),
     Methods.MOBSTER_JOINT: lambda method_arguments: HyperbandScheduler(
         config_space=method_arguments.config_space,
@@ -72,6 +76,7 @@ methods = {
         max_resource_attr=method_arguments.max_resource_attr,
         resource_attr=method_arguments.resource_attr,
         random_seed=method_arguments.random_seed,
+        brackets=method_arguments.num_brackets,
     ),
     Methods.MOBSTER_INDEP: lambda method_arguments: HyperbandScheduler(
         config_space=method_arguments.config_space,
@@ -86,6 +91,23 @@ methods = {
         max_resource_attr=method_arguments.max_resource_attr,
         resource_attr=method_arguments.resource_attr,
         random_seed=method_arguments.random_seed,
+        brackets=method_arguments.num_brackets,
+    ),
+    Methods.HYPERTUNE_INDEP: lambda method_arguments: HyperbandScheduler(
+        config_space=method_arguments.config_space,
+        searcher="bayesopt",
+        type="promotion",
+        search_options=dict(
+            _search_options(method_arguments),
+            model="gp_independent",
+            hypertune_distribution_num_samples=method_arguments.num_samples,
+        ),
+        mode=method_arguments.mode,
+        metric=method_arguments.metric,
+        max_resource_attr=method_arguments.max_resource_attr,
+        resource_attr=method_arguments.resource_attr,
+        random_seed=method_arguments.random_seed,
+        brackets=method_arguments.num_brackets,
     ),
     Methods.SYNCHB: lambda method_arguments: SynchronousGeometricHyperbandScheduler(
         config_space=method_arguments.config_space,
@@ -119,6 +141,7 @@ methods = {
         max_resource_attr=method_arguments.max_resource_attr,
         resource_attr=method_arguments.resource_attr,
         random_seed=method_arguments.random_seed,
+        brackets=method_arguments.num_brackets,
     ),
     Methods.MOBSTER_INDEP_ORD: lambda method_arguments: HyperbandScheduler(
         config_space=_convert_categorical_to_ordinal(method_arguments),
@@ -133,6 +156,23 @@ methods = {
         max_resource_attr=method_arguments.max_resource_attr,
         resource_attr=method_arguments.resource_attr,
         random_seed=method_arguments.random_seed,
+        brackets=method_arguments.num_brackets,
+    ),
+    Methods.HYPERTUNE_INDEP_ORD: lambda method_arguments: HyperbandScheduler(
+        config_space=_convert_categorical_to_ordinal(method_arguments),
+        searcher="bayesopt",
+        type="promotion",
+        search_options=dict(
+            _search_options(method_arguments),
+            model="gp_independent",
+            hypertune_distribution_num_samples=method_arguments.num_samples,
+        ),
+        mode=method_arguments.mode,
+        metric=method_arguments.metric,
+        max_resource_attr=method_arguments.max_resource_attr,
+        resource_attr=method_arguments.resource_attr,
+        random_seed=method_arguments.random_seed,
+        brackets=method_arguments.num_brackets,
     ),
     Methods.BOHB_ORD: lambda method_arguments: SynchronousGeometricHyperbandScheduler(
         config_space=_convert_categorical_to_ordinal(method_arguments),

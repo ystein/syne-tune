@@ -1,6 +1,5 @@
 from pathlib import Path
 from tqdm import tqdm
-import itertools
 
 from sagemaker.pytorch import PyTorch
 
@@ -14,8 +13,7 @@ from syne_tune.util import s3_experiment_path, random_string
 
 
 def _is_expensive_method(method: str) -> bool:
-    # return method.startswith("MOBSTER-JOINT")
-    return method.startswith("MOBSTER")
+    return method.startswith("MOBSTER") or method.startswith("HYPERTUNE")
 
 
 if __name__ == "__main__":
@@ -54,6 +52,8 @@ if __name__ == "__main__":
         hyperparameters = {
             "experiment_tag": experiment_tag,
             "method": method,
+            "num_brackets": args.num_brackets,
+            "num_samples": args.num_samples,
         }
         if seed is not None:
             hyperparameters["num_seeds"] = seed
@@ -63,6 +63,9 @@ if __name__ == "__main__":
             hyperparameters["start_seed"] = args.start_seed
         if benchmark_name is not None:
             hyperparameters["benchmark"] = benchmark_name
+        max_t = getattr(args, "max_t")
+        if max_t is not None:
+            hyperparameters["max_t"] = max_t
         sm_args["hyperparameters"] = hyperparameters
         print(
             f"{experiment_tag}-{method}\n"
