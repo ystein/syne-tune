@@ -11,7 +11,7 @@
 # express or implied. See the License for the specific language governing
 # permissions and limitations under the License.
 import numpy as np
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
 from numpy.random import RandomState
 
 from syne_tune.optimizer.schedulers.searchers.bayesopt.datatypes.hp_ranges_impl import (
@@ -29,7 +29,10 @@ from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.independent.po
     IndependentGPPerResourcePosteriorState,
 )
 
-__all__ = ["hypertune_ranking_losses", "extract_data_at_resource"]
+__all__ = [
+    "hypertune_ranking_losses",
+    "number_supported_brackets_and_data_highest_level",
+]
 
 
 def hypertune_ranking_losses(
@@ -42,16 +45,20 @@ def hypertune_ranking_losses(
 ) -> np.ndarray:
     """
     Samples ranking loss values as defined in the Hyper-Tune paper. We return a
-    matrix of size `(num_brackets, num_samples)`. If `num_brackets` is not given,
-    it is set to the number of rungs `num_rungs = poster_state.rung_levels`.
-    The loss values depend on the cases in `data` at the highest level
-    `poster_state.rung_levels[-1]`, there must be at least 6 of those.
+    matrix of size `(num_supp_brackets, num_samples)`, where
+    `num_supp_brackets <= num_brackets` is the number of brackets supported by
+    at least 6 labeled datapoints. If `num_brackets` is not given, it is set to
+    the number of rungs `num_rungs = poster_state.rung_levels`.
 
-    If `num_brackets == num_rungs`, loss values at the highest level are
-    estimated by cross-validation (so the data at the highest level is split
-    into training and test, where the training part is used to obtain the
-    posterior state). The number of CV folds is `<= 5`, and such that each fold
-    has at least two points.
+    The loss values depend on the cases in `data` at the level
+    `poster_state.rung_levels[num_supp_brackets - 1]`. We must have
+    `num_supp_brackets >= 2`.
+
+    Loss values at this highest supported level are estimated by
+    cross-validation (so the data at this level is split into training and
+    test, where the training part is used to obtain the posterior state). The
+    number of CV folds is `<= 5`, and such that each fold has at least two
+    points.
 
     :param poster_state: Posterior state (independent across levels)
     :param data: Training data (only data at highest level is used)
@@ -62,25 +69,22 @@ def hypertune_ranking_losses(
     :return: See above
     """
     rung_levels = poster_state.rung_levels
-    num_rungs = len(rung_levels)
-    if num_brackets is None:
-        num_brackets = num_rungs
-    else:
-        assert (
-            2 <= num_brackets <= num_rungs
-        ), f"num_brackets = {num_brackets}, must be in [2, {num_rungs}]"
-    max_resource = rung_levels[-1]
-    data_max_resource = extract_data_at_resource(
-        data=data, resource=max_resource, resource_attr_range=resource_attr_range
+    (
+        num_supp_brackets,
+        data_max_resource,
+    ) = number_supported_brackets_and_data_highest_level(
+        rung_levels=rung_levels,
+        data=data,
+        resource_attr_range=resource_attr_range,
+        num_brackets=num_brackets,
     )
-    assert data_max_resource["features"].shape[0] >= 6, (
-        "Must have at least six observed datapoints at maximum resource "
-        f"level {max_resource}"
-    )
-    loss_values = np.zeros((num_brackets, num_samples))
+    assert (
+        num_supp_brackets > 1
+    ), "Need to have at least 6 labeled datapoints at 2nd lowest rung level"
+    max_resource = rung_levels[num_supp_brackets - 1]
+    loss_values = np.zeros((num_supp_brackets, num_samples))
     # All loss values except for maximum rung (which is special)
-    end = min(num_brackets, num_rungs - 1)
-    for pos, resource in enumerate(rung_levels[:end]):
+    for pos, resource in enumerate(rung_levels[: (num_supp_brackets - 1)]):
         loss_values[pos] = _losses_for_rung(
             resource=resource,
             poster_state=poster_state,
@@ -89,19 +93,63 @@ def hypertune_ranking_losses(
             resource_attr_range=resource_attr_range,
             random_state=random_state,
         )
-    if num_brackets == num_rungs:
-        # Loss values for maximum rung: Five-fold cross-validation
-        loss_values[-1] = _losses_for_maximum_rung_by_cross_validation(
-            poster_state=poster_state,
-            data_max_resource=data_max_resource,
-            num_samples=num_samples,
-            resource_attr_range=resource_attr_range,
-            random_state=random_state,
-        )
+    # Loss values for maximum rung: Five-fold cross-validation
+    loss_values[-1] = _losses_for_maximum_rung_by_cross_validation(
+        max_resource=max_resource,
+        poster_state=poster_state,
+        data_max_resource=data_max_resource,
+        num_samples=num_samples,
+        resource_attr_range=resource_attr_range,
+        random_state=random_state,
+    )
     return loss_values
 
 
-def extract_data_at_resource(
+def number_supported_brackets_and_data_highest_level(
+    rung_levels: List[int],
+    data: dict,
+    resource_attr_range: Tuple[int, int],
+    num_brackets: Optional[int] = None,
+) -> Tuple[int, dict]:
+    """
+    Finds `num_supp_brackets <= num_brackets` maximum such that
+    brackets up to there have >= 6 labeled datapoints. The set
+    of labeled datapoints of bracket `num_supp_brackets - 1` is
+    returned as well.
+
+    If 'num_supp_brackets == 1`, no bracket except for the lowest
+    has >= 6 datapoints. In this case, `data_max_resource` returned
+    is invalid.
+
+    :param rung_levels: Rung levels
+    :param data: Training data (only data at highest level is used)
+    :param resource_attr_range: `(r_min, r_max)`
+    :param num_brackets: See above
+    :return: `(num_supp_brackets, data_max_resource)`
+    """
+    num_rungs = len(rung_levels)
+    if num_brackets is None:
+        num_brackets = num_rungs
+    else:
+        assert (
+            2 <= num_brackets <= num_rungs
+        ), f"num_brackets = {num_brackets}, must be in [2, {num_rungs}]"
+    num_supp_brackets = num_brackets
+    data_max_resource = None
+    while num_supp_brackets > 1:
+        max_resource = rung_levels[num_supp_brackets - 1]
+        data_max_resource = _extract_data_at_resource(
+            data=data, resource=max_resource, resource_attr_range=resource_attr_range
+        )
+        if data_max_resource["features"].shape[0] >= 6:
+            break
+        num_supp_brackets -= 1
+    if num_supp_brackets == 1:
+        data_max_resource = None
+    return num_supp_brackets, data_max_resource
+
+
+def _extract_data_at_resource(
     data: dict, resource: int, resource_attr_range: Tuple[int, int]
 ) -> dict:
     features_ext = data["features"]
@@ -123,6 +171,7 @@ def extract_data_at_resource(
 
 
 def _losses_for_maximum_rung_by_cross_validation(
+    max_resource: int,
     poster_state: IndependentGPPerResourcePosteriorState,
     data_max_resource: dict,
     num_samples: int,
@@ -137,16 +186,15 @@ def _losses_for_maximum_rung_by_cross_validation(
     For simplicity, we ignore pending evaluations here. They would affect the
     result only if they are at the highest level.
     """
-    rung_levels = poster_state.rung_levels
-    max_resource = rung_levels[-1]
     poster_state_max_resource = poster_state.state(max_resource)
     features = data_max_resource["features"]
     targets = data_max_resource["targets"]
     num_data = features.shape[0]
     # Make sure each fold has at least two datapoints
     num_folds = min(num_data // 2, 5)
-    fold_sizes = np.full(num_folds, num_data // num_folds)
-    incr_ind = num_folds - num_data + (num_data // num_folds) * num_folds
+    low_val = num_data // num_folds
+    fold_sizes = np.full(num_folds, low_val)
+    incr_ind = num_folds - num_data + low_val * num_folds
     fold_sizes[incr_ind:] += 1
     # Loop over folds
     result = np.zeros(num_samples)
@@ -200,12 +248,11 @@ def _losses_for_rung(
     )
     targets = data_max_resource["targets"]
     num_data = joint_sample.shape[0]
-    result = np.zeros(num_samples)
-    # TODO: Does this need a nested loop?
+    result = np.zeros(joint_sample.shape[1:])
     for j, k in ((j, k) for j in range(num_data - 1) for k in range(j + 1, num_data)):
-        yj_sub_yk = targets[j] - targets[k]
-        fj_sub_fk = joint_sample[j] - joint_sample[k]
-        result += yj_sub_yk * fj_sub_fk < 0
+        yj_lt_yk = targets[j] < targets[k]
+        fj_lt_fk = joint_sample[j] < joint_sample[k]
+        result += np.logical_xor(fj_lt_fk, yj_lt_yk)
     result *= 2 / (num_data * (num_data - 1))
     if poster_state.num_fantasies > 1:
         assert result.ndim == 2 and result.shape == (

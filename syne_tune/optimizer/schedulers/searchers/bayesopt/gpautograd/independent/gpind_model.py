@@ -39,7 +39,7 @@ from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.independent.po
 from syne_tune.optimizer.schedulers.utils.simple_profiler import SimpleProfiler
 from syne_tune.optimizer.schedulers.searchers.bayesopt.gpautograd.independent.utils import (
     hypertune_ranking_losses,
-    extract_data_at_resource,
+    number_supported_brackets_and_data_highest_level,
 )
 
 logger = logging.getLogger(__name__)
@@ -64,6 +64,23 @@ class IndependentGPPerResourceModel(GaussianProcessOptimizeModel):
     The likelihood object is not created at construction, but only with
     `create_likelihood`. This is because we need to know the rung levels of
     the Hyperband scheduler.
+
+    If `hypertune_distribution_args` is given, we also estimate the distribution
+    [w_k] over brackets from the Hyper-Tune paper in `fit`. See
+
+        Yang Li et al
+        Hyper-Tune: Towards Efficient Hyper-parameter Tuning at Scale
+        VLDB 2022
+
+    Our implementation differs from the Hyper-Tune paper in a number of ways.
+    Most importantly, their method requires a sufficient number of observed
+    points at the starting rung of the highest bracket. In contrast, we
+    estimate ranking loss values already when the starting rung of the 2nd
+    bracket is sufficiently occupied. This allows us to estimate the head
+    of the distribution only (over all brackets with sufficiently occupied
+    starting rungs), and we use the default distribution over the remaining
+    tail. Eventually, we do the same as Hyper-Tune, but we move away from the
+    default distribution earlier on.
 
     :param kernel: Kernel function without covariance scale, shared by models
         for all resources r
@@ -105,7 +122,9 @@ class IndependentGPPerResourceModel(GaussianProcessOptimizeModel):
         self._initial_covariance_scale = initial_covariance_scale
         self.hypertune_distribution_args = hypertune_distribution_args
         self._distribution = None
-        self._hypertune_distribution_datasize = None
+        # Tuple (num_supp_brackets, data_size) for current distribution. If
+        # this signature is different in `fit`, the distribution is recomputed
+        self._hypertune_distribution_signature = None
         self._likelihood = None  # Delayed creation
 
     def create_likelihood(self, rung_levels: List[int]):
@@ -135,36 +154,50 @@ class IndependentGPPerResourceModel(GaussianProcessOptimizeModel):
         ), "Call create_likelihood (passing rung levels) in order to complete creation"
         return self._likelihood
 
-    def hypertune_distribution(self) -> np.ndarray:
+    def hypertune_distribution(self) -> Optional[np.ndarray]:
+        """
+        Distribution of support size `num_supp_brackets`, where
+        `num_supp_brackets <= args.num_brackets` (the latter is maximum if
+        not given) is maximum such that the first `num_supp_brackets`
+        brackets have >= 6 labeled datapoints each.
+
+        If `num_supp_brackets < args.num_brackets`, the distribution must be
+        extended to full size before being used to sample the next bracket.
+        """
         return self._distribution
 
     def fit(self, data: dict, profiler: SimpleProfiler = None):
         super().fit(data, profiler)
-        if self.hypertune_distribution_args is not None:
-            max_resource = max(self._likelihood.mean.keys())
-            data_max_resource = extract_data_at_resource(
+        args = self.hypertune_distribution_args
+        if args is not None:
+            poster_state: IndependentGPPerResourcePosteriorState = self.states[0]
+            (
+                num_supp_brackets,
+                data_resource,
+            ) = number_supported_brackets_and_data_highest_level(
+                rung_levels=poster_state.rung_levels,
                 data=data,
-                resource=max_resource,
                 resource_attr_range=self._resource_attr_range,
+                num_brackets=args.num_brackets,
             )
-            num_data = data_max_resource["features"].shape[0]
-            prev_num_data = self._hypertune_distribution_datasize
-            if num_data >= 6 and (prev_num_data is None or num_data > prev_num_data):
-                # Data at highest level has changed
-                self._hypertune_distribution_datasize = num_data
-                args = self.hypertune_distribution_args
-                poster_state: IndependentGPPerResourcePosteriorState = self.states[0]
-                ranking_losses = hypertune_ranking_losses(
-                    poster_state=poster_state,
-                    data=data,
-                    num_samples=args.num_samples,
-                    resource_attr_range=self._resource_attr_range,
-                    num_brackets=args.num_brackets,
-                    random_state=self.random_state,
-                )
-                min_losses = np.min(ranking_losses, axis=0)
-                theta = np.sum(ranking_losses == min_losses, axis=1).reshape((-1,))
-                self._distribution = theta * np.array(
-                    [1 / r for r in poster_state.rung_levels[: theta.size]]
-                )
-                self._distribution /= np.sum(self._distribution)
+            if num_supp_brackets > 1:
+                num_data = data_resource["features"].shape[0]
+                curr_sig = self._hypertune_distribution_signature
+                new_sig = (num_supp_brackets, num_data)
+                if curr_sig is None or new_sig != curr_sig:
+                    # Data at highest level has changed
+                    self._hypertune_distribution_signature = new_sig
+                    ranking_losses = hypertune_ranking_losses(
+                        poster_state=poster_state,
+                        data=data,
+                        num_samples=args.num_samples,
+                        resource_attr_range=self._resource_attr_range,
+                        num_brackets=args.num_brackets,
+                        random_state=self.random_state,
+                    )
+                    min_losses = np.min(ranking_losses, axis=0, keepdims=True)
+                    theta = np.sum(ranking_losses == min_losses, axis=1).reshape((-1,))
+                    self._distribution = theta * np.array(
+                        [1 / r for r in poster_state.rung_levels[: theta.size]]
+                    )
+                    self._distribution /= np.sum(self._distribution)

@@ -68,7 +68,7 @@ def parse_args():
     parser.add_argument(
         "--num_samples",
         type=int,
-        default=20,
+        default=50,
         help="number of samples for bracket distribution (only for HYPERTUNE_*)",
     )
     parser.add_argument(
@@ -125,9 +125,9 @@ if __name__ == "__main__":
         )
 
         resource_attr = next(iter(backend.blackbox.fidelity_space.keys()))
-        max_resource_level = getattr(
-            args, "max_t", int(max(backend.blackbox.fidelity_values))
-        )
+        max_resource_level = getattr(args, "max_t")
+        if max_resource_level is None:
+            max_resource_level = int(max(backend.blackbox.fidelity_values))
         config_space = dict(
             backend.blackbox.configuration_space,
             **{max_resource_attr: max_resource_level},

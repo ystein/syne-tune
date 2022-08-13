@@ -21,7 +21,7 @@ class MethodArguments:
     resource_attr: str
     num_brackets: Optional[int] = None
     verbose: Optional[bool] = False
-    num_samples: int = 20
+    num_samples: int = 50
 
 
 class Methods:

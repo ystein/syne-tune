@@ -93,7 +93,3 @@ class RandomWithDefaultBracketSamplingSearcher(
     def configure_scheduler(self, scheduler):
         DefaultHyperbandBracketSamplingSearcher.configure_scheduler(self, scheduler)
         RandomSearcher.configure_scheduler(self, scheduler)
-
-    def _update(self, trial_id: str, config: dict, result: dict):
-        DefaultHyperbandBracketSamplingSearcher._update(self, trial_id, config, result)
-        RandomSearcher._update(self, trial_id, config, result)

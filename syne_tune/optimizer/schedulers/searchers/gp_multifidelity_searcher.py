@@ -345,11 +345,23 @@ class GPMultiFidelitySearcher(GPFIFOSearcher, DefaultHyperbandBracketSamplingSea
             if isinstance(gpmodel, IndependentGPPerResourceModel):
                 ht_distribution = gpmodel.hypertune_distribution()
                 if ht_distribution is not None:
-                    distribution = ht_distribution
+                    # The Hyper-Tune distribution may not be over all brackets.
+                    # In that case, we keep the tail of the default distribution
+                    ht_size = ht_distribution.size
+                    if ht_size == distribution.size:
+                        distribution = ht_distribution.copy()
+                    else:
+                        assert ht_size < distribution.size, (ht_size, distribution.size)
+                        distribution = distribution.copy()
+                        mass_old_head = np.sum(distribution[:ht_size])
+                        distribution[:ht_size] = ht_distribution * mass_old_head
                     if self.debug_log is not None and (
                         self._previous_distribution is None
                         or np.any(distribution != self._previous_distribution)
                     ):
-                        logger.info(f"New distribution over brackets: {distribution}")
+                        logger.info(
+                            "New distribution over brackets (ht_size = "
+                            f"{ht_size}):\n{distribution}"
+                        )
                         self._previous_distribution = distribution
         return distribution
