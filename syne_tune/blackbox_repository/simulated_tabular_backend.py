@@ -153,6 +153,14 @@ class _BlackboxSimulatorBackend(SimulatorBackend):
 
         # Fetch all results for this trial from the table
         all_results = self.config_objectives(config, seed=seed)
+        # DEBUG!
+        parts = [f"Trial {trial_id}: Fetching results:"]
+        for result in all_results:
+            parts.append(
+                f"  r={result[self.resource_attr]}, elapsed_time = {result[self.elapsed_time_attr]:.3f}"
+            )
+        logger.info("\n".join(parts))
+        # END DEBUG
 
         status = Status.completed
         resource_paused = self._resource_paused_for_trial.get(trial_id)

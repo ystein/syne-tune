@@ -69,7 +69,8 @@ methods = {
     Methods.ASHA: lambda method_arguments: HyperbandScheduler(
         config_space=method_arguments.config_space,
         searcher="random",
-        search_options={"debug_log": False},
+        type="promotion",
+        search_options={"debug_log": True},
         mode=method_arguments.mode,
         metric=method_arguments.metric,
         max_t=method_arguments.max_t,
