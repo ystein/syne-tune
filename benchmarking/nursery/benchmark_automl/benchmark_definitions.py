@@ -13,8 +13,6 @@
 from dataclasses import dataclass
 from typing import Optional, List, Callable
 
-from syne_tune.config_space import ordinal, Ordinal
-
 
 @dataclass
 class BenchmarkDefinition:
@@ -52,33 +50,7 @@ def fcnet_benchmark(dataset_name):
     )
 
 
-def _modify_ordering_categories(new_categories: Optional[list]):
-    def modify_config_space(config_space: dict) -> dict:
-        new_config_space = dict()
-        new_set = set(new_categories)
-        for name, domain in config_space.items():
-            if isinstance(domain, Ordinal):
-                assert (
-                    set(domain.categories) == new_set
-                ), f"{name}: categories = {set(domain.categories)} != {new_set}"
-                domain = ordinal(new_categories)
-            new_config_space[name] = domain
-        return new_config_space
-
-    if new_categories is not None:
-        return modify_config_space
-    else:
-        return None
-
-
-def nas201_benchmark(dataset_name, new_categories: Optional[list] = None):
-    """
-    :param dataset_name: Name of dataset for NASBench-201
-    :param new_categories: If given, the original config space is modified
-        by changing each `ordinal` domain to have this list of values. Must
-        be a permutation of the original one:
-        ["avg_pool_3x3", "nor_conv_3x3", "skip_connect", "nor_conv_1x1", "none"]
-    """
+def nas201_benchmark(dataset_name):
     return BenchmarkDefinition(
         max_wallclock_time=6 * 3600,
         n_workers=4,
@@ -88,7 +60,6 @@ def nas201_benchmark(dataset_name, new_categories: Optional[list] = None):
         blackbox_name="nasbench201",
         dataset_name=dataset_name,
         max_resource_attr="epochs",
-        modify_config_space=_modify_ordering_categories(new_categories),
     )
 
 
