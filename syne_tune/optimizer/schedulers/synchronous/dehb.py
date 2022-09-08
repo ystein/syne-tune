@@ -161,7 +161,9 @@ class DifferentialEvolutionHyperbandScheduler(ResourceLevelsScheduler):
         If searcher == "random_encoded", the encoded configs are
         sampled directly, each entry independent from U([0, 1]).
         This distribution has higher entropy than for "random" if
-        there are discrete hyperparameters in `config_space`.
+        there are discrete hyperparameters in `config_space`. It works
+        better than "random" and is the default, as also recommended
+        in the DEHB publication
     search_options : dict
         Passed to `searcher_factory`
     metric : str

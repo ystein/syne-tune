@@ -190,14 +190,16 @@ def main(methods: dict, benchmark_definitions: dict):
 
         resource_attr = next(iter(backend.blackbox.fidelity_space.keys()))
         max_resource_level = int(max(backend.blackbox.fidelity_values))
+        config_space = backend.blackbox.configuration_space
+        if benchmark.modify_config_space is not None:
+            config_space = benchmark.modify_config_space(config_space)
         if max_resource_attr is not None:
             config_space = dict(
-                backend.blackbox.configuration_space,
+                config_space,
                 **{max_resource_attr: max_resource_level},
             )
             method_kwargs = {"max_resource_attr": max_resource_attr}
         else:
-            config_space = backend.blackbox.configuration_space
             method_kwargs = {"max_t": max_resource_level}
 
         scheduler = methods[method](
