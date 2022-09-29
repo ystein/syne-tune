@@ -22,10 +22,7 @@ from syne_tune.optimizer.baselines import (
     BayesianOptimization,
     RandomSearch,
 )
-from syne_tune import (
-    Tuner,
-    StoppingCriterion,
-)
+from syne_tune import Tuner, StoppingCriterion
 
 
 # Different GLUE tasks and their metric names
@@ -58,7 +55,6 @@ PRETRAINED_MODELS = [
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--run_id", type=int, default=0)
     parser.add_argument(
         "--dataset", type=str, default="rte", choices=list(TASK2METRICSMODE.keys())
     )

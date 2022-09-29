@@ -12,16 +12,16 @@
 # permissions and limitations under the License.
 
 import logging
+from argparse import ArgumentParser
 
 from gluonts.evaluation import make_evaluation_predictions, Evaluator
-
-from syne_tune import Reporter
-from argparse import ArgumentParser
 from gluonts.model.simple_feedforward import SimpleFeedForwardEstimator
 from gluonts.mx.trainer import Trainer
 from gluonts.mx.trainer.callback import Callback
 from gluonts.core.component import validated
 from gluonts.dataset.repository.datasets import get_dataset
+
+from syne_tune import Reporter
 
 
 class GluontsTuneReporter(Callback):
@@ -33,8 +33,9 @@ class GluontsTuneReporter(Callback):
         self.num_samples = 10
 
     def set_estimator(self, estimator):
-        # since the callback does not provide all information to compute forecasting metrics, we set the estimator
-        # in order to have the transformation.
+        # since the callback does not provide all information to compute
+        # forecasting metrics, we set the estimator in order to have the
+        # transformation.
         self.estimator = estimator
 
     def compute_metrics(self, predictor, dataset):
@@ -72,12 +73,11 @@ if __name__ == "__main__":
     root.setLevel(logging.INFO)
 
     parser = ArgumentParser()
-    parser.add_argument("--lr", type=float, default=0.001)
-    parser.add_argument("--num_cells", type=int, default=40)
-    parser.add_argument("--num_layers", type=int, default=2)
-    parser.add_argument("--epochs", type=int, default=1)
-    parser.add_argument("--dataset", type=str, default="m4_hourly")
-
+    parser.add_argument(f"--lr", type=float, default=0.001)
+    parser.add_argument(f"--num_cells", type=int, default=40)
+    parser.add_argument(f"--num_layers", type=int, default=2)
+    parser.add_argument(f"--epochs", type=int, default=1)
+    parser.add_argument(f"--dataset", type=str, default="m4_hourly")
     args, _ = parser.parse_known_args()
 
     dataset = get_dataset(args.dataset, regenerate=False)
@@ -100,7 +100,8 @@ if __name__ == "__main__":
         freq=freq,
         trainer=trainer,
     )
-    # required to pass additional context so that the callback can compute forecasting metrics
+    # required to pass additional context so that the callback can compute
+    # forecasting metrics
     reporter.set_estimator(estimator)
 
     predictor = estimator.train(
