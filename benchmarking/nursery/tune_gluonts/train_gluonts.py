@@ -10,9 +10,10 @@
 # on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
 # express or implied. See the License for the specific language governing
 # permissions and limitations under the License.
-
+import os
 import logging
 from argparse import ArgumentParser
+from pathlib import Path
 
 from gluonts.evaluation import make_evaluation_predictions, Evaluator
 from gluonts.model.simple_feedforward import SimpleFeedForwardEstimator
@@ -69,6 +70,8 @@ class GluontsTuneReporter(Callback):
 
 
 if __name__ == "__main__":
+    from filelock import SoftFileLock, Timeout
+
     root = logging.getLogger()
     root.setLevel(logging.INFO)
 
@@ -78,12 +81,27 @@ if __name__ == "__main__":
     parser.add_argument(f"--num_layers", type=int, default=2)
     parser.add_argument(f"--epochs", type=int, default=1)
     parser.add_argument(f"--dataset", type=str, default="m4_hourly")
+    parser.add_argument(f"--dataset_path", type=str, required=True)
     args, _ = parser.parse_known_args()
 
-    dataset = get_dataset(args.dataset, regenerate=False)
+    path = args.dataset_path
+    os.makedirs(path, exist_ok=True)
+    # Lock protection is needed for backends which run multiple worker
+    # processes on the same instance
+    lock_path = os.path.join(path, "lock")
+    lock = SoftFileLock(lock_path)
+    try:
+        with lock.acquire(timeout=120, poll_intervall=1):
+            dataset = get_dataset(args.dataset, regenerate=False, path=Path(path))
+    except Timeout:
+        print(
+            "WARNING: Could not obtain lock for dataset files. Trying anyway...",
+            flush=True,
+        )
+        dataset = get_dataset(args.dataset, regenerate=False, path=Path(path))
+
     prediction_length = dataset.metadata.prediction_length
     freq = dataset.metadata.freq
-
     # TODO, we should provide a validation split in all our datasets
     #  for now we use the test as the validation.
     validation_data = dataset.test

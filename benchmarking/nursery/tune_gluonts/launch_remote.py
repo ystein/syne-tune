@@ -61,6 +61,7 @@ if __name__ == "__main__":
         # Each experiment run is executed as SageMaker training job
         hyperparameters = {
             "dataset": args.dataset,
+            "local_root": "/opt/ml/input/data",
             "max_runtime": args.max_runtime,
             "train_epochs": args.train_epochs,
             "n_workers": args.n_workers,

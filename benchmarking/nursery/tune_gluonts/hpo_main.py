@@ -33,6 +33,9 @@ def parse_args(remote=False):
         default="electricity",
         choices=("electricity", "m4-hourly"),
     )
+    parser.add_argument(
+        "--local_root", type=str, default=str(Path("~").expanduser()),
+    )
     parser.add_argument("--max_runtime", type=int, default=1800)
     parser.add_argument("--train_epochs", type=int, default=50)
     parser.add_argument("--n_workers", type=int, default=4)
@@ -68,6 +71,7 @@ if __name__ == "__main__":
         "num_layers": lograndint(lower=1, upper=10),
         "epochs": args.train_epochs,
         "dataset": args.dataset,
+        "dataset_path": str(Path(args.local_root) / ".mxnet" / "gluon-ts" / "datasets"),
     }
     default_config = {
         "lr": 0.001,
