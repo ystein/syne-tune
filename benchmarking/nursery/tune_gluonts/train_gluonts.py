@@ -10,7 +10,6 @@
 # on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
 # express or implied. See the License for the specific language governing
 # permissions and limitations under the License.
-import os
 import logging
 from argparse import ArgumentParser
 from pathlib import Path
@@ -85,7 +84,7 @@ if __name__ == "__main__":
     args, _ = parser.parse_known_args()
 
     path = Path(args.dataset_path)
-    os.makedirs(path, exist_ok=True)
+    path.mkdir(parents=True, exist_ok=True)
     # Lock protection is needed for backends which run multiple worker
     # processes on the same instance
     lock = SoftFileLock(str(path / "lock"))

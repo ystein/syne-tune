@@ -52,7 +52,8 @@ if __name__ == "__main__":
         Path(__file__).parent / "training_scripts" / "gluonts" / "train_gluonts.py"
     )
 
-    evaluate_trials_on_sagemaker = False
+    # evaluate_trials_on_sagemaker = False
+    evaluate_trials_on_sagemaker = True  # DEBUG
 
     if evaluate_trials_on_sagemaker:
         # evaluate trials on Sagemaker
@@ -82,7 +83,8 @@ if __name__ == "__main__":
         config_space, max_t=epochs, resource_attr="epoch_no", mode="min", metric=metric
     )
 
-    wallclock_time_budget = 3600 if evaluate_trials_on_sagemaker else 600
+    # wallclock_time_budget = 3600 if evaluate_trials_on_sagemaker else 600
+    wallclock_time_budget = 600  # DEBUG
     dollar_cost_budget = 20.0
 
     tuner = Tuner(
@@ -95,7 +97,7 @@ if __name__ == "__main__":
         ),
         n_workers=4,
         # some failures may happen when SGD diverges with NaNs
-        max_failures=10,
+        max_failures=1,  # DEBUG
     )
 
     # launch the tuning
