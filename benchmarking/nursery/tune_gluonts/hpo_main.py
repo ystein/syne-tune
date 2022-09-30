@@ -34,7 +34,9 @@ def parse_args(remote=False):
         choices=("electricity", "m4-hourly"),
     )
     parser.add_argument(
-        "--local_root", type=str, default=str(Path("~").expanduser()),
+        "--local_root",
+        type=str,
+        default=str(Path("~").expanduser()),
     )
     parser.add_argument("--max_runtime", type=int, default=1800)
     parser.add_argument("--train_epochs", type=int, default=50)
