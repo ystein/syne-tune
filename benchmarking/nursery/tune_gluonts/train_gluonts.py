@@ -84,21 +84,20 @@ if __name__ == "__main__":
     parser.add_argument(f"--dataset_path", type=str, required=True)
     args, _ = parser.parse_known_args()
 
-    path = args.dataset_path
+    path = Path(args.dataset_path)
     os.makedirs(path, exist_ok=True)
     # Lock protection is needed for backends which run multiple worker
     # processes on the same instance
-    lock_path = os.path.join(path, "lock")
-    lock = SoftFileLock(lock_path)
+    lock = SoftFileLock(str(path / "lock"))
     try:
         with lock.acquire(timeout=120, poll_intervall=1):
-            dataset = get_dataset(args.dataset, regenerate=False, path=Path(path))
+            dataset = get_dataset(args.dataset, regenerate=False, path=path)
     except Timeout:
         print(
             "WARNING: Could not obtain lock for dataset files. Trying anyway...",
             flush=True,
         )
-        dataset = get_dataset(args.dataset, regenerate=False, path=Path(path))
+        dataset = get_dataset(args.dataset, regenerate=False, path=path)
 
     prediction_length = dataset.metadata.prediction_length
     freq = dataset.metadata.freq

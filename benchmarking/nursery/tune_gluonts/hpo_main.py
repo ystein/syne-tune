@@ -42,6 +42,7 @@ def parse_args(remote=False):
     parser.add_argument("--train_epochs", type=int, default=50)
     parser.add_argument("--n_workers", type=int, default=4)
     parser.add_argument("--experiment_name", type=str, default="gluonts-1")
+    parser.add_argument("--store_logs_checkpoints_to_s3", type=int, default=0)
     if not remote:
         parser.add_argument(
             "--optimizer",
@@ -60,6 +61,7 @@ def parse_args(remote=False):
         parser.add_argument("--num_seeds", type=int, default=1)
 
     args, _ = parser.parse_known_args()
+    args.store_logs_checkpoints_to_s3 = bool(args.store_logs_checkpoints_to_s3)
     return args
 
 
@@ -117,7 +119,16 @@ if __name__ == "__main__":
         metadata=vars(args),  # metadata is stored along with results
         tuner_name=args.experiment_name,
         # some failures may happen when SGD diverges with NaNs
-        max_failures=10,
+        # max_failures=10,
+        max_failures=1,  # DEBUG
     )
+
+    # Set path for logs and checkpoints
+    if args.store_logs_checkpoints_to_s3:
+        backend.set_path(results_root=tuner.tuner_path)
+    else:
+        backend.set_path(
+            results_root=str(Path("~/").expanduser()), tuner_name=tuner.name
+        )
 
     tuner.run()  # off we go!

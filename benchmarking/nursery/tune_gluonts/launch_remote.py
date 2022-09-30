@@ -66,6 +66,7 @@ if __name__ == "__main__":
             "train_epochs": args.train_epochs,
             "n_workers": args.n_workers,
             "experiment_name": args.experiment_name,
+            "store_logs_checkpoints_to_s3": int(args.store_logs_checkpoints_to_s3),
             "optimizer": optimizer,
             "seed": seed,
         }
