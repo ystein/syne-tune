@@ -30,6 +30,7 @@ class MethodArguments:
     num_brackets: Optional[int] = None
     verbose: Optional[bool] = False
     num_samples: int = 50
+    scheduler_kwargs: Optional[dict] = None
 
 
 def search_options(args: MethodArguments) -> dict:

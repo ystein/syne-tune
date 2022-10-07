@@ -12,11 +12,15 @@
 # permissions and limitations under the License.
 from pathlib import Path
 from tqdm import tqdm
-from argparse import ArgumentParser
 import os
-import boto3
 
-from sagemaker.pytorch import PyTorch
+from syne_tune.try_import import try_import_aws_message
+
+try:
+    import boto3
+    from sagemaker.pytorch import PyTorch
+except ImportError:
+    print(try_import_aws_message())
 
 from syne_tune.backend.sagemaker_backend.sagemaker_utils import (
     get_execution_role,
@@ -25,57 +29,33 @@ import syne_tune
 import benchmarking
 from syne_tune.util import s3_experiment_path, random_string
 from benchmarking.commons.launch_remote import message_sync_from_s3
+from benchmarking.commons.benchmark_real_definitions import (
+    benchmark_definitions,
+)
+from benchmarking.nursery.remote_sm_backend.launch_experiment import parse_args
 
 
 if __name__ == "__main__":
-    parser = ArgumentParser()
-    parser.add_argument(
-        "--experiment_tag",
-        type=str,
-        required=True,
-    )
-    parser.add_argument(
-        "--num_seeds",
-        type=int,
-        required=True,
-        help="number of seeds to run",
-    )
-    parser.add_argument(
-        "--start_seed",
-        type=int,
-        default=0,
-        help="first seed to run",
-    )
-    parser.add_argument(
-        "--n_workers",
-        type=int,
-        default=4,
-        help="number of parallel workers",
-    )
-    parser.add_argument(
-        "--max_wallclock_time",
-        type=int,
-        default=3 * 3600,
-        help="maximum wallclock time of experiment",
-    )
-    parser.add_argument(
-        "--method",
-        type=str,
-        choices=["asha", "mobster", "rs", "bo"],
-        default="asha",
-        help="method to run",
-    )
-    args, _ = parser.parse_known_args()
+    args = parse_args(launch_remote=True)
     experiment_tag = args.experiment_tag
     suffix = random_string(4)
 
     if boto3.Session().region_name is None:
         os.environ["AWS_DEFAULT_REGION"] = "us-west-2"
     environment = {"AWS_DEFAULT_REGION": boto3.Session().region_name}
+    benchmark = benchmark_definitions(sagemaker_backend=True)[args.benchmark]
+    assert (
+        benchmark.framework == "PyTorch"
+    ), "Only support PyTorch estimator at the moment"
+    if args.max_wallclock_time is not None:
+        max_wallclock_time = args.max_wallclock_time
+    else:
+        max_wallclock_time = benchmark.max_wallclock_time
 
     for seed in tqdm(range(args.start_seed, args.num_seeds)):
+        tuner_name = f"{args.method}-{seed}"
         checkpoint_s3_uri = s3_experiment_path(
-            tuner_name=str(seed), experiment_name=experiment_tag
+            tuner_name=tuner_name, experiment_name=experiment_tag
         )
         sm_args = dict(
             entry_point="launch_experiment.py",
@@ -83,28 +63,33 @@ if __name__ == "__main__":
             checkpoint_s3_uri=checkpoint_s3_uri,
             instance_type="ml.c5.4xlarge",
             instance_count=1,
-            py_version="py3",
-            framework_version="1.7.1",
-            max_run=3600 * 72,
+            py_version="py38",
+            framework_version="1.10.0",
+            max_run=int(1.2 * max_wallclock_time),
             role=get_execution_role(),
             dependencies=syne_tune.__path__ + benchmarking.__path__,
             disable_profiler=True,
+            debugger_hook_config=False,
             environment=environment,
         )
-
-        sm_args["hyperparameters"] = {
+        hyperparameters = {
+            "benchmark": args.benchmark,
             "experiment_tag": experiment_tag,
             "seed": seed,
-            "n_workers": args.n_workers,
-            "max_wallclock_time": args.max_wallclock_time,
             "method": args.method,
+            "max_failures": args.max_failures,
         }
+        if args.n_workers is not None:
+            hyperparameters["n_workers"] = args.n_workers
+        if args.max_wallclock_time is not None:
+            hyperparameters["max_wallclock_time"] = args.max_wallclock_time
+        sm_args["hyperparameters"] = hyperparameters
         print(
-            f"{experiment_tag}-{seed}\n"
-            f"hyperparameters = {sm_args['hyperparameters']}\n"
+            f"{experiment_tag}-{tuner_name}\n"
+            f"hyperparameters = {hyperparameters}\n"
             f"Results written to {checkpoint_s3_uri}"
         )
         est = PyTorch(**sm_args)
-        est.fit(job_name=f"{experiment_tag}-{seed}-{suffix}", wait=False)
+        est.fit(job_name=f"{experiment_tag}-{tuner_name}-{suffix}", wait=False)
 
     print("\n" + message_sync_from_s3(experiment_tag))

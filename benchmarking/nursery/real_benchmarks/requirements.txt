@@ -1,0 +1,3 @@
+syne-tune[gpsearchers]
+tqdm
+filelock

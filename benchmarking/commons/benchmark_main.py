@@ -11,12 +11,12 @@
 # express or implied. See the License for the specific language governing
 # permissions and limitations under the License.
 from typing import Optional, List, Callable, Union, Dict
-
 import numpy as np
 import itertools
 import logging
 from argparse import ArgumentParser
 from tqdm import tqdm
+import copy
 
 try:
     from coolname import generate_slug
@@ -175,6 +175,7 @@ def parse_args(
             type=str,
         )
     if extra_args is not None:
+        extra_args = copy.deepcopy(extra_args)
         for kwargs in extra_args:
             name = kwargs.pop("name")
             parser.add_argument(name, **kwargs)

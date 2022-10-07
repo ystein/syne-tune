@@ -13,7 +13,12 @@
 import logging
 from argparse import ArgumentParser
 
-from sagemaker.pytorch import PyTorch
+from syne_tune.try_import import try_import_aws_message
+
+try:
+    from sagemaker.pytorch import PyTorch
+except ImportError:
+    print(try_import_aws_message())
 
 from syne_tune.backend import SageMakerBackend
 from syne_tune.backend.sagemaker_backend.sagemaker_utils import (
@@ -28,35 +33,35 @@ from syne_tune.optimizer.baselines import (
 )
 from syne_tune.stopping_criterion import StoppingCriterion
 from syne_tune.tuner import Tuner
-from benchmarking.definitions.definition_resnet_cifar10 import (
-    resnet_cifar10_benchmark,
+from benchmarking.commons.benchmark_real_definitions import (
+    benchmark_definitions,
 )
 from syne_tune.util import repository_root_path
 
 
-if __name__ == "__main__":
+def parse_args(launch_remote: bool = False):
     parser = ArgumentParser()
+    parser.add_argument(
+        "--benchmark",
+        type=str,
+        default="resnet_cifar10",
+        help="benchmark to run",
+    )
     parser.add_argument(
         "--experiment_tag",
         type=str,
         required=True,
     )
     parser.add_argument(
-        "--seed",
-        type=int,
-        default=0,
-        help="seed (for repetitions)",
-    )
-    parser.add_argument(
         "--n_workers",
         type=int,
-        default=4,
+        required=False,
         help="number of parallel workers",
     )
     parser.add_argument(
         "--max_wallclock_time",
         type=int,
-        default=3 * 3600,
+        required=False,
         help="maximum wallclock time of experiment",
     )
     parser.add_argument(
@@ -66,87 +71,126 @@ if __name__ == "__main__":
         default="asha",
         help="method to run",
     )
+    parser.add_argument(
+        "--max_failures",
+        type=int,
+        default=3,
+        help="number of trials which can fail without experiment being terminated",
+    )
+    if launch_remote:
+        parser.add_argument(
+            "--num_seeds",
+            type=int,
+            required=True,
+            help="number of seeds to run",
+        )
+        parser.add_argument(
+            "--start_seed",
+            type=int,
+            default=0,
+            help="first seed to run",
+        )
+    else:
+        parser.add_argument(
+            "--seed",
+            type=int,
+            default=0,
+            help="seed (for repetitions)",
+        )
     args, _ = parser.parse_known_args()
-    experiment_tag = args.experiment_tag
+    return args
 
-    params = {
-        "backend": "sagemaker",
-        "dataset_path": "./",
-        "num_gpus": 1,
-        "max_resource_level": 27,
-        "instance_type": "ml.g4dn.xlarge",
-    }
-    benchmark = resnet_cifar10_benchmark(params)
+
+if __name__ == "__main__":
     logging.getLogger().setLevel(logging.INFO)
+    args = parse_args()
+    experiment_tag = args.experiment_tag
+    benchmark_name = args.benchmark
+
+    benchmark_kwargs = (
+        dict(n_workers=args.n_workers) if args.n_workers is not None else dict()
+    )
+    benchmark = benchmark_definitions(sagemaker_backend=True, **benchmark_kwargs)[
+        benchmark_name
+    ]
+    assert (
+        benchmark.framework == "PyTorch"
+    ), "Only support PyTorch estimator at the moment"
+    if args.max_wallclock_time is not None:
+        max_wallclock_time = args.max_wallclock_time
+    else:
+        max_wallclock_time = benchmark.max_wallclock_time
 
     print(f"Starting experiment ({args.seed}) of {experiment_tag}")
 
-    script_path = benchmark["script"]
+    script_path = benchmark.script
+    estimator_kwargs = (
+        benchmark.estimator_kwargs if benchmark.estimator_kwargs is not None else dict()
+    )
     trial_backend = SageMakerBackend(
         # we tune a PyTorch Framework from Sagemaker
         sm_estimator=PyTorch(
             entry_point=script_path.name,
             source_dir=str(script_path.parent),
-            instance_type=params["instance_type"],
+            instance_type=benchmark.instance_type,
             instance_count=1,
             role=get_execution_role(),
-            framework_version="1.7.1",
-            py_version="py3",
-            max_run=2 * args.max_wallclock_time,
+            max_run=int(1.2 * max_wallclock_time),
             dependencies=[str(repository_root_path() / "benchmarking/")],
             disable_profiler=True,
             debugger_hook_config=False,
             sagemaker_session=default_sagemaker_session(),
+            **estimator_kwargs,
         ),
         # names of metrics to track. Each metric will be detected by Sagemaker if it is written in the
         # following form: "[RMSE]: 1.2", see in train_main_example how metrics are logged for an example
-        metrics_names=[benchmark["metric"]],
+        metrics_names=[benchmark.metric],
     )
 
     common_kwargs = dict(
+        config_space=benchmark.config_space,
         search_options={"debug_log": True},
-        metric=benchmark["metric"],
-        mode=benchmark["mode"],
-        max_resource_attr=benchmark["max_resource_attr"],
+        metric=benchmark.metric,
+        mode=benchmark.mode,
+        max_resource_attr=benchmark.max_resource_attr,
         random_seed=args.seed,
     )
     if args.method == "asha":
         scheduler = ASHA(
-            benchmark["config_space"],
-            resource_attr=benchmark["resource_attr"],
             **common_kwargs,
+            resource_attr=benchmark.resource_attr,
         )
     elif args.method == "mobster":
         scheduler = MOBSTER(
-            benchmark["config_space"],
-            resource_attr=benchmark["resource_attr"],
             **common_kwargs,
+            resource_attr=benchmark.resource_attr,
         )
     elif args.method == "rs":
-        scheduler = RandomSearch(benchmark["config_space"], **common_kwargs)
+        scheduler = RandomSearch(**common_kwargs)
     else:
         assert args.method == "bo"
-        scheduler = BayesianOptimization(benchmark["config_space"], **common_kwargs)
+        scheduler = BayesianOptimization(**common_kwargs)
 
     stop_criterion = StoppingCriterion(
-        max_wallclock_time=args.max_wallclock_time,
+        max_wallclock_time=max_wallclock_time,
+        max_num_evaluations=benchmark.max_num_evaluations,
     )
     tuner = Tuner(
         trial_backend=trial_backend,
         scheduler=scheduler,
         stop_criterion=stop_criterion,
-        n_workers=args.n_workers,
+        n_workers=benchmark.n_workers,
         sleep_time=5.0,
-        max_failures=3,
+        max_failures=args.max_failures,
         tuner_name=experiment_tag,
         metadata={
             "seed": args.seed,
             "algorithm": args.method,
             "type": "stopping",
             "tag": experiment_tag,
-            "benchmark": "resnet_cifar10",
-            "n_workers": args.n_workers,
-            "max_wallclock_time": args.max_wallclock_time,
+            "benchmark": benchmark_name,
+            "n_workers": benchmark.n_workers,
+            "max_wallclock_time": max_wallclock_time,
         },
     )
 
