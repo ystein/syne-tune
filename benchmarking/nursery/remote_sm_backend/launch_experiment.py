@@ -67,8 +67,8 @@ def parse_args(launch_remote: bool = False):
     parser.add_argument(
         "--method",
         type=str,
-        choices=["asha", "mobster", "rs", "bo"],
-        default="asha",
+        choices=["ASHA", "MOBSTER", "RS", "BO"],
+        default="ASHA",
         help="method to run",
     )
     parser.add_argument(
