@@ -53,7 +53,7 @@ class LocalBackend(TrialBackend):
         entry_point: str,
         delete_checkpoints: bool = False,
         rotate_gpus: bool = True,
-        ignore_gpus: list = []
+        ignore_gpus: list = [],
     ):
         """
         :param entry_point: Path to Python main file to be tuned
@@ -129,7 +129,9 @@ class LocalBackend(TrialBackend):
         The number of assignments is incremented for the GPU returned.
         """
         assert self.rotate_gpus
-        free_gpus = set(range(self.num_gpus)).difference(self.trial_gpu.values()) - set(self.ignore_gpus)
+        free_gpus = set(range(self.num_gpus)).difference(self.trial_gpu.values()) - set(
+            self.ignore_gpus
+        )
         if free_gpus:
             eligible_gpus = free_gpus
             logging.debug(f"Free GPUs: {free_gpus}")
