@@ -53,6 +53,7 @@ class LocalBackend(TrialBackend):
         entry_point: str,
         delete_checkpoints: bool = False,
         rotate_gpus: bool = True,
+        ignore_gpus: list = []
     ):
         """
         :param entry_point: Path to Python main file to be tuned
@@ -80,6 +81,7 @@ class LocalBackend(TrialBackend):
         self.num_gpus = None
         self.trial_gpu = None
         self.gpu_times_assigned = None
+        self.ignore_gpus = ignore_gpus
         # sets the path where to write files, can be overidden later by Tuner.
         self.set_path(Path(experiment_path(tuner_name=random_string(length=10))))
 
@@ -127,12 +129,12 @@ class LocalBackend(TrialBackend):
         The number of assignments is incremented for the GPU returned.
         """
         assert self.rotate_gpus
-        free_gpus = set(range(self.num_gpus)).difference(self.trial_gpu.values())
+        free_gpus = set(range(self.num_gpus)).difference(self.trial_gpu.values()) - set(self.ignore_gpus)
         if free_gpus:
             eligible_gpus = free_gpus
             logging.debug(f"Free GPUs: {free_gpus}")
         else:
-            eligible_gpus = range(self.num_gpus)
+            eligible_gpus = set(range(self.num_gpus)) - set(self.ignore_gpus)
         # We select the GPU which has the least prior assignments. Selection
         # over all GPUs currently free. If all GPUs are currently assigned,
         # selection is over all GPUs. In this case, the assignment will go to
