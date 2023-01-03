@@ -40,13 +40,32 @@ RealBenchmarkDefinitions = Callable[..., Dict[str, RealBenchmarkDefinition]]
 def get_benchmark(
     args, benchmark_definitions: RealBenchmarkDefinitions, **benchmark_kwargs
 ) -> RealBenchmarkDefinition:
+    do_scale = (
+        args.scale_max_wallclock_time
+        and args.n_workers is not None
+        and args.max_wallclock_time is None
+    )
+    if do_scale:
+        benchmark_default = benchmark_definitions(**benchmark_kwargs)[args.benchmark]
+        default_n_workers = benchmark_default.n_workers
+    else:
+        default_n_workers = None
     if args.n_workers is not None:
         benchmark_kwargs["n_workers"] = args.n_workers
     if args.max_wallclock_time is not None:
         benchmark_kwargs["max_wallclock_time"] = args.max_wallclock_time
     if args.instance_type is not None:
         benchmark_kwargs["instance_type"] = args.instance_type
-    return benchmark_definitions(**benchmark_kwargs)[args.benchmark]
+    benchmark = benchmark_definitions(**benchmark_kwargs)[args.benchmark]
+    if do_scale and args.n_workers < default_n_workers:
+        # Scale ``max_wallclock_time``
+        factor = default_n_workers / args.n_workers
+        bm_mwt = benchmark.max_wallclock_time
+        benchmark.max_wallclock_time = int(bm_mwt * factor)
+        print(
+            f"Scaling max_wallclock_time: {benchmark.max_wallclock_time} (from {bm_mwt})"
+        )
+    return benchmark
 
 
 def parse_args(

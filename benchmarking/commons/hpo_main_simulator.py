@@ -243,14 +243,28 @@ def main(
 
     combinations = list(itertools.product(method_names, seeds, benchmark_names))
     print(combinations)
+    do_scale = (
+        args.scale_max_wallclock_time
+        and args.n_workers is not None
+        and args.max_wallclock_time is None
+    )
     for method, seed, benchmark_name in tqdm(combinations):
         random_seed = effective_random_seed(master_random_seed, seed)
         np.random.seed(random_seed)
         benchmark = benchmark_definitions[benchmark_name]
+        default_n_workers = benchmark.n_workers
         if args.n_workers is not None:
             benchmark.n_workers = args.n_workers
         if args.max_wallclock_time is not None:
             benchmark.max_wallclock_time = args.max_wallclock_time
+        elif do_scale and args.n_workers < default_n_workers:
+            # Scale ``max_wallclock_time``
+            factor = default_n_workers / args.n_workers
+            bm_mwt = benchmark.max_wallclock_time
+            benchmark.max_wallclock_time = int(bm_mwt * factor)
+            print(
+                f"Scaling max_wallclock_time: {benchmark.max_wallclock_time} (from {bm_mwt})"
+            )
         print(
             f"Starting experiment ({method}/{benchmark_name}/{seed}) of {experiment_tag}"
         )

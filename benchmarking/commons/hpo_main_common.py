@@ -99,6 +99,15 @@ def parse_args(
         type=int,
         help=f"Limits number of datapoints for surrogate model of MOBSTER or HyperTune",
     )
+    parser.add_argument(
+        "--scale_max_wallclock_time",
+        type=int,
+        default=0,
+        help=(
+            "If 1, benchmark.max_wallclock_time is multiplied by B / min(A, B),"
+            "where A = n_workers and B = benchmark.n_workers"
+        ),
+    )
     if extra_args is not None:
         extra_args = copy.deepcopy(extra_args)
         for kwargs in extra_args:
@@ -109,6 +118,7 @@ def parse_args(
             parser.add_argument("--" + name, **kwargs)
     args, _ = parser.parse_known_args()
     args.save_tuner = bool(args.save_tuner)
+    args.scale_max_wallclock_time = bool(args.scale_max_wallclock_time)
     seeds = list(range(args.start_seed, args.num_seeds))
     method_names = [args.method] if args.method is not None else list(methods.keys())
     return args, method_names, seeds
