@@ -17,14 +17,19 @@ def sigmoid(x: np.ndarray) -> np.ndarray:
     return np.reciprocal(np.exp(-x) + 1.0)
 
 
-def joint_probability(alpha: np.ndarray, beta: np.ndarray) -> np.ndarray:
+def joint_probability(alpha: np.ndarray, beta: np.ndarray) -> dict:
     """
     Computes 2D joint probability table related to marginal contributions in
-    games based on d-way categorical distributions.
+    games based on d-way categorical distributions. We return a dictionary
+    with:
+
+    * "joint": Joint probability matrix
+    * "marg_left": Marginal probability vector over left variable
+    * "marg_right": Marginal probability vector over left variable
 
     Note that the matrix has a simple representation in terms of ``O(d)``
     memory and compute, and many useful functions of the full table can
-    likely be computed in much less than ``O(d^2)`` space and time.
+    likely be computed in less than ``O(d^2)`` space and time.
 
     :param alpha: Input vector, shape ``(d,)``
     :param beta: Input vector, shape ``(d,)``
@@ -49,7 +54,9 @@ def joint_probability(alpha: np.ndarray, beta: np.ndarray) -> np.ndarray:
     bar_alpha = np.logaddexp.accumulate(alpha_ord)
     bar_alpha_d = bar_alpha[-1]  # Needed for diagonal below
     bar_alpha = bar_alpha[:-1]
-    bar_beta = np.flip(np.logaddexp.accumulate(np.flip(beta_ord[1:])))
+    bar_beta = np.logaddexp.accumulate(np.flip(beta_ord))
+    bar_beta_0 = bar_beta[-1]
+    bar_beta = np.flip(bar_beta[:-1])
     bar_diff = bar_beta - bar_alpha
     sigma_delta_k = sigmoid(bar_diff + delta[:-1])
     sigma_delta_kp1 = sigmoid(bar_diff + delta[1:])
@@ -79,13 +86,17 @@ def joint_probability(alpha: np.ndarray, beta: np.ndarray) -> np.ndarray:
         * (inv_order_ind.reshape(r_shp) < inv_order_ind.reshape(s_shp))
     )
     prob_mat[np.diag_indices_from(prob_mat)] = prob_diag
-    return prob_mat
+    return {
+        "joint": prob_mat,
+        "marg_left": np.exp(alpha - bar_alpha_d),
+        "marg_right": np.exp(beta - bar_beta_0),
+    }
 
 
 if __name__ == "__main__":
     num_categs = 10
     alpha = np.random.normal(size=num_categs)
     beta = np.random.normal(size=num_categs)
-    prob_mat = joint_probability(alpha, beta)
+    prob_mat = joint_probability(alpha, beta)["joint"]
     print(prob_mat)
     print(f"Sum of all entries = {np.sum(prob_mat)}")
