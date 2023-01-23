@@ -50,39 +50,41 @@ def joint_probability(
     assert num_categs >= 3, "Must have at least 3 categories"
     # Reorder categories so that ``delta`` is nonincreasing
     delta = alpha - beta
-    # HIER!!
-    order_ind = np.argsort(-delta)
-    alpha_ord = alpha[order_ind]
-    beta_ord = beta[order_ind]
-    delta = delta[order_ind]
+    order_ind = np.argsort(-delta, axis=1)
+    alpha_ord = np.take_along_axis(alpha, order_ind, axis=1)
+    beta_ord = np.take_along_axis(beta, order_ind, axis=1)
+    delta = np.take_along_axis(delta, order_ind, axis=1)
     # Compute :code:`log(sum(exp(alpha[:k])))` for all k<d. This is done by
     # applying :code:`accumulate` (which generalizes cumsum and cumprod) to the
     # ufunc
     #    ``(a, b) -> log(exp(a) + exp(b))``
-    bar_alpha = np.logaddexp.accumulate(alpha_ord)
-    bar_alpha_d = bar_alpha[-1]  # Needed for diagonal below
-    bar_alpha = bar_alpha[:-1]
-    bar_beta = np.logaddexp.accumulate(np.flip(beta_ord))
-    bar_beta_0 = bar_beta[-1]
-    bar_beta = np.flip(bar_beta[:-1])
+    bar_alpha = np.logaddexp.accumulate(alpha_ord, axis=1)
+    bar_alpha_d = bar_alpha[:, -1:]  # Needed for diagonal below
+    bar_alpha = bar_alpha[:, :-1]
+    bar_beta = np.logaddexp.accumulate(np.flip(beta_ord, axis=1), axis=1)
+    bar_beta_0 = bar_beta[:, -1:]  # Needed below
+    bar_beta = np.flip(bar_beta[:, :-1], axis=1)
     bar_diff = bar_beta - bar_alpha
-    sigma_delta_k = sigmoid(bar_diff + delta[:-1])
+    sigma_delta_k = sigmoid(bar_diff + delta[:, :-1])
     prob_diag_ord = np.concatenate(
         (
-            sigma_delta_k * np.exp(beta_ord[:-1] - bar_beta),
-            np.array([np.exp(alpha_ord[-1] - bar_alpha_d)]),
-        )
+            sigma_delta_k * np.exp(beta_ord[:, :-1] - bar_beta),
+            np.array([np.exp(alpha_ord[:, -1:] - bar_alpha_d)]),
+        ),
+        axis=1,
     )
     if not diag_only:
-        sigma_delta_kp1 = sigmoid(bar_diff + delta[1:])
-        cvec = np.exp(-bar_alpha - bar_beta) * (sigma_delta_k - sigma_delta_kp1)
-        cumsum_c_ord = np.concatenate((np.zeros(1), np.cumsum(cvec)))
+        sigma_delta_kp1 = sigmoid(bar_diff + delta[:, 1:])
+        cvecs = np.exp(-bar_alpha - bar_beta) * (sigma_delta_k - sigma_delta_kp1)
+        cumsum_c_ord = np.concatenate(
+            (np.zeros((num_cases, 1)), np.cumsum(cvecs, axis=1)), axis=1
+        )
     # Undo the reordering
     if not diag_only:
-        cumsum_c = np.empty((num_categs,))
-        cumsum_c[order_ind] = cumsum_c_ord
-    prob_diag = np.empty((num_categs,))
-    prob_diag[order_ind] = prob_diag_ord
+        cumsum_c = np.empty_like(cumsum_c_ord)
+        np.put_along_axis(cumsum_c, indices=order_ind, values=cumsum_c_ord, axis=1)
+    prob_diag = np.empty_like(prob_diag_ord)
+    np.put_along_axis(prob_diag, indices=order_ind, values=prob_diag_ord, axis=1)
     result = {
         "marg_left": np.exp(alpha - bar_alpha_d),
         "marg_right": np.exp(beta - bar_beta_0),
@@ -92,16 +94,22 @@ def joint_probability(
     else:
         # Compose probability matrix. Note that up to here, all computations are
         # O(d)
-        inv_order_ind = np.empty((num_categs,))
-        inv_order_ind[order_ind] = np.arange(num_categs)
-        r_shp = (-1, 1)
-        s_shp = (1, -1)
+        inv_order_ind = np.zeros_like(order_ind)
+        np.put_along_axis(
+            inv_order_ind,
+            indices=order_ind,
+            values=np.arange(num_categs).reshape((1, -1)),
+            axis=1,
+        )
+        r_shp = (num_cases, -1, 1)
+        s_shp = (num_cases, 1, -1)
         prob_mat = (
             np.reshape(np.exp(alpha), r_shp)
             * (cumsum_c.reshape(s_shp) - cumsum_c.reshape(r_shp))
             * np.reshape(np.exp(beta), s_shp)
             * (inv_order_ind.reshape(r_shp) < inv_order_ind.reshape(s_shp))
         )
+        # HIER!
         prob_mat[np.diag_indices_from(prob_mat)] = prob_diag
         result["joint"] = prob_mat
     return result
@@ -117,8 +125,8 @@ def query_max_probability_of_change(
 
        \mathrm{max}_s \mathbb{P}( v(S) = s, v(S\cup i) \ne s )
 
-    :param alpha: Input vector, shape ``(d,)``
-    :param beta: Input vector, shape ``(d,)``
+    :param alpha: Input vector, shape ``(n, d)``
+    :param beta: Input vector, shape ``(n, d)``
     :return: Tuple of score value and argmax
     """
     result = joint_probability(alpha, beta, diag_only=True)
