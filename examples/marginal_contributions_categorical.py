@@ -17,6 +17,7 @@ def sigmoid(x: np.ndarray) -> np.ndarray:
     return np.reciprocal(np.exp(-x) + 1.0)
 
 
+# TODO: Vectorize this, esp for diag_only=True
 def joint_probability(
     alpha: np.ndarray, beta: np.ndarray, diag_only: bool = False
 ) -> dict:
@@ -34,20 +35,22 @@ def joint_probability(
     memory and compute, and many useful functions of the full table can
     likely be computed in less than ``O(d^2)`` space and time.
 
-    :param alpha: Input vector, shape ``(d,)``
-    :param beta: Input vector, shape ``(d,)``
+    :param alpha: Input vectors, shape ``(n, d)``
+    :param beta: Input vectors, shape ``(n, d)``
     :param diag_only: If ``True``, only the diagonal of the joint probability
         matrix is computed, which costs ``O(d)`` only. Defaults to ``False``
-    :return: Probability matrix, shape ``(d, d)``
+    :return: Result dictionary (see above)
     """
 
-    alpha = alpha.reshape((-1,))
-    beta = beta.reshape((-1,))
-    num_categs = alpha.size
-    assert beta.size == num_categs
+    if alpha.ndim == 1:
+        alpha = alpha.reshape((1, -1))
+    assert alpha.size == beta.size
+    beta = beta.reshape(alpha.shape)
+    num_cases, num_categs = alpha.shape
     assert num_categs >= 3, "Must have at least 3 categories"
     # Reorder categories so that ``delta`` is nonincreasing
     delta = alpha - beta
+    # HIER!!
     order_ind = np.argsort(-delta)
     alpha_ord = alpha[order_ind]
     beta_ord = beta[order_ind]
