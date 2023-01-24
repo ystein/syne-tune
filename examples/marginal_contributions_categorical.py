@@ -17,7 +17,6 @@ def sigmoid(x: np.ndarray) -> np.ndarray:
     return np.reciprocal(np.exp(-x) + 1.0)
 
 
-# TODO: Vectorize this, esp for diag_only=True
 def joint_probability(
     alpha: np.ndarray, beta: np.ndarray, diag_only: bool = False
 ) -> dict:
@@ -26,10 +25,14 @@ def joint_probability(
     games based on d-way categorical distributions. We return a dictionary
     with:
 
-    * "joint": Joint probability matrix (if ``diag_only == False``)
-    * "diag": Diagonal of joint probability matrix (if ``diag_only == True``)
+    * "joint": Joint probability matrix (shape ``(n, d, d)``;
+      if ``diag_only == False``)
+    * "diag": Diagonal of joint probability matrix (shape ``(n, d)``;
+      if ``diag_only == True``)
     * "marg_left": Marginal probability vector over left variable
+      (shape ``(n, d)``)
     * "marg_right": Marginal probability vector over left variable
+      (shape ``(n, d)``)
 
     Note that the matrix has a simple representation in terms of ``O(d)``
     memory and compute, and many useful functions of the full table can
@@ -69,7 +72,7 @@ def joint_probability(
     prob_diag_ord = np.concatenate(
         (
             sigma_delta_k * np.exp(beta_ord[:, :-1] - bar_beta),
-            np.array([np.exp(alpha_ord[:, -1:] - bar_alpha_d)]),
+            np.exp(alpha_ord[:, -1:] - bar_alpha_d),
         ),
         axis=1,
     )
@@ -109,15 +112,16 @@ def joint_probability(
             * np.reshape(np.exp(beta), s_shp)
             * (inv_order_ind.reshape(r_shp) < inv_order_ind.reshape(s_shp))
         )
-        # HIER!
-        prob_mat[np.diag_indices_from(prob_mat)] = prob_diag
+        ind1 = np.arange(num_cases).reshape((-1, 1))[:, [0] * num_categs].flatten()
+        ind2 = np.arange(num_categs).reshape((1, -1))[[0] * num_cases].flatten()
+        prob_mat[(ind1, ind2, ind2)] = prob_diag.flatten()
         result["joint"] = prob_mat
     return result
 
 
 def query_max_probability_of_change(
     alpha: np.ndarray, beta: np.ndarray
-) -> (float, int):
+) -> (np.ndarray, np.ndarray):
     """
     Computes the score for the query functional
 
@@ -127,15 +131,41 @@ def query_max_probability_of_change(
 
     :param alpha: Input vector, shape ``(n, d)``
     :param beta: Input vector, shape ``(n, d)``
-    :return: Tuple of score value and argmax
+    :return: Tuple of score value and argmax, both shape ``(n,)``
     """
     result = joint_probability(alpha, beta, diag_only=True)
     argument = result["marg_right"] - result["diag"]
-    pos = np.argmax(argument)
-    return argument[pos], pos
+    pos = np.argmax(argument, axis=1)
+    maxvals = np.take_along_axis(argument, np.expand_dims(pos, axis=-1), axis=-1).reshape((-1,))
+    return maxvals, pos
+
+
+def test_multi_inputs():
+    num_categs = 5
+    num_cases = 4
+    alpha = np.random.normal(size=(num_cases, num_categs))
+    beta = np.random.normal(size=(num_cases, num_categs))
+    for diag_only in [True, False]:
+        result1 = joint_probability(alpha, beta, diag_only=diag_only)
+        result2 = [
+            joint_probability(alpha=alpha[i], beta=beta[i], diag_only=diag_only)
+            for i in range(num_cases)
+        ]
+        for i in range(num_cases):
+            keys = ["marg_left", "marg_right"]
+            if diag_only:
+                keys.append("diag")
+            else:
+                keys.append("joint")
+            for k in keys:
+                np.testing.assert_almost_equal(
+                    result1[k][i].flatten(), result2[i][k].flatten(), decimal=4
+                )
 
 
 if __name__ == "__main__":
+    print("Testing")
+    test_multi_inputs()
     num_categs = 10
     alpha = np.random.normal(size=num_categs)
     beta = np.random.normal(size=num_categs)
