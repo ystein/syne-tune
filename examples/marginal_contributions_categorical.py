@@ -129,6 +129,13 @@ def query_max_probability_of_change(
 
        \mathrm{max}_s \mathbb{P}( v(S) = s, v(S\cup i) \ne s )
 
+    Note: This is computing the query functional values for several different
+    values of S (the first dimension, size ``n`, is over different S).
+
+    What might be better instead is to compute the probability distributions
+    for many different S, then average these to obtain a single distribution,
+    and then compute the query functional based on this mixture distribution.
+
     :param alpha: Input vector, shape ``(n, d)``
     :param beta: Input vector, shape ``(n, d)``
     :return: Tuple of score value and argmax, both shape ``(n,)``
@@ -136,7 +143,9 @@ def query_max_probability_of_change(
     result = joint_probability(alpha, beta, diag_only=True)
     argument = result["marg_right"] - result["diag"]
     pos = np.argmax(argument, axis=1)
-    maxvals = np.take_along_axis(argument, np.expand_dims(pos, axis=-1), axis=-1).reshape((-1,))
+    maxvals = np.take_along_axis(
+        argument, np.expand_dims(pos, axis=-1), axis=-1
+    ).reshape((-1,))
     return maxvals, pos
 
 
