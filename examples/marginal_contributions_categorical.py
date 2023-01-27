@@ -47,26 +47,28 @@ def joint_probability(
 
     if alpha.ndim == 1:
         alpha = alpha.reshape((1, -1))
+    else:
+        assert alpha.ndim == 2
     assert alpha.size == beta.size
     beta = beta.reshape(alpha.shape)
-    num_cases, num_categs = alpha.shape
+    num_cases, num_categs = alpha.shape  # (n, d)
     assert num_categs >= 3, "Must have at least 3 categories"
     # Reorder categories so that ``delta`` is nonincreasing
     delta = alpha - beta
-    order_ind = np.argsort(-delta, axis=1)
-    alpha_ord = np.take_along_axis(alpha, order_ind, axis=1)
-    beta_ord = np.take_along_axis(beta, order_ind, axis=1)
-    delta = np.take_along_axis(delta, order_ind, axis=1)
-    # Compute :code:`log(sum(exp(alpha[:k])))` for all k<d. This is done by
+    order_ind = np.argsort(-delta, axis=-1)
+    alpha_ord = np.take_along_axis(alpha, order_ind, axis=-1)
+    beta_ord = np.take_along_axis(beta, order_ind, axis=-1)
+    delta = np.take_along_axis(delta, order_ind, axis=-1)
+    # Compute :code:`log(sum(exp(alpha[:k])))` for all k <= d. This is done by
     # applying :code:`accumulate` (which generalizes cumsum and cumprod) to the
-    # ufunc
+    # ufunc ``logaddexp``:
     #    ``(a, b) -> log(exp(a) + exp(b))``
-    bar_alpha = np.logaddexp.accumulate(alpha_ord, axis=1)
+    bar_alpha = np.logaddexp.accumulate(alpha_ord, axis=-1)
     bar_alpha_d = bar_alpha[:, -1:]  # Needed for diagonal below
     bar_alpha = bar_alpha[:, :-1]
-    bar_beta = np.logaddexp.accumulate(np.flip(beta_ord, axis=1), axis=1)
+    bar_beta = np.logaddexp.accumulate(np.flip(beta_ord, axis=-1), axis=-1)
     bar_beta_0 = bar_beta[:, -1:]  # Needed below
-    bar_beta = np.flip(bar_beta[:, :-1], axis=1)
+    bar_beta = np.flip(bar_beta[:, :-1], axis=-1)
     bar_diff = bar_beta - bar_alpha
     sigma_delta_k = sigmoid(bar_diff + delta[:, :-1])
     prob_diag_ord = np.concatenate(
@@ -74,20 +76,20 @@ def joint_probability(
             sigma_delta_k * np.exp(beta_ord[:, :-1] - bar_beta),
             np.exp(alpha_ord[:, -1:] - bar_alpha_d),
         ),
-        axis=1,
+        axis=-1,
     )
     if not diag_only:
         sigma_delta_kp1 = sigmoid(bar_diff + delta[:, 1:])
         cvecs = np.exp(-bar_alpha - bar_beta) * (sigma_delta_k - sigma_delta_kp1)
         cumsum_c_ord = np.concatenate(
-            (np.zeros((num_cases, 1)), np.cumsum(cvecs, axis=1)), axis=1
+            (np.zeros((num_cases, 1)), np.cumsum(cvecs, axis=-1)), axis=-1
         )
     # Undo the reordering
     if not diag_only:
         cumsum_c = np.empty_like(cumsum_c_ord)
-        np.put_along_axis(cumsum_c, indices=order_ind, values=cumsum_c_ord, axis=1)
+        np.put_along_axis(cumsum_c, indices=order_ind, values=cumsum_c_ord, axis=-1)
     prob_diag = np.empty_like(prob_diag_ord)
-    np.put_along_axis(prob_diag, indices=order_ind, values=prob_diag_ord, axis=1)
+    np.put_along_axis(prob_diag, indices=order_ind, values=prob_diag_ord, axis=-1)
     result = {
         "marg_left": np.exp(alpha - bar_alpha_d),
         "marg_right": np.exp(beta - bar_beta_0),
@@ -96,22 +98,24 @@ def joint_probability(
         result["diag"] = prob_diag
     else:
         # Compose probability matrix. Note that up to here, all computations are
-        # O(d)
+        # O(n * d)
         inv_order_ind = np.zeros_like(order_ind)
         np.put_along_axis(
             inv_order_ind,
             indices=order_ind,
             values=np.arange(num_categs).reshape((1, -1)),
-            axis=1,
+            axis=-1,
         )
         r_shp = (num_cases, -1, 1)
         s_shp = (num_cases, 1, -1)
+        # ``prob_mat`` has shape (n, d, d)
         prob_mat = (
             np.reshape(np.exp(alpha), r_shp)
             * (cumsum_c.reshape(s_shp) - cumsum_c.reshape(r_shp))
             * np.reshape(np.exp(beta), s_shp)
             * (inv_order_ind.reshape(r_shp) < inv_order_ind.reshape(s_shp))
         )
+        # Write ``prob_diag`` to diagonals of matrices
         ind1 = np.arange(num_cases).reshape((-1, 1))[:, [0] * num_categs].flatten()
         ind2 = np.arange(num_categs).reshape((1, -1))[[0] * num_cases].flatten()
         prob_mat[(ind1, ind2, ind2)] = prob_diag.flatten()
@@ -142,7 +146,7 @@ def query_max_probability_of_change(
     """
     result = joint_probability(alpha, beta, diag_only=True)
     argument = result["marg_right"] - result["diag"]
-    pos = np.argmax(argument, axis=1)
+    pos = np.argmax(argument, axis=-1)
     maxvals = np.take_along_axis(
         argument, np.expand_dims(pos, axis=-1), axis=-1
     ).reshape((-1,))
