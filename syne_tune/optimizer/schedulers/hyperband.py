@@ -1205,6 +1205,11 @@ class HyperbandBracketManager:
         Samples bracket for task to be scheduled. Check whether any paused
         trial in that bracket can be promoted. If so, its ``trial_id`` is
         returned. We also return ``extra_kwargs`` to be used in ``_promote_trial``.
+        This contains the bracket which was sampled (key "bracket").
+
+        Note: ``extra_kwargs`` can return information also if ``trial_id = None``
+        is returned. This information is passed to ``get_config`` of the
+        searcher.
 
         :return: ``(trial_id, extra_kwargs)``
         """
@@ -1216,11 +1221,11 @@ class HyperbandBracketManager:
         ret_dict = rung_sys.on_task_schedule()
         trial_id = ret_dict.get("trial_id")
         if trial_id is not None:
-            for k in ("milestone", "resume_from"):
-                extra_kwargs[k] = ret_dict[k]
-        else:
-            # First milestone the new config will get to
-            extra_kwargs["milestone"] = rung_sys.get_first_milestone(skip_rungs)
+            del ret_dict["trial_id"]
+        extra_kwargs.update(ret_dict)
+        k = "milestone"
+        if k not in extra_kwargs:
+            extra_kwargs[k] = rung_sys.get_first_milestone(skip_rungs)
         return trial_id, extra_kwargs
 
     def snapshot_rungs(self, bracket_id):
