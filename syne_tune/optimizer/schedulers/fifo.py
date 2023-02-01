@@ -239,9 +239,8 @@ class FIFOScheduler(TrialSchedulerWithSearcher):
         # For pause/resume schedulers: Can a paused trial be promoted?
         promote_trial_id, extra_kwargs = self._promote_trial()
         if promote_trial_id is not None:
-            promote_trial_id = int(promote_trial_id)
             return TrialSuggestion.resume_suggestion(
-                trial_id=promote_trial_id, config=extra_kwargs
+                trial_id=int(promote_trial_id), config=extra_kwargs
             )
         # Ask searcher for config of new trial to start
         extra_kwargs["elapsed_time"] = self._elapsed_time()

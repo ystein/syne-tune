@@ -87,11 +87,16 @@ class RungSystem:
         """Called when new task is to be scheduled.
 
         For a promotion-based rung system, check whether any trial can be
-        promoted. If so, return dict with keys ``trial_id``, ``resume_from``
-        (rung level where trial is paused), ``milestone`` (next rung level
+        promoted. If so, return dict with keys "trial_id", "resume_from"
+        (rung level where trial is paused), "milestone" (next rung level
         the trial will reach, or None).
+
         If no trial can be promoted, or if the rung system is not
-        promotion-based, an empty dict is returned.
+        promotion-based, the returned dictionary must not contain the
+        "trial_id" key. It is nevertheless passed back via ``extra_kwargs`` in
+        :meth:`~syne_tune.optimizer.schedulers.hyperband.HyperbandBracketManager.on_task_schedule`.
+        The default is to return an empty dictionary, but some special subclasses
+        can use this to return information in case a trial is not promoted.
 
         :return: See above
         """
