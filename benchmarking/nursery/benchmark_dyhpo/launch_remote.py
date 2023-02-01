@@ -13,20 +13,17 @@
 from pathlib import Path
 
 from benchmarking.commons.launch_remote_simulator import launch_remote
-from benchmarking.nursery.benchmark_dehb.benchmark_definitions import (
+from benchmarking.nursery.benchmark_dyhpo.benchmark_definitions import (
     benchmark_definitions,
 )
-from benchmarking.nursery.benchmark_dehb.baselines import (
-    methods,
-    Methods,
-)
-from benchmarking.nursery.benchmark_dehb.hpo_main import extra_args
+from benchmarking.nursery.benchmark_dyhpo.baselines import methods
+from benchmarking.nursery.benchmark_dyhpo.hpo_main import extra_args
 
 
 if __name__ == "__main__":
 
     def _is_expensive_method(method: str) -> bool:
-        return method == Methods.SYNCMOBSTER
+        return method not in ["RS", "BO", "ASHA"]
 
     entry_point = Path(__file__).parent / "hpo_main.py"
     launch_remote(

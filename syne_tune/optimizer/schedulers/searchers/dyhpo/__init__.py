@@ -10,26 +10,15 @@
 # on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
 # express or implied. See the License for the specific language governing
 # permissions and limitations under the License.
-from benchmarking.commons.default_baselines import (
-    RandomSearch,
-    BayesianOptimization,
-    ASHA,
-    MOBSTER,
-)
+from syne_tune.try_import import try_import_gpsearchers_message
 
+__all__ = []
 
-class Methods:
-    RS = "RS"
-    BO = "BO"
-    ASHA = "ASHA"
-    MOBSTER = "MOBSTER"
+try:
+    from syne_tune.optimizer.schedulers.searchers.dyhpo.dyhpo_searcher import (  # noqa: F401
+        DynamicHPOSearcher,
+    )
 
-
-methods = {
-    Methods.RS: lambda method_arguments: RandomSearch(method_arguments),
-    Methods.BO: lambda method_arguments: BayesianOptimization(method_arguments),
-    Methods.ASHA: lambda method_arguments: ASHA(method_arguments, type="promotion"),
-    Methods.MOBSTER: lambda method_arguments: MOBSTER(
-        method_arguments, type="promotion"
-    ),
-}
+    __all__.append("DynamicHPOSearcher")
+except ImportError:
+    print(try_import_gpsearchers_message())
