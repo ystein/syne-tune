@@ -15,7 +15,7 @@ from typing import List, Dict, Any
 from syne_tune.optimizer.schedulers.hyperband_stopping import (
     RungSystem,
 )
-from syne_tune.optimizer.schedulers.searchers.dyhpo.dyhpo_searcher import (
+from syne_tune.optimizer.schedulers.searchers.dyhpo import (
     DynamicHPOSearcher,
 )
 
@@ -35,9 +35,32 @@ class DyHPORungSystem(RungSystem):
 
     We do promotion-based scheduling, as in
     :class:`~syne_tune.optimizer.schedulers.hyperband_promotion.PromotionRungSystem`.
-    All relevant logic happens in :meth:`on_task_schedule`. There, we score all
-    paused trials as well as a number of new configurations. If a new
-    configuration wins, this is passed back instead of a trial ID to be promoted.
+    Since :class:`~syne_tune.optimizer.schedulers.HyperbandScheduler` was designed
+    for promotion decisions to be separate from decisions about new configs, the
+    overall workflow is a bit tricky:
+
+    * In :meth:`FIFOScheduler._suggest`, we first call
+      :code:`promote_trial_id, extra_kwargs = self._promote_trial()`. If
+      ``promote_trial_id != None``, this trial is promoted. Otherwise, we call
+      :code:`config = self.searcher.get_config(**extra_kwargs, trial_id=trial_id)`
+      and start a new trial with this config. In most cases, :meth:`_promote_trial`
+      makes a promotion decision without using the searcher (i.e., its model).
+    * Here, we use the fact that information can be passed from
+      :meth:`_promote_trial` to ``self.searcher.get_config`` via ``extra_kwargs``.
+      Namely, :meth:``HyperbandScheduler._promote_trial` calls
+      :meth:`on_task_schedule` here, which calls
+      :meth:`~syne_tune.optimizer.schedulers.searchers.dyhpo.DynamicHPOSearcher.score_paused_trials_and_new_configs`,
+      where everything happens.
+    * First, all paused trials are scored w.r.t. the value of running them for one
+      more unit of resource. Also, a number of random configs are scored w.r.t.
+      the value of running them to the minimum resource.
+    * If the winning config is from a paused trial, this is resumed. If the
+      winning config is a new one, :meth:`on_task_schedule` returns this
+      config using a special key :const:`KEY_NEW_CONFIGURATION`. This dict
+      becomes part of ``extra_kwargs`` and is passed to ``self.searcher.get_config``
+    * :meth:`~syne_tune.optimizer.schedulers.searchers.dyhpo.DynamicHPOSearcher.get_config`
+      is trivial. It obtains an argument of name :const:`KEY_NEW_CONFIGURATION`
+      returns its value, which is the winning config to be started as new trial
 
     We can ignore ``rung_levels`` and ``promote_quantiles``, they are not used.
     For each trial, we only need to maintain the resource level at which it is
@@ -84,7 +107,9 @@ class DyHPORungSystem(RungSystem):
         paused_trials = [
             (trial_id, resource) for trial_id, resource in self._paused_trial.items()
         ]
-        result = self._searcher.score_paused_trials_and_new_configs(paused_trials)
+        result = self._searcher.score_paused_trials_and_new_configs(
+            paused_trials, min_resource=self._min_resource
+        )
         trial_id = result.get("trial_id")
         if trial_id is not None:
             # Trial is to be promoted

@@ -56,6 +56,10 @@ class MyGPMultiFidelitySearcher(GPMultiFidelitySearcher):
     def _get_config_modelbased(
         self, exclusion_candidates: ExclusionList, **kwargs
     ) -> Optional[Configuration]:
+        # Allows us to call :meth:`get_config` in
+        # :meth:`score_paused_trials_and_new_configs`. If this returns the dummy
+        # here, we are ready to score configs there, otherwise we are still in
+        # the initial phase and return the config.
         return {INTERNAL_KEY: "dummy"}
 
     def score_paused_trials_and_new_configs(
@@ -180,7 +184,9 @@ class DynamicHPOSearcher(BaseSearcher):
     is the best scorer, a paused trial is resumed, or a trial with a new
     configuration is started. Since all the work is already done in
     :meth:`score_paused_trials_and_new_configs`, the implementation of
-    :meth:`get_config` becomes trivial. Extra points:
+    :meth:`get_config` becomes trivial. See also
+    :class:`~syne_tune.optimizer.schedulers.searchers.dyhpo.DyHPORungSystem`.
+    Extra points:
 
     * The number of new configurations scored in
       :meth:`score_paused_trials_and_new_configs` is the maximum of
@@ -196,8 +202,7 @@ class DynamicHPOSearcher(BaseSearcher):
      ``type="dyhpo"``. It has the same constructor parameters as
     :class:`~syne_tune.optimizer.schedulers.searchers.GPMultiFidelitySearcher`.
     Of these, the following are not used, but need to be given valid values:
-    ``resource_acq``, ``initial_scoring``, ``skip_local_optimization``, so that
-    a ``GPMultiFidelitySearcher`` can be created.
+    ``resource_acq``, ``initial_scoring``, ``skip_local_optimization``.
     """
 
     def __init__(
