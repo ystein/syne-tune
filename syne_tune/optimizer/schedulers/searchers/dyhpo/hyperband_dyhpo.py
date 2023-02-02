@@ -15,8 +15,9 @@ from typing import List, Dict, Any
 from syne_tune.optimizer.schedulers.hyperband_stopping import (
     RungSystem,
 )
-# TODO: Replace by DyHPO specific wrapper!
-from syne_tune.optimizer.schedulers.searchers import GPMultiFidelitySearcher
+from syne_tune.optimizer.schedulers.searchers.dyhpo.dyhpo_searcher import (
+    DynamicHPOSearcher,
+)
 
 
 class DyHPORungSystem(RungSystem):
@@ -48,7 +49,7 @@ class DyHPORungSystem(RungSystem):
         mode: str,
         resource_attr: str,
         max_t: int,
-        searcher: GPMultiFidelitySearcher,
+        searcher: DynamicHPOSearcher,
     ):
         super().__init__(
             rung_levels, promote_quantiles, metric, mode, resource_attr, max_t
