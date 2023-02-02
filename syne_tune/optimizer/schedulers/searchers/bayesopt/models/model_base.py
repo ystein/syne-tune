@@ -42,6 +42,15 @@ class BaseSurrogateModel(SurrogateModel):
         self._current_best = None
         self._filter_observed_data = filter_observed_data
 
+    @property
+    def filter_observed_data(self) -> Optional[ConfigurationFilter]:
+        return self._filter_observed_data
+
+    def set_filter_observed_data(
+        self, filter_observed_data: Optional[ConfigurationFilter]
+    ):
+        self._filter_observed_data = filter_observed_data
+
     def predict_mean_current_candidates(self) -> List[np.ndarray]:
         """
         Returns the predictive mean (signal with key 'mean') at all current candidates

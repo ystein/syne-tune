@@ -12,10 +12,14 @@
 # permissions and limitations under the License.
 from typing import Optional, List, Dict, Any, Tuple
 import logging
+import numpy as np
 
 from syne_tune.optimizer.schedulers.searchers import (
     BaseSearcher,
     GPMultiFidelitySearcher,
+)
+from syne_tune.optimizer.schedulers.searchers.gp_fifo_searcher import (
+    create_initial_candidates_scorer,
 )
 from syne_tune.optimizer.schedulers.searchers.bayesopt.utils.debug_log import (
     DebugLogPrinter,
@@ -52,21 +56,102 @@ class MyGPMultiFidelitySearcher(GPMultiFidelitySearcher):
         return {INTERNAL_KEY: "dummy"}
 
     def score_paused_trials_and_new_configs(
-        self, paused_trials: List[Tuple[str, int]]
+        self,
+        paused_trials: List[Tuple[str, int]],
+        min_resource: int,
+        skip_optimization: bool,
     ) -> Dict[str, Any]:
         """
         See :meth:`DynamicHPOSearcher.score_paused_trials_and_new_configs`.
+        If ``skip_optimization == True``, this is passed to the posterior state
+        computation, and refitting of the surrogate model is skipped. Otherwise,
+        nothing is passed, so the built in ``skip_optimization`` logic is used.
         """
         # Test whether we are still at the beginning, where we always return
         # new configs from ``points_to_evaluate`` or drawn at random
         config = self.get_config()
         if INTERNAL_KEY not in config:
             return {"config": config}
-        # Collect all external configs to be scored
-        # - Use random_generator to select random configs
-        # - Use initial_candidates_scorer to score
-        # BUT: Marginals and EI scores need to be computed for extended configs,
-        # not fixing the resource
+        # Collect all extended configs to be scored
+        state = self.state_transformer.state
+        assert (
+            not state.hp_ranges.is_attribute_fixed()
+        ), "Internal error: state.hp_ranges.is_attribute_fixed() must not be True"
+        # Paused trials are scored at the next level they attain, while
+        # ``paused_trials`` lists their current level
+        configs_paused = [
+            self.config_space_ext.get(state.config_for_trial[trial_id], resource + 1)
+            for trial_id, resource in paused_trials
+        ]
+        resources_all = [x[1] + 1 for x in paused_trials]
+        num_new = max(self.num_initial_candidates, len(paused_trials))
+        exclusion_candidates = self._get_exclusion_candidates()
+        # New configurations are scored at level ``min_resource``
+        configs_new = [
+            self.config_space_ext.get(config, min_resource)
+            for config in self.random_generator.generate_candidates_en_bulk(
+                num_new, exclusion_list=exclusion_candidates
+            )
+        ]
+        num_new = len(configs_new)  # Can be less than before
+        configs_all = configs_paused + configs_new
+        resources_all.extend([min_resource] * num_new)
+        num_all = len(resources_all)
+
+        # Score all extended configurations :math:`(x, r)` with
+        # :math:`EI(x | r)`, expected improvement at level :math:`r`. Note that
+        # the incumbent is the best value at the same level, not overall. This
+        # is why we compute the score values in chunks for the same :math:`r`
+        # value
+        if skip_optimization:
+            kwargs = dict(skip_optimization=skip_optimization)
+        else:
+            kwargs = dict()
+        # Note: Asking for the model triggers the posterior computation
+        model = self.state_transformer.model(**kwargs)
+        resources_all = np.array(resources_all)
+        sorted_ind = np.argsort(resources_all)
+        resources_all = resources_all[sorted_ind]
+        # Find positions where resource value changes
+        change_pos = (
+            [0]
+            + list(np.flatnonzero(resources_all[:-1] != resources_all[1:]) + 1)
+            + [num_all]
+        )
+        scores = np.empty((num_all,))
+        for start, end in zip(change_pos[:-1], change_pos[1:]):
+            resource = resources_all[start]
+            assert resources_all[end - 1] == resource
+
+            def my_filter_observed_data(config: Configuration) -> bool:
+                return self.config_space_ext.get_resource(config) == resource
+
+            # If there is data at level ``resource``, the incumbent in EI
+            # should only be computed over this. If there is no data at level
+            # ``resource``, the incumbent is computed over all data
+            if state.num_observed_cases(resource=resource) > 0:
+                filter_observed_data = my_filter_observed_data
+            else:
+                filter_observed_data = None
+            model.set_filter_observed_data(filter_observed_data)
+            candidates_scorer = create_initial_candidates_scorer(
+                initial_scoring="acq_func",
+                model=model,
+                acquisition_class=self.acquisition_class,
+                random_state=self.random_state,
+            )
+            ind_for_resource = sorted_ind[start:end]
+            scores_for_resource = candidates_scorer.score(
+                [configs_all[pos] for pos in ind_for_resource]
+            )
+            scores[ind_for_resource] = scores_for_resource
+
+        # Pick the winner
+        best_ind = np.argmin(scores)
+        if best_ind < len(paused_trials):
+            return {"trial_id": paused_trials[best_ind][0]}
+        else:
+            return {"config": self._postprocess_config(configs_all[best_ind])}
 
 
 class DynamicHPOSearcher(BaseSearcher):
@@ -137,7 +222,7 @@ class DynamicHPOSearcher(BaseSearcher):
                 points_to_evaluate=points_to_evaluate,
                 **kwargs,
             )
-        self._previous_winner_new_trial = False
+        self._previous_winner_new_trial = True
 
     def configure_scheduler(self, scheduler):
         from syne_tune.optimizer.schedulers import HyperbandScheduler
@@ -188,18 +273,22 @@ class DynamicHPOSearcher(BaseSearcher):
         return self._searcher_int.model_parameters()
 
     def score_paused_trials_and_new_configs(
-        self, paused_trials: List[Tuple[str, int]]
+        self,
+        paused_trials: List[Tuple[str, int]],
+        min_resource: int,
     ) -> Dict[str, Any]:
         """
         This method computes acquisition scores for a number of extended
-        configs :math:`(x, r)`. The acquisition score is expected improvement
-        (EI) at resource level :math:`r + 1`. There are two types of configs
-        being scored:
+        configs :math:`(x, r)`. The acquisition score :math:`EI(x | r + 1)` is
+        expected improvement (EI) at resource level :math:`r + 1`. Here, the
+        incumbent used in EI is the best value attained at level :math:`r + 1`,
+        or the best value overall if there is no data yet at that level.
+        There are two types of configs being scored:
 
         * Paused trials: Passed by ``paused_trials`` as tuples
           ``(trial_id, resource)``
-        * New configurations drawn at random. For these, :math:`r = 0`, so the
-          score is EI at :math:`r = 1`
+        * New configurations drawn at random. For these, the score is EI
+          at :math:`r` equal to ``min_resource``
 
         We return a dictionary. If a paused trial wins, its ``trial_id`` is
         returned with key "trial_id". If a new configuration wins, this
@@ -211,9 +300,16 @@ class DynamicHPOSearcher(BaseSearcher):
         is only done afterwards.
 
         :param paused_trials: See above. Can be empty
+        :param min_resource:
         :return: Dictionary, see above
         """
-        return self._searcher_int.score_paused_trials_and_new_configs(paused_trials)
+        result = self._searcher_int.score_paused_trials_and_new_configs(
+            paused_trials=paused_trials,
+            min_resource=min_resource,
+            skip_optimization=not self._previous_winner_new_trial,
+        )
+        self._previous_winner_new_trial = "config" in result
+        return result
 
     def get_state(self) -> Dict[str, Any]:
         return {
