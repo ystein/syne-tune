@@ -20,6 +20,9 @@ from syne_tune.optimizer.schedulers.searchers.dyhpo.dyhpo_searcher import (
 )
 
 
+KEY_NEW_CONFIGURATION = "new_configuration"
+
+
 class DyHPORungSystem(RungSystem):
     """
     Implements the logic which decides which paused trial to promote to the
@@ -51,6 +54,9 @@ class DyHPORungSystem(RungSystem):
         max_t: int,
         searcher: DynamicHPOSearcher,
     ):
+        assert isinstance(
+            searcher, DynamicHPOSearcher
+        ), "searcher must be of type DynamicHPOSearcher. Use searcher='dyhpo'"
         super().__init__(
             rung_levels, promote_quantiles, metric, mode, resource_attr, max_t
         )
@@ -91,7 +97,7 @@ class DyHPORungSystem(RungSystem):
             }
         else:
             # New trial is to be started
-            ret_dict = {"new_configuration": result["config"]}
+            ret_dict = {KEY_NEW_CONFIGURATION: result["config"]}
         return ret_dict
 
     def on_task_report(

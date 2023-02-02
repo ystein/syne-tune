@@ -14,6 +14,9 @@ from typing import Optional, List, Dict, Any, Tuple
 import logging
 import numpy as np
 
+from syne_tune.optimizer.schedulers.searchers.dyhpo.hyperband_dyhpo import (
+    KEY_NEW_CONFIGURATION,
+)
 from syne_tune.optimizer.schedulers.searchers import (
     BaseSearcher,
     GPMultiFidelitySearcher,
@@ -236,9 +239,9 @@ class DynamicHPOSearcher(BaseSearcher):
 
     def get_config(self, **kwargs) -> Optional[dict]:
         assert (
-            "new_config" in kwargs
-        ), "Internal error: 'new_config' argument must be given"
-        return kwargs["new_config"]
+            KEY_NEW_CONFIGURATION in kwargs
+        ), f"Internal error: '{KEY_NEW_CONFIGURATION}' argument must be given"
+        return kwargs[KEY_NEW_CONFIGURATION]
 
     def on_trial_result(
         self,

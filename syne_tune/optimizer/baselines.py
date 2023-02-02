@@ -50,6 +50,11 @@ def _random_seed_from_generator(random_seed: int) -> int:
     return RandomSeedGenerator(random_seed)()
 
 
+def _assert_searcher_must_be(kwargs: Dict[str, Any], name: str):
+    searcher = kwargs.get("searcher")
+    assert searcher is None or searcher == name, f"Must have searcher='{name}'"
+
+
 class RandomSearch(FIFOScheduler):
     """Random search.
 
@@ -63,10 +68,12 @@ class RandomSearch(FIFOScheduler):
     """
 
     def __init__(self, config_space: Dict[str, Any], metric: str, **kwargs):
+        searcher_name = "random"
+        _assert_searcher_must_be(kwargs, searcher_name)
         super(RandomSearch, self).__init__(
             config_space=config_space,
             metric=metric,
-            searcher="random",
+            searcher=searcher_name,
             **kwargs,
         )
 
@@ -84,10 +91,12 @@ class GridSearch(FIFOScheduler):
     """
 
     def __init__(self, config_space: Dict[str, Any], metric: str, **kwargs):
+        searcher_name = "grid"
+        _assert_searcher_must_be(kwargs, searcher_name)
         super(GridSearch, self).__init__(
             config_space=config_space,
             metric=metric,
-            searcher="grid",
+            searcher=searcher_name,
             **kwargs,
         )
 
@@ -105,10 +114,12 @@ class BayesianOptimization(FIFOScheduler):
     """
 
     def __init__(self, config_space: Dict[str, Any], metric: str, **kwargs):
+        searcher_name = "bayesopt"
+        _assert_searcher_must_be(kwargs, searcher_name)
         super(BayesianOptimization, self).__init__(
             config_space=config_space,
             metric=metric,
-            searcher="bayesopt",
+            searcher=searcher_name,
             **kwargs,
         )
 
@@ -136,10 +147,12 @@ class ASHA(HyperbandScheduler):
         self, config_space: Dict[str, Any], metric: str, resource_attr: str, **kwargs
     ):
         _assert_need_one(kwargs)
+        searcher_name = "random"
+        _assert_searcher_must_be(kwargs, searcher_name)
         super(ASHA, self).__init__(
             config_space=config_space,
             metric=metric,
-            searcher="random",
+            searcher=searcher_name,
             resource_attr=resource_attr,
             **kwargs,
         )
@@ -171,10 +184,12 @@ class MOBSTER(HyperbandScheduler):
         self, config_space: Dict[str, Any], metric: str, resource_attr: str, **kwargs
     ):
         _assert_need_one(kwargs)
+        searcher_name = "bayesopt"
+        _assert_searcher_must_be(kwargs, searcher_name)
         super(MOBSTER, self).__init__(
             config_space=config_space,
             metric=metric,
-            searcher="bayesopt",
+            searcher=searcher_name,
             resource_attr=resource_attr,
             **kwargs,
         )
@@ -212,6 +227,8 @@ class HyperTune(HyperbandScheduler):
 
     def __init__(self, config_space: Dict, metric: str, resource_attr: str, **kwargs):
         _assert_need_one(kwargs)
+        searcher_name = "hypertune"
+        _assert_searcher_must_be(kwargs, searcher_name)
         kwargs = copy.deepcopy(kwargs)
         search_options = kwargs.get("search_options", dict())
         k, v, supp = "model", "gp_independent", {"gp_independent", "gp_multitask"}
@@ -225,8 +242,60 @@ class HyperTune(HyperbandScheduler):
         super(HyperTune, self).__init__(
             config_space=config_space,
             metric=metric,
-            searcher="hypertune",
+            searcher=searcher_name,
             resource_attr=resource_attr,
+            **kwargs,
+        )
+
+
+class DyHPO(HyperbandScheduler):
+    """Dynamic Gray-Box Hyperparameter Optimization (DyHPO)
+
+    One of ``max_t``, ``max_resource_attr`` needs to be in ``kwargs``. The latter
+    is more useful (DyHPO is a pause-resume scheduler), see also
+    :class:`~syne_tune.optimizer.schedulers.HyperbandScheduler`.
+
+    DyHPO can be run with the same surrogate models as :class:`MOBSTER`, but
+    ``search_options["model"] != "gp_independent"``. This is because DyHPO
+    requires extrapolation to resource levels without any data, which cannot
+    sensibly be done with independent GPs per resource level. Compared to
+    :class:`MOBSTER` or :class:`HyperTune`, there are no successive halving rung
+    levels, and decisions whether to promote a paused trial are done based on
+    the surrogate model, and more often. Our implementation is based on
+
+        | Wistuba, M. and Kadra, A. and Grabocka, J.
+        | Dynamic and Efficient Gray-Box Hyperparameter Optimization for Deep Learning
+        | https://arxiv.org/abs/2202.09774
+
+    However, we do not implemented the surrogate model based on a neural network
+    kernel proposed in this work, but instead just use the surrogate models we
+    provide for :class:`MOBSTER` as well.
+
+    See :class:`~syne_tune.optimizer.schedulers.searchers.GPMultifidelitySearcher`
+    for ``kwargs["search_options"]`` parameters.
+
+    :param config_space: Configuration space for evaluation function
+    :param metric: Name of metric to optimize
+    :param resource_attr: Name of resource attribute
+    :param kwargs: Additional arguments to :class:`~syne_tune.optimizer.schedulers.HyperbandScheduler`
+    """
+
+    def __init__(
+        self, config_space: Dict[str, Any], metric: str, resource_attr: str, **kwargs
+    ):
+        _assert_need_one(kwargs)
+        searcher_name = "dyhpo"
+        _assert_searcher_must_be(kwargs, searcher_name)
+        scheduler_type = kwargs.get("type")
+        assert (
+            scheduler_type is None or scheduler_type == "dyhpo"
+        ), "Must have type='dyhpo'"
+        super(DyHPO, self).__init__(
+            config_space=config_space,
+            metric=metric,
+            searcher=searcher_name,
+            resource_attr=resource_attr,
+            type="dyhpo",
             **kwargs,
         )
 
@@ -250,7 +319,7 @@ class PASHA(HyperbandScheduler):
         super(PASHA, self).__init__(
             config_space=config_space,
             metric=metric,
-            searcher="random",
+            searcher="random",  # default, can be overwritten
             resource_attr=resource_attr,
             type="pasha",
             **kwargs,
@@ -281,10 +350,12 @@ class BOHB(HyperbandScheduler):
         self, config_space: Dict[str, Any], metric: str, resource_attr: str, **kwargs
     ):
         _assert_need_one(kwargs)
+        searcher_name = "kde"
+        _assert_searcher_must_be(kwargs, searcher_name)
         super(BOHB, self).__init__(
             config_space=config_space,
             metric=metric,
-            searcher="kde",
+            searcher=searcher_name,
             resource_attr=resource_attr,
             **kwargs,
         )
@@ -314,7 +385,7 @@ class SyncHyperband(SynchronousGeometricHyperbandScheduler):
         super(SyncHyperband, self).__init__(
             config_space=config_space,
             metric=metric,
-            searcher="random",
+            searcher="random",  # default, can be overwritten
             resource_attr=resource_attr,
             **kwargs,
         )
@@ -345,10 +416,12 @@ class SyncBOHB(SynchronousGeometricHyperbandScheduler):
         **kwargs,
     ):
         _assert_need_one(kwargs, need_one={"max_resource_level", "max_resource_attr"})
+        searcher_name = "kde"
+        _assert_searcher_must_be(kwargs, searcher_name)
         super(SyncBOHB, self).__init__(
             config_space=config_space,
             metric=metric,
-            searcher="kde",
+            searcher=searcher_name,
             resource_attr=resource_attr,
             **kwargs,
         )
@@ -380,7 +453,7 @@ class DEHB(GeometricDifferentialEvolutionHyperbandScheduler):
         super(DEHB, self).__init__(
             config_space=config_space,
             metric=metric,
-            searcher="random",
+            searcher="random_encoded",  # default, can be overwritten
             resource_attr=resource_attr,
             **kwargs,
         )
@@ -415,6 +488,8 @@ class SyncMOBSTER(SynchronousGeometricHyperbandScheduler):
         **kwargs,
     ):
         _assert_need_one(kwargs, need_one={"max_resource_level", "max_resource_attr"})
+        searcher_name = "bayesopt"
+        _assert_searcher_must_be(kwargs, searcher_name)
         search_options = kwargs.get("search_options", dict())
         if "model" not in search_options:
             search_options["model"] = "gp_independent"
@@ -422,7 +497,7 @@ class SyncMOBSTER(SynchronousGeometricHyperbandScheduler):
         super(SyncMOBSTER, self).__init__(
             config_space=config_space,
             metric=metric,
-            searcher="bayesopt",
+            searcher=searcher_name,
             resource_attr=resource_attr,
             **kwargs,
         )
@@ -623,12 +698,14 @@ class ConstrainedBayesianOptimization(FIFOScheduler):
     def __init__(
         self, config_space: Dict[str, Any], metric: str, constraint_attr: str, **kwargs
     ):
+        searcher_name = "bayesopt_constrained"
+        _assert_searcher_must_be(kwargs, searcher_name)
         search_options = kwargs.get("search_options", dict())
         kwargs["search_options"] = dict(search_options, constraint_attr=constraint_attr)
         super(ConstrainedBayesianOptimization, self).__init__(
             config_space=config_space,
             metric=metric,
-            searcher="bayesopt_constrained",
+            searcher=searcher_name,
             **kwargs,
         )
 
@@ -777,10 +854,12 @@ class KDE(FIFOScheduler):
     """
 
     def __init__(self, config_space: Dict[str, Any], metric: str, **kwargs):
+        searcher_name = "kde"
+        _assert_searcher_must_be(kwargs, searcher_name)
         super(KDE, self).__init__(
             config_space=config_space,
             metric=metric,
-            searcher="kde",
+            searcher=searcher_name,
             **kwargs,
         )
 

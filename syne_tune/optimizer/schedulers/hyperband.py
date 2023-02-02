@@ -31,6 +31,9 @@ from syne_tune.optimizer.schedulers.hyperband_rush import (
     RUSHStoppingRungSystem,
 )
 from syne_tune.optimizer.schedulers.hyperband_stopping import StoppingRungSystem
+from syne_tune.optimizer.schedulers.searchers.dyhpo.hyperband_dyhpo import (
+    DyHPORungSystem,
+)
 from syne_tune.optimizer.schedulers.searchers.utils.default_arguments import (
     check_and_merge_defaults,
     Integer,
@@ -1001,6 +1004,7 @@ RUNG_SYSTEMS = {
     "rush_promotion": RUSHPromotionRungSystem,
     "rush_stopping": RUSHStoppingRungSystem,
     "cost_promotion": CostPromotionRungSystem,
+    "dyhpo": DyHPORungSystem,
 }
 
 
@@ -1021,7 +1025,8 @@ class HyperbandBracketManager:
     :param cost_attr: Overrides entry in ``rung_system_kwargs``
     :param random_seed: Random seed for bracket sampling
     :param rung_system_kwargs: Arguments passed to the rung system
-    :param scheduler: The scheduler is needed in order to sample a bracket
+    :param scheduler: The scheduler is needed in order to sample a bracket, and
+        also some rung level systems need more information from the scheduler
     """
 
     def __init__(
@@ -1062,27 +1067,19 @@ class HyperbandBracketManager:
             resource_attr=resource_attr,
             max_t=max_t,
         )
-        if scheduler_type == "stopping":
-            rs_type = StoppingRungSystem
-        elif scheduler_type == "pasha":
+        if scheduler_type == "pasha":
             kwargs["ranking_criterion"] = rung_system_kwargs["ranking_criterion"]
             kwargs["epsilon"] = rung_system_kwargs["epsilon"]
             kwargs["epsilon_scaling"] = rung_system_kwargs["epsilon_scaling"]
-            rs_type = PASHARungSystem
         elif scheduler_type in ["rush_promotion", "rush_stopping"]:
             kwargs["num_threshold_candidates"] = rung_system_kwargs.get(
                 "num_threshold_candidates", 0
             )
-            rs_type = (
-                RUSHStoppingRungSystem
-                if scheduler_type == "rush_stopping"
-                else RUSHPromotionRungSystem
-            )
-        elif scheduler_type == "promotion":
-            rs_type = PromotionRungSystem
-        else:
+        elif scheduler_type == "cost_promotion":
             kwargs["cost_attr"] = cost_attr
-            rs_type = CostPromotionRungSystem
+        elif scheduler_type == "dyhpo":
+            kwargs["searcher"] = scheduler.searcher
+        rs_type = RUNG_SYSTEMS[scheduler_type]
         self._rung_systems = [
             rs_type(
                 rung_levels=rung_levels[s:],
