@@ -44,7 +44,7 @@ class DyHPORungSystem(RungSystem):
       ``promote_trial_id != None``, this trial is promoted. Otherwise, we call
       :code:`config = self.searcher.get_config(**extra_kwargs, trial_id=trial_id)`
       and start a new trial with this config. In most cases, :meth:`_promote_trial`
-      makes a promotion decision without using the searcher (i.e., its model).
+      makes a promotion decision without using the searcher.
     * Here, we use the fact that information can be passed from
       :meth:`_promote_trial` to ``self.searcher.get_config`` via ``extra_kwargs``.
       Namely, :meth:``HyperbandScheduler._promote_trial` calls
