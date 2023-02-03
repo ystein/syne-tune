@@ -24,13 +24,19 @@ extra_args = [
         type=int,
         help="Number of brackets",
     ),
+    dict(
+        name="--probability_sh",
+        type=float,
+        help="Parameter for DyHPO: Probability of making SH promotion decision",
+    ),
 ]
 
 
 def map_extra_args(args) -> Dict[str, Any]:
-    return dict(
-        num_brackets=args.num_brackets,
-    )
+    result = dict(num_brackets=args.num_brackets)
+    if args.probability_sh is not None:
+        result["rung_system_kwargs"] = dict(probability_sh=args.probability_sh)
+    return result
 
 
 if __name__ == "__main__":

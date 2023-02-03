@@ -91,6 +91,8 @@ _DEFAULT_OPTIONS = {
         "ranking_criterion": "soft_ranking",
         "epsilon": 1.0,
         "epsilon_scaling": 1.0,
+        "num_threshold_candidates": 0,
+        "probability_sh": 0.25,
     },
 }
 
@@ -363,6 +365,14 @@ class HyperbandScheduler(FIFOScheduler, MultiFidelitySchedulerMixin):
           ``points_to_evaluate`` enforce stricter requirements to the
           continuation of training tasks. See
           :class:`~syne_tune.optimizer.schedulers.transfer_learning.RUSHScheduler`.
+        * probability_sh: Used if ``type == "dyhpo"``. In DyHPO, we typically
+          all paused trials against a number of new configurations, and the
+          winner is either resumed or started (new trial). However, with the
+          probability given here, we instead try to promote a trial as if
+          ``type == "promotion"``. If no trial can be promoted, we fall back to
+          the DyHPO logic. Use this to make DyHPO robust against starting too
+          many new trials, because all paused ones score poorly (this happens
+          especially at the beginning).
 
     :type rung_system_kwargs: Dict[str, Any], optional
     """
@@ -1044,6 +1054,7 @@ class HyperbandBracketManager:
         self.rung_levels = copy.copy(rung_levels)
         self._rung_system_per_bracket = rung_system_per_bracket
         self._scheduler = scheduler
+        self.random_state = np.random.RandomState(random_seed)
         # Maps trial_id -> bracket_id
         self._task_info = dict()
         max_num_brackets = len(rung_levels) + 1
@@ -1070,6 +1081,8 @@ class HyperbandBracketManager:
             kwargs["cost_attr"] = cost_attr
         elif scheduler_type == "dyhpo":
             kwargs["searcher"] = scheduler.searcher
+            kwargs["probability_sh"] = rung_system_kwargs["probability_sh"]
+            kwargs["random_state"] = self.random_state
         rs_type = RUNG_SYSTEMS[scheduler_type]
         self._rung_systems = [
             rs_type(
@@ -1079,7 +1092,6 @@ class HyperbandBracketManager:
             )
             for s in range(num_systems)
         ]
-        self.random_state = np.random.RandomState(random_seed)
 
     @staticmethod
     def does_pause_resume(scheduler_type: str) -> bool:

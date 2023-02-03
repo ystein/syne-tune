@@ -69,7 +69,7 @@ class MethodArguments:
     num_samples: int = 50
     fcnet_ordinal: Optional[str] = None
     max_size_data_for_model: Optional[int] = None
-    scheduler_kwargs: Optional[dict] = None
+    scheduler_kwargs: Optional[Dict[str, Any]] = None
 
 
 MethodDefinitions = Dict[str, Callable[[MethodArguments], TrialScheduler]]
