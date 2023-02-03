@@ -31,6 +31,11 @@ from syne_tune.optimizer.schedulers.searchers.utils.common import (
     Configuration,
 )
 
+# DEBUG:
+from syne_tune.optimizer.schedulers.searchers.bayesopt.models.meanstd_acqfunc_impl import (
+    EIAcquisitionFunction,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -40,7 +45,10 @@ KEY_NEW_CONFIGURATION = "new_configuration"
 INTERNAL_KEY = "RESERVED_KEY_31415927"
 
 
-def _debug_print_info(resource: int, scores: List[float]):
+# DEBUG:
+def _debug_print_info(
+    resource: int, scores: List[float], acq_function: EIAcquisitionFunction
+):
     msg_parts = [
         f"Summary scores [resource = {resource}]",
         f"  Min:    {np.min(scores):.2e}",
@@ -48,6 +56,8 @@ def _debug_print_info(resource: int, scores: List[float]):
         f"  Max:    {np.max(scores):.2e}",
         f"  Num:    {len(scores)}",
     ]
+    if acq_function._debug_data is not None:
+        msg_parts.append("Summary inputs to EI:\n" + acq_function.debug_stats_message())
     print("\n".join(msg_parts))
 
 
@@ -63,6 +73,10 @@ class MyGPMultiFidelitySearcher(GPMultiFidelitySearcher):
             INTERNAL_KEY not in config_space
         ), f"Key {INTERNAL_KEY} must not be used in config_space (reserved)"
         super().__init__(config_space, **kwargs)
+        # DEBUG
+        # self.acquisition_class = (
+        #     self.acquisition_class, {"debug_collect_stats": True}
+        # )
 
     def _get_config_modelbased(
         self, exclusion_candidates: ExclusionList, **kwargs
@@ -170,7 +184,8 @@ class MyGPMultiFidelitySearcher(GPMultiFidelitySearcher):
             scores_for_resource = candidates_scorer.score(
                 [configs_all[pos] for pos in ind_for_resource]
             )
-            _debug_print_info(resource, scores_for_resource)  # DEBUG
+            # DEBUG:
+            _debug_print_info(resource, scores_for_resource, candidates_scorer)
             scores[ind_for_resource] = scores_for_resource
 
         # Pick the winner
