@@ -83,7 +83,7 @@ class RungSystem:
             for x, y in reversed(list(zip(rung_levels, promote_quantiles)))
         ]
 
-    def on_task_schedule(self) -> Dict[str, Any]:
+    def on_task_schedule(self, **kwargs) -> Dict[str, Any]:
         """Called when new task is to be scheduled.
 
         For a promotion-based rung system, check whether any trial can be
@@ -228,7 +228,7 @@ class StoppingRungSystem(RungSystem):
             return True
         return metric_value <= cutoff if self._mode == "min" else metric_value >= cutoff
 
-    def on_task_schedule(self) -> Dict[str, Any]:
+    def on_task_schedule(self, **kwargs) -> Dict[str, Any]:
         return dict()
 
     def on_task_report(

@@ -14,9 +14,6 @@ from typing import Optional, List, Dict, Any, Tuple
 import logging
 import numpy as np
 
-from syne_tune.optimizer.schedulers.searchers.dyhpo.hyperband_dyhpo import (
-    KEY_NEW_CONFIGURATION,
-)
 from syne_tune.optimizer.schedulers.searchers import (
     BaseSearcher,
     GPMultiFidelitySearcher,
@@ -35,6 +32,9 @@ from syne_tune.optimizer.schedulers.searchers.utils.common import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+KEY_NEW_CONFIGURATION = "new_configuration"
 
 
 INTERNAL_KEY = "RESERVED_KEY_31415927"
@@ -66,6 +66,7 @@ class MyGPMultiFidelitySearcher(GPMultiFidelitySearcher):
         self,
         paused_trials: List[Tuple[str, int]],
         min_resource: int,
+        new_trial_id: int,
         skip_optimization: bool,
     ) -> Dict[str, Any]:
         """
@@ -75,8 +76,10 @@ class MyGPMultiFidelitySearcher(GPMultiFidelitySearcher):
         nothing is passed, so the built in ``skip_optimization`` logic is used.
         """
         # Test whether we are still at the beginning, where we always return
-        # new configs from ``points_to_evaluate`` or drawn at random
-        config = self.get_config()
+        # new configs from ``points_to_evaluate`` or drawn at random.
+        # Note: We need to pass ``trial_id`` to :meth:`get_config`, which is why
+        # we need ``new_trial_id``.
+        config = self.get_config(trial_id=new_trial_id)
         if INTERNAL_KEY not in config:
             return {"config": config}
         # Collect all extended configs to be scored
@@ -155,10 +158,17 @@ class MyGPMultiFidelitySearcher(GPMultiFidelitySearcher):
 
         # Pick the winner
         best_ind = np.argmin(scores)
+        msg = (
+            f"*** Scored {len(paused_trials)} paused and {num_new} new configurations. "
+        )
         if best_ind < len(paused_trials):
+            trial_id = paused_trials[best_ind][0]
+            logger.info(msg + f"Winner is paused, trial_id = {trial_id}")
             return {"trial_id": paused_trials[best_ind][0]}
         else:
-            return {"config": self._postprocess_config(configs_all[best_ind])}
+            config = self._postprocess_config(configs_all[best_ind])
+            logger.info(msg + f"Winner is new, trial_id = {new_trial_id}")
+            return {"config": config}
 
 
 class DynamicHPOSearcher(BaseSearcher):
@@ -284,6 +294,7 @@ class DynamicHPOSearcher(BaseSearcher):
         self,
         paused_trials: List[Tuple[str, int]],
         min_resource: int,
+        new_trial_id: int,
     ) -> Dict[str, Any]:
         """
         This method computes acquisition scores for a number of extended
@@ -308,12 +319,15 @@ class DynamicHPOSearcher(BaseSearcher):
         is only done afterwards.
 
         :param paused_trials: See above. Can be empty
-        :param min_resource:
+        :param min_resource: Smallest resource level
+        :param new_trial_id: ID of new trial to be started in case a new
+            configuration wins
         :return: Dictionary, see above
         """
         result = self._searcher_int.score_paused_trials_and_new_configs(
             paused_trials=paused_trials,
             min_resource=min_resource,
+            new_trial_id=new_trial_id,
             skip_optimization=not self._previous_winner_new_trial,
         )
         self._previous_winner_new_trial = "config" in result

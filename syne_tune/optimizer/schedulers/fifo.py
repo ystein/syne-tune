@@ -237,7 +237,8 @@ class FIFOScheduler(TrialSchedulerWithSearcher):
             self.time_keeper = RealTimeKeeper()
             self.time_keeper.start_of_time()
         # For pause/resume schedulers: Can a paused trial be promoted?
-        promote_trial_id, extra_kwargs = self._promote_trial()
+        # Note: Some specific schedulers also require ``trial_id``
+        promote_trial_id, extra_kwargs = self._promote_trial(trial_id=trial_id)
         if promote_trial_id is not None:
             return TrialSuggestion.resume_suggestion(
                 trial_id=int(promote_trial_id), config=extra_kwargs
@@ -275,7 +276,7 @@ class FIFOScheduler(TrialSchedulerWithSearcher):
             config = dict(config, trial_id=trial_id)
         return config
 
-    def _promote_trial(self) -> (Optional[str], Optional[dict]):
+    def _promote_trial(self, **kwargs) -> (Optional[str], Optional[dict]):
         """Checks whether any paused trial can be promoted.
 
         Has to be implemented by pause/resume schedulers.

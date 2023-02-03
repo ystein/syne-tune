@@ -15,12 +15,10 @@ from typing import List, Dict, Any
 from syne_tune.optimizer.schedulers.hyperband_stopping import (
     RungSystem,
 )
-from syne_tune.optimizer.schedulers.searchers.dyhpo import (
+from syne_tune.optimizer.schedulers.searchers.dyhpo.dyhpo_searcher import (
     DynamicHPOSearcher,
+    KEY_NEW_CONFIGURATION,
 )
-
-
-KEY_NEW_CONFIGURATION = "new_configuration"
 
 
 class DyHPORungSystem(RungSystem):
@@ -91,7 +89,7 @@ class DyHPORungSystem(RungSystem):
         # removed there
         self._paused_trial = dict()
 
-    def on_task_schedule(self) -> Dict[str, Any]:
+    def on_task_schedule(self, **kwargs) -> Dict[str, Any]:
         """
         The main decision making happens here. We collect ``(trial_id, resource)``
         for all paused trials and call ``searcher``. The searcher scores all
@@ -103,12 +101,24 @@ class DyHPORungSystem(RungSystem):
         If one of the new configurations has the best score, we return this
         configuration (key "new_configuration"). In this case, a new trial is
         started with this configuration.
+
+        Note: For this scheduler type, ``kwargs`` must contain the trial ID of
+        the new trial to be started, in case none can be promoted.
         """
         paused_trials = [
             (trial_id, resource) for trial_id, resource in self._paused_trial.items()
         ]
+        new_trial_id = kwargs.get("trial_id")
+        assert new_trial_id is not None, (
+            "Internal error: kwargs must contain 'trial_id', the ID for a new "
+            "trial to be started if no paused one is resumed. Make sure to "
+            "pass this to the _promote_trial method when calling it in "
+            "_suggest"
+        )
         result = self._searcher.score_paused_trials_and_new_configs(
-            paused_trials, min_resource=self._min_resource
+            paused_trials,
+            min_resource=self._min_resource,
+            new_trial_id=new_trial_id,
         )
         trial_id = result.get("trial_id")
         if trial_id is not None:

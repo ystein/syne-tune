@@ -37,6 +37,8 @@ from syne_tune.try_import import (
     try_import_botorch_message,
 )
 
+logger = logging.getLogger(__name__)
+
 
 def _random_seed_from_generator(random_seed: int) -> int:
     """
@@ -290,12 +292,25 @@ class DyHPO(HyperbandScheduler):
         assert (
             scheduler_type is None or scheduler_type == "dyhpo"
         ), "Must have type='dyhpo'"
+        search_options = kwargs.get("search_options")
+        k = "debug_log"
+        if search_options is None:
+            search_options = {k: False}
+        else:
+            kwargs.pop("search_options")
+            debug_log = search_options.get(k)
+            if debug_log is not None and debug_log:
+                logger.warning(
+                    "DyHPO does not support debug_log=True at the moment. Switching it off"
+                )
+            search_options[k] = False
         super(DyHPO, self).__init__(
             config_space=config_space,
             metric=metric,
             searcher=searcher_name,
             resource_attr=resource_attr,
             type="dyhpo",
+            search_options=search_options,
             **kwargs,
         )
 

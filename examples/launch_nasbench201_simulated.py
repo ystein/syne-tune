@@ -19,6 +19,7 @@ from benchmarking.commons.benchmark_definitions.nas201 import nas201_benchmark
 from syne_tune.blackbox_repository import BlackboxRepositoryBackend
 from syne_tune.backend.simulator_backend.simulator_callback import SimulatorCallback
 from syne_tune.optimizer.baselines import ASHA
+from syne_tune.optimizer.baselines import DyHPO
 from syne_tune import Tuner, StoppingCriterion
 
 
@@ -46,12 +47,13 @@ if __name__ == "__main__":
         **{max_resource_attr: max_resource_level},
     )
     # Asynchronous successive halving (ASHA)
-    scheduler = ASHA(
+    scheduler = DyHPO(
         config_space,
         max_resource_attr=max_resource_attr,
         resource_attr=resource_attr,
         mode=benchmark.mode,
         metric=benchmark.metric,
+        search_options={"debug_log": False},
         random_seed=random_seed,
     )
 

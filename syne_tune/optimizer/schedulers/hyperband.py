@@ -51,6 +51,17 @@ from syne_tune.optimizer.schedulers.searchers.bracket_distribution import (
 logger = logging.getLogger(__name__)
 
 
+RUNG_SYSTEMS = {
+    "stopping": StoppingRungSystem,
+    "promotion": PromotionRungSystem,
+    "pasha": PASHARungSystem,
+    "rush_promotion": RUSHPromotionRungSystem,
+    "rush_stopping": RUSHStoppingRungSystem,
+    "cost_promotion": CostPromotionRungSystem,
+    "dyhpo": DyHPORungSystem,
+}
+
+
 _ARGUMENT_KEYS = {
     "resource_attr",
     "grace_period",
@@ -88,16 +99,7 @@ _CONSTRAINTS = {
     "grace_period": Integer(1, None),
     "reduction_factor": Float(2, None),
     "brackets": Integer(1, None),
-    "type": Categorical(
-        (
-            "stopping",
-            "promotion",
-            "cost_promotion",
-            "pasha",
-            "rush_promotion",
-            "rush_stopping",
-        )
-    ),
+    "type": Categorical(tuple(RUNG_SYSTEMS.keys())),
     "searcher_data": Categorical(("rungs", "all", "rungs_and_last")),
     "cost_attr": String(),
     "register_pending_myopic": Boolean(),
@@ -599,7 +601,7 @@ class HyperbandScheduler(FIFOScheduler, MultiFidelitySchedulerMixin):
         return config
 
     # Snapshot (in extra_kwargs['snapshot']):
-    def _promote_trial(self) -> (Optional[str], Optional[dict]):
+    def _promote_trial(self, **kwargs) -> (Optional[str], Optional[dict]):
         """
         If ``self.do_snapshots``, a snapshot is written to
         ``extra_kwargs["snapshot"]``:
@@ -620,7 +622,7 @@ class HyperbandScheduler(FIFOScheduler, MultiFidelitySchedulerMixin):
 
         :return: ``(trial_id, extra_kwargs)``
         """
-        trial_id, extra_kwargs = self.terminator.on_task_schedule()
+        trial_id, extra_kwargs = self.terminator.on_task_schedule(**kwargs)
         if trial_id is None:
             # No trial to be promoted
             if self.do_snapshots:
@@ -997,17 +999,6 @@ def hyperband_rung_levels(
     return rung_levels
 
 
-RUNG_SYSTEMS = {
-    "stopping": StoppingRungSystem,
-    "promotion": PromotionRungSystem,
-    "pasha": PASHARungSystem,
-    "rush_promotion": RUSHPromotionRungSystem,
-    "rush_stopping": RUSHStoppingRungSystem,
-    "cost_promotion": CostPromotionRungSystem,
-    "dyhpo": DyHPORungSystem,
-}
-
-
 class HyperbandBracketManager:
     """
     Maintains rung level systems for range of brackets. Differences depending
@@ -1197,7 +1188,7 @@ class HyperbandBracketManager:
         distribution = self._scheduler.bracket_distribution()
         return self.random_state.choice(a=distribution.size, p=distribution)
 
-    def on_task_schedule(self) -> (Optional[str], dict):
+    def on_task_schedule(self, **kwargs) -> (Optional[str], dict):
         """
         Samples bracket for task to be scheduled. Check whether any paused
         trial in that bracket can be promoted. If so, its ``trial_id`` is
@@ -1215,7 +1206,7 @@ class HyperbandBracketManager:
         rung_sys, skip_rungs = self._get_rung_system_for_bracket_id(bracket_id)
         extra_kwargs = {"bracket": bracket_id}
         # Check whether config can be promoted
-        ret_dict = rung_sys.on_task_schedule()
+        ret_dict = rung_sys.on_task_schedule(**kwargs)
         trial_id = ret_dict.get("trial_id")
         if trial_id is not None:
             del ret_dict["trial_id"]
