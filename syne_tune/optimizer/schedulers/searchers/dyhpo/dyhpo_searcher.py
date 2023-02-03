@@ -40,6 +40,17 @@ KEY_NEW_CONFIGURATION = "new_configuration"
 INTERNAL_KEY = "RESERVED_KEY_31415927"
 
 
+def _debug_print_info(resource: int, scores: List[float]):
+    msg_parts = [
+        f"Summary scores [resource = {resource}]",
+        f"  Min:    {np.min(scores):.2e}",
+        f"  Median: {np.median(scores):.2e}",
+        f"  Max:    {np.max(scores):.2e}",
+        f"  Num:    {len(scores)}",
+    ]
+    print("\n".join(msg_parts))
+
+
 class MyGPMultiFidelitySearcher(GPMultiFidelitySearcher):
     """
     This wrapper is for convenience, to avoid having to depend on internal
@@ -87,13 +98,11 @@ class MyGPMultiFidelitySearcher(GPMultiFidelitySearcher):
         assert (
             not state.hp_ranges.is_attribute_fixed()
         ), "Internal error: state.hp_ranges.is_attribute_fixed() must not be True"
-        # Paused trials are scored at the next level they attain, while
-        # ``paused_trials`` lists their current level
         configs_paused = [
-            self.config_space_ext.get(state.config_for_trial[trial_id], resource + 1)
+            self.config_space_ext.get(state.config_for_trial[trial_id], resource)
             for trial_id, resource in paused_trials
         ]
-        resources_all = [x[1] + 1 for x in paused_trials]
+        resources_all = [x[1] for x in paused_trials]
         num_new = max(self.num_initial_candidates, len(paused_trials))
         exclusion_candidates = self._get_exclusion_candidates()
         # New configurations are scored at level ``min_resource``
@@ -104,6 +113,13 @@ class MyGPMultiFidelitySearcher(GPMultiFidelitySearcher):
             )
         ]
         num_new = len(configs_new)  # Can be less than before
+        # DEBUG!!
+        # configs_paused = configs_paused + [
+        #     self.config_space_ext.get(config, 2)
+        #     for config in configs_new[:3]
+        # ]
+        # resources_all = resources_all + ([2] * 3)
+        # END DEBUG
         configs_all = configs_paused + configs_new
         resources_all.extend([min_resource] * num_new)
         num_all = len(resources_all)
@@ -154,6 +170,7 @@ class MyGPMultiFidelitySearcher(GPMultiFidelitySearcher):
             scores_for_resource = candidates_scorer.score(
                 [configs_all[pos] for pos in ind_for_resource]
             )
+            _debug_print_info(resource, scores_for_resource)  # DEBUG
             scores[ind_for_resource] = scores_for_resource
 
         # Pick the winner
@@ -161,6 +178,7 @@ class MyGPMultiFidelitySearcher(GPMultiFidelitySearcher):
         msg = (
             f"*** Scored {len(paused_trials)} paused and {num_new} new configurations. "
         )
+        # TODO: logger.info -> logger.debug, remove ***
         if best_ind < len(paused_trials):
             trial_id = paused_trials[best_ind][0]
             logger.info(msg + f"Winner is paused, trial_id = {trial_id}")
@@ -298,14 +316,15 @@ class DynamicHPOSearcher(BaseSearcher):
     ) -> Dict[str, Any]:
         """
         This method computes acquisition scores for a number of extended
-        configs :math:`(x, r)`. The acquisition score :math:`EI(x | r + 1)` is
-        expected improvement (EI) at resource level :math:`r + 1`. Here, the
-        incumbent used in EI is the best value attained at level :math:`r + 1`,
+        configs :math:`(x, r)`. The acquisition score :math:`EI(x | r)` is
+        expected improvement (EI) at resource level :math:`r`. Here, the
+        incumbent used in EI is the best value attained at level :math:`r`,
         or the best value overall if there is no data yet at that level.
         There are two types of configs being scored:
 
         * Paused trials: Passed by ``paused_trials`` as tuples
-          ``(trial_id, resource)``
+          ``(trial_id, resource)``, where ``resource`` is the level to be
+          attained by the trial if it was resumed
         * New configurations drawn at random. For these, the score is EI
           at :math:`r` equal to ``min_resource``
 

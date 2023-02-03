@@ -50,6 +50,7 @@ class BaseSurrogateModel(SurrogateModel):
         self, filter_observed_data: Optional[ConfigurationFilter]
     ):
         self._filter_observed_data = filter_observed_data
+        self._current_best = None
 
     def predict_mean_current_candidates(self) -> List[np.ndarray]:
         """
@@ -94,6 +95,7 @@ class BaseSurrogateModel(SurrogateModel):
         if self._filter_observed_data is None:
             return candidates  # Default: No filtering
         else:
-            return [
+            filtered_candidates = [
                 config for config in candidates if self._filter_observed_data(config)
             ]
+            return filtered_candidates

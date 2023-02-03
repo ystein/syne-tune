@@ -99,14 +99,14 @@ class DyHPORungSystem(RungSystem):
         If one of the paused trials has the best score, we return its ``trial_id``
         along with extra information, so it gets promoted.
         If one of the new configurations has the best score, we return this
-        configuration (key "new_configuration"). In this case, a new trial is
-        started with this configuration.
+        configuration. In this case, a new trial is started with this configuration.
 
         Note: For this scheduler type, ``kwargs`` must contain the trial ID of
         the new trial to be started, in case none can be promoted.
         """
         paused_trials = [
-            (trial_id, resource) for trial_id, resource in self._paused_trial.items()
+            (trial_id, resource + 1)
+            for trial_id, resource in self._paused_trial.items()
         ]
         new_trial_id = kwargs.get("trial_id")
         assert new_trial_id is not None, (
