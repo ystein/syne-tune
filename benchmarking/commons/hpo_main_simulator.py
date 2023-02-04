@@ -255,6 +255,10 @@ def main(
             add_surrogate_kwargs=benchmark.add_surrogate_kwargs,
         )
 
+        method_kwargs = dict(
+            fcnet_ordinal=args.fcnet_ordinal,
+            use_surrogates="lcbench" in benchmark_name,
+        )
         resource_attr = next(iter(trial_backend.blackbox.fidelity_space.keys()))
         max_resource_level = int(max(trial_backend.blackbox.fidelity_values))
         if max_resource_attr is not None:
@@ -262,10 +266,10 @@ def main(
                 trial_backend.blackbox.configuration_space,
                 **{max_resource_attr: max_resource_level},
             )
-            method_kwargs = {"max_resource_attr": max_resource_attr}
+            method_kwargs["max_resource_attr"] = max_resource_attr
         else:
             config_space = trial_backend.blackbox.configuration_space
-            method_kwargs = {"max_t": max_resource_level}
+            method_kwargs["max_t"] = max_resource_level
         if use_transfer_learning:
             method_kwargs["transfer_learning_evaluations"] = (
                 get_transfer_learning_evaluations(
@@ -289,8 +293,6 @@ def main(
                 random_seed=random_seed,
                 resource_attr=resource_attr,
                 verbose=args.verbose,
-                fcnet_ordinal=args.fcnet_ordinal,
-                use_surrogates="lcbench" in benchmark_name,
                 **method_kwargs,
             )
         )

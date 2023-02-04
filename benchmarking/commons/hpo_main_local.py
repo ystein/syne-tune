@@ -37,7 +37,7 @@ RealBenchmarkDefinitions = Callable[..., Dict[str, RealBenchmarkDefinition]]
 
 def get_benchmark(
     args, benchmark_definitions: RealBenchmarkDefinitions, **benchmark_kwargs
-):
+) -> RealBenchmarkDefinition:
     if args.n_workers is not None:
         benchmark_kwargs["n_workers"] = args.n_workers
     if args.max_wallclock_time is not None:
@@ -91,6 +91,60 @@ def parse_args(
     return args, method_names, seeds
 
 
+def create_objects_for_tuner(
+    args,
+    method_kwargs: Dict[str, Any],
+    methods: MethodDefinitions,
+    extra_args: Optional[ExtraArgsType],
+    map_extra_args: Optional[MapExtraArgsType],
+    method: str,
+    benchmark: RealBenchmarkDefinition,
+    master_random_seed: int,
+    seed: int,
+    verbose: bool,
+) -> Dict[str, Any]:
+    if args.max_size_data_for_model is not None:
+        method_kwargs["search_options"] = {
+            "max_size_data_for_model": args.max_size_data_for_model,
+        }
+    if extra_args is not None:
+        assert map_extra_args is not None
+        method_kwargs = map_extra_args(args, method, method_kwargs)
+    scheduler = methods[method](
+        MethodArguments(
+            config_space=benchmark.config_space,
+            metric=benchmark.metric,
+            mode=benchmark.mode,
+            random_seed=effective_random_seed(master_random_seed, seed),
+            resource_attr=benchmark.resource_attr,
+            verbose=verbose,
+            **method_kwargs,
+        )
+    )
+    stop_criterion = StoppingCriterion(
+        max_wallclock_time=benchmark.max_wallclock_time,
+        max_num_evaluations=benchmark.max_num_evaluations,
+    )
+    metadata = get_metadata(
+        seed=seed,
+        method=method,
+        experiment_tag=args.experiment_tag,
+        benchmark_name=args.benchmark,
+        random_seed=master_random_seed,
+        max_size_data_for_model=args.max_size_data_for_model,
+        benchmark=benchmark,
+        extra_args=None if extra_args is None else extra_metadata(args, extra_args),
+    )
+    return dict(
+        scheduler=scheduler,
+        stop_criterion=stop_criterion,
+        n_workers=benchmark.n_workers,
+        tuner_name=args.experiment_tag,
+        metadata=metadata,
+        save_tuner=args.save_tuner,
+    )
+
+
 def main(
     methods: MethodDefinitions,
     benchmark_definitions: RealBenchmarkDefinitions,
@@ -118,7 +172,6 @@ def main(
     experiment_tag = args.experiment_tag
     benchmark_name = args.benchmark
     master_random_seed = get_master_random_seed(args.random_seed)
-
     set_logging_level(args)
     benchmark = get_benchmark(args, benchmark_definitions)
 
@@ -133,46 +186,20 @@ def main(
         trial_backend = LocalBackend(entry_point=str(benchmark.script))
 
         method_kwargs = {"max_resource_attr": benchmark.max_resource_attr}
-        if args.max_size_data_for_model is not None:
-            method_kwargs["search_options"] = {
-                "max_size_data_for_model": args.max_size_data_for_model,
-            }
-        if extra_args is not None:
-            assert map_extra_args is not None
-            method_kwargs = map_extra_args(args, method, method_kwargs)
-        scheduler = methods[method](
-            MethodArguments(
-                config_space=benchmark.config_space,
-                metric=benchmark.metric,
-                mode=benchmark.mode,
-                random_seed=random_seed,
-                resource_attr=benchmark.resource_attr,
-                verbose=args.verbose,
-                **method_kwargs,
-            )
-        )
-
-        stop_criterion = StoppingCriterion(
-            max_wallclock_time=benchmark.max_wallclock_time,
-            max_num_evaluations=benchmark.max_num_evaluations,
-        )
-        metadata = get_metadata(
-            seed=seed,
+        tuner_kwargs = create_objects_for_tuner(
+            args,
+            method_kwargs=method_kwargs,
+            methods=methods,
+            extra_args=extra_args,
+            map_extra_args=map_extra_args,
             method=method,
-            experiment_tag=experiment_tag,
-            benchmark_name=benchmark_name,
-            random_seed=master_random_seed,
-            max_size_data_for_model=args.max_size_data_for_model,
             benchmark=benchmark,
-            extra_args=None if extra_args is None else extra_metadata(args, extra_args),
+            master_random_seed=master_random_seed,
+            seed=seed,
+            verbose=args.verbose,
         )
         tuner = Tuner(
             trial_backend=trial_backend,
-            scheduler=scheduler,
-            stop_criterion=stop_criterion,
-            n_workers=benchmark.n_workers,
-            tuner_name=experiment_tag,
-            metadata=metadata,
-            save_tuner=args.save_tuner,
+            **tuner_kwargs,
         )
         tuner.run()
