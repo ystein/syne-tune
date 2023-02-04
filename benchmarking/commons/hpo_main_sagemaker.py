@@ -18,6 +18,9 @@ from benchmarking.commons.baselines import MethodArguments, MethodDefinitions
 from benchmarking.commons.hpo_main_common import (
     parse_args as _parse_args,
     get_metadata,
+    ExtraArgsType,
+    MapExtraArgsType,
+    extra_metadata,
 )
 from benchmarking.commons.hpo_main_local import (
     RealBenchmarkDefinitions,
@@ -45,7 +48,7 @@ WARM_POOL_KEEP_ALIVE_PERIOD_IN_SECONDS = 10 * 60
 
 
 def parse_args(
-    methods: Dict[str, Any], extra_args: Optional[List[dict]] = None
+    methods: Dict[str, Any], extra_args: Optional[ExtraArgsType] = None
 ) -> (Any, List[str], List[int]):
     """Parse command line arguments for SageMaker backend experiments.
 
@@ -127,8 +130,8 @@ def parse_args(
 def main(
     methods: MethodDefinitions,
     benchmark_definitions: RealBenchmarkDefinitions,
-    extra_args: Optional[List[dict]] = None,
-    map_extra_args: Optional[callable] = None,
+    extra_args: Optional[ExtraArgsType] = None,
+    map_extra_args: Optional[MapExtraArgsType] = None,
 ):
     """
     Runs experiment with SageMaker backend.
@@ -189,10 +192,13 @@ def main(
     )
 
     method_kwargs = {"max_resource_attr": benchmark.max_resource_attr}
+    if args.max_size_data_for_model is not None:
+        method_kwargs["search_options"] = {
+            "max_size_data_for_model": args.max_size_data_for_model,
+        }
     if extra_args is not None:
         assert map_extra_args is not None
-        extra_args = map_extra_args(args)
-        method_kwargs.update(extra_args)
+        method_kwargs = map_extra_args(args, method, method_kwargs)
     scheduler = methods[method](
         MethodArguments(
             config_space=benchmark.config_space,
@@ -201,7 +207,6 @@ def main(
             random_seed=random_seed,
             resource_attr=benchmark.resource_attr,
             verbose=True,
-            max_size_data_for_model=args.max_size_data_for_model,
             **method_kwargs,
         )
     )
@@ -218,7 +223,7 @@ def main(
         random_seed=master_random_seed,
         max_size_data_for_model=args.max_size_data_for_model,
         benchmark=benchmark,
-        extra_args=extra_args,
+        extra_args=None if extra_args is None else extra_metadata(args, extra_args),
     )
     tuner = Tuner(
         trial_backend=trial_backend,

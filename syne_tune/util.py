@@ -17,7 +17,7 @@ import random
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, List, Union
+from typing import Optional, List, Union, Dict, Any
 from time import perf_counter
 from contextlib import contextmanager
 
@@ -207,3 +207,53 @@ def is_positive_integer(lst: List[int]) -> bool:
     :return: Are all entries of ``lst`` of type ``int`` and positive?
     """
     return all(x == int(x) and x >= 1 for x in lst)
+
+
+def dict_get(params: Dict[str, Any], key: str, default: Any) -> Any:
+    """
+    Returns ``params[key]`` if this exists and is not None, and ``default`` otherwise.
+    Note that this is not the same as ``params.get(key, default)``. Namely, if ``params[key]``
+    is equal to None, this would return None, but this method returns ``default``.
+
+    This function is particularly helpful when dealing with a dict returned by
+    :class:`argparse.ArgumentParser`. Whenever ``key`` is added as argument to the parser,
+    but a value is not provided, this leads to ``params[key] = None``.
+
+    """
+    v = params.get(key)
+    return default if v is None else v
+
+
+def recursive_merge(a: Dict[str, Any], b: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Merge dictionaries ``a`` and ``b``, where ``b`` takes precedence. We
+    typically use this to modify a dictionary ``a``, so ``b`` is smaller
+    than ``a``.
+
+    :param a: Dictionary
+    :param b: Dictionary (can be empty)
+    :return: Merged dictionary
+    """
+    if b:
+        result = dict()
+        keys_b = set(b.keys())
+        for k, va in a.items():
+            if k in keys_b:
+                keys_b.remove(k)
+                vb = b[k]
+                if isinstance(va, dict):
+                    assert isinstance(
+                        vb, dict
+                    ), f"k={k} has dict value in a, but not in b:\n{va}\n{vb}"
+                    result[k] = recursive_merge(va, vb)
+                else:
+                    assert not isinstance(
+                        vb, dict
+                    ), f"k={k} has dict value in b, but not in a:\n{va}\n{vb}"
+                    result[k] = vb
+            else:
+                result[k] = va
+        result.update({k: b[k] for k in keys_b})
+        return result
+    else:
+        return a

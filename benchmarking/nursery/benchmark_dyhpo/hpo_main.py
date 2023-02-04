@@ -12,10 +12,11 @@
 # permissions and limitations under the License.
 from typing import Dict, Any
 from benchmarking.commons.hpo_main_simulator import main
-from benchmarking.nursery.benchmark_dyhpo.baselines import methods
+from benchmarking.nursery.benchmark_dyhpo.baselines import methods, Methods
 from benchmarking.nursery.benchmark_dyhpo.benchmark_definitions import (
     benchmark_definitions,
 )
+from syne_tune.util import recursive_merge
 
 
 extra_args = [
@@ -32,11 +33,22 @@ extra_args = [
 ]
 
 
-def map_extra_args(args) -> Dict[str, Any]:
-    result = dict(num_brackets=args.num_brackets)
-    if args.probability_sh is not None:
-        result["rung_system_kwargs"] = dict(probability_sh=args.probability_sh)
-    return result
+def map_extra_args(args, method: str, method_kwargs: Dict[str, Any]) -> Dict[str, Any]:
+    if method == Methods.DYHPO and args.probability_sh is not None:
+        scheduler_kwargs = {
+            "search_options": {
+                "rung_system_kwargs": {"probability_sh": args.probability_sh},
+            },
+        }
+    else:
+        scheduler_kwargs = dict()
+    if args.num_brackets is not None:
+        scheduler_kwargs["brackets"] = args.num_brackets
+    if scheduler_kwargs:
+        method_kwargs = recursive_merge(
+            method_kwargs, {"scheduler_kwargs": scheduler_kwargs}
+        )
+    return method_kwargs
 
 
 if __name__ == "__main__":

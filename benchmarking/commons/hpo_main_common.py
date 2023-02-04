@@ -13,7 +13,7 @@
 import copy
 import logging
 from argparse import ArgumentParser
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Callable
 
 from benchmarking.commons.benchmark_definitions.common import BenchmarkDefinition
 
@@ -23,8 +23,17 @@ except ImportError:
     print("coolname is not installed, will not be used")
 
 
+DictStrKey = Dict[str, Any]
+
+
+MapExtraArgsType = Callable[[Any, str, DictStrKey], DictStrKey]
+
+
+ExtraArgsType = Optional[List[DictStrKey]]
+
+
 def parse_args(
-    methods: Dict[str, Any], extra_args: Optional[List[dict]] = None
+    methods: DictStrKey, extra_args: Optional[ExtraArgsType] = None
 ) -> (Any, List[str], List[int]):
     """Default implementation for parsing command line arguments.
 
@@ -117,7 +126,7 @@ def get_metadata(
     random_seed: int,
     max_size_data_for_model: Optional[int] = None,
     benchmark: Optional[BenchmarkDefinition] = None,
-    extra_args: Optional[dict] = None,
+    extra_args: Optional[DictStrKey] = None,
 ) -> Dict[str, Any]:
     """Returns default value for ``metadata`` passed to :class:`~syne_tune.Tuner`.
 
@@ -152,3 +161,13 @@ def get_metadata(
     if extra_args is not None:
         metadata.update(extra_args)
     return metadata
+
+
+def extra_metadata(args, extra_args: ExtraArgsType) -> DictStrKey:
+    result = dict()
+    for extra_arg in extra_args:
+        name = extra_arg["name"]
+        value = getattr(args, name)
+        if value is not None:
+            result[name] = value
+    return result

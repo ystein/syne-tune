@@ -39,18 +39,13 @@ class MethodArguments:
     :param transfer_learning_evaluations: Support for transfer learning. Only
         for simulator backend experiments right now
     :param use_surrogates: For simulator backend experiments, defaults to False
-    :param num_brackets: Parameter for Hyperband schedulers, optional
     :param verbose: If True, fine-grained log information about the tuning is
         printed. Defaults to False
-    :param num_samples: Parameter for Hyper-Tune schedulers, defaults to 50
     :param fcnet_ordinal: Only for simulator backend and ``fcnet`` blackbox.
         This blackbox is tabulated with finite domains, one of which has
         irregular spacing. If ``fcnet_ordinal="none"``, this is left as
         categorical, otherwise we use ordinal encoding with
         ``kind=fcnet_ordinal``.
-    :param max_size_data_for_model: Parameter of
-        :class:`~syne_tune.optimizer.schedulers.searchers.GPMultiFidelitySearcher`,
-        sets limit to number of observations to which GP surrogate model is fit to
     :param scheduler_kwargs: If given, overwrites defaults of scheduler
         arguments
     """
@@ -64,11 +59,8 @@ class MethodArguments:
     max_t: Optional[int] = None
     transfer_learning_evaluations: Optional[Dict] = None
     use_surrogates: bool = False
-    num_brackets: Optional[int] = None
     verbose: Optional[bool] = False
-    num_samples: int = 50
     fcnet_ordinal: Optional[str] = None
-    max_size_data_for_model: Optional[int] = None
     scheduler_kwargs: Optional[Dict[str, Any]] = None
 
 
@@ -77,10 +69,20 @@ MethodDefinitions = Dict[str, Callable[[MethodArguments], TrialScheduler]]
 
 def search_options(args: MethodArguments) -> Dict[str, Any]:
     result = {"debug_log": args.verbose}
-    max_size = args.max_size_data_for_model
-    if max_size is not None:
-        result["max_size_data_for_model"] = max_size
+    k = "search_options"
+    if args.scheduler_kwargs is not None and k in args.scheduler_kwargs:
+        result.update(args.scheduler_kwargs[k])
     return result
+
+
+def default_arguments(args: MethodArguments) -> Dict[str, Any]:
+    return dict(
+        dict() if args.scheduler_kwargs is None else args.scheduler_kwargs,
+        mode=args.mode,
+        metric=args.metric,
+        max_resource_attr=args.max_resource_attr,
+        random_seed=args.random_seed,
+    )
 
 
 def convert_categorical_to_ordinal(config_space: Dict[str, Any]) -> Dict[str, Any]:
