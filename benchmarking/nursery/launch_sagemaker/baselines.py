@@ -31,27 +31,43 @@ class Methods:
 
 methods = {
     Methods.RS: lambda method_arguments: RandomSearch(
-        **default_arguments(method_arguments),
-        config_space=method_arguments.config_space,
-        search_options=search_options(method_arguments),
+        **default_arguments(
+            method_arguments,
+            dict(
+                config_space=method_arguments.config_space,
+                search_options=search_options(method_arguments),
+            ),
+        )
     ),
     Methods.BO: lambda method_arguments: BayesianOptimization(
-        **default_arguments(method_arguments),
-        config_space=method_arguments.config_space,
-        search_options=search_options(method_arguments),
+        **default_arguments(
+            method_arguments,
+            dict(
+                config_space=method_arguments.config_space,
+                search_options=search_options(method_arguments),
+            ),
+        )
     ),
     Methods.ASHA: lambda method_arguments: ASHA(
-        **default_arguments(method_arguments),
-        config_space=method_arguments.config_space,
-        search_options=search_options(method_arguments),
-        type="promotion",
-        resource_attr=method_arguments.resource_attr,
+        **default_arguments(
+            method_arguments,
+            dict(
+                config_space=method_arguments.config_space,
+                search_options=search_options(method_arguments),
+                type="promotion",
+                resource_attr=method_arguments.resource_attr,
+            ),
+        )
     ),
     Methods.MOBSTER: lambda method_arguments: MOBSTER(
-        **default_arguments(method_arguments),
-        config_space=method_arguments.config_space,
-        search_options=search_options(method_arguments),
-        type="promotion",
-        resource_attr=method_arguments.resource_attr,
+        **default_arguments(
+            method_arguments,
+            dict(
+                config_space=method_arguments.config_space,
+                search_options=search_options(method_arguments),
+                type="promotion",
+                resource_attr=method_arguments.resource_attr,
+            ),
+        )
     ),
 }

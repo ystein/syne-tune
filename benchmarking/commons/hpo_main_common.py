@@ -99,6 +99,9 @@ def parse_args(
         extra_args = copy.deepcopy(extra_args)
         for kwargs in extra_args:
             name = kwargs.pop("name")
+            assert (
+                name[0] != "-"
+            ), f"Name entry '{name}' in extra_args invalid: No leading '-'"
             parser.add_argument("--" + name, **kwargs)
     args, _ = parser.parse_known_args()
     args.save_tuner = bool(args.save_tuner)

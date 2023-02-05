@@ -21,12 +21,12 @@ from syne_tune.util import recursive_merge
 
 extra_args = [
     dict(
-        name="--num_brackets",
+        name="num_brackets",
         type=int,
         help="Number of brackets",
     ),
     dict(
-        name="--probability_sh",
+        name="probability_sh",
         type=float,
         help="Parameter for DyHPO: Probability of making SH promotion decision",
     ),

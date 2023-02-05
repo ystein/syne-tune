@@ -299,7 +299,9 @@ def main(
             )
         )
         if args.verbose:
-            logger.info(f"Creating {method} with MethodArguments:\n" + str(method_kwargs))
+            logger.info(
+                f"Creating {method} with MethodArguments:\n" + str(method_kwargs)
+            )
         scheduler = methods[method](MethodArguments(**method_kwargs))
 
         stop_criterion = StoppingCriterion(

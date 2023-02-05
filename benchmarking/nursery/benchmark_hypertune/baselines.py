@@ -40,66 +40,94 @@ def conv_numeric_only(margs) -> Dict[str, Any]:
 
 methods = {
     Methods.ASHA: lambda method_arguments: HyperbandScheduler(
-        **default_arguments(method_arguments),
-        config_space=conv_numeric_only(method_arguments),
-        searcher="random",
-        type="promotion",
-        search_options=search_options(method_arguments),
-        resource_attr=method_arguments.resource_attr,
+        **default_arguments(
+            method_arguments,
+            dict(
+                config_space=conv_numeric_only(method_arguments),
+                searcher="random",
+                type="promotion",
+                search_options=search_options(method_arguments),
+                resource_attr=method_arguments.resource_attr,
+            ),
+        )
     ),
     Methods.MOBSTER_JOINT: lambda method_arguments: HyperbandScheduler(
-        **default_arguments(method_arguments),
-        config_space=conv_numeric_only(method_arguments),
-        searcher="bayesopt",
-        type="promotion",
-        search_options=search_options(method_arguments),
-        resource_attr=method_arguments.resource_attr,
+        **default_arguments(
+            method_arguments,
+            dict(
+                config_space=conv_numeric_only(method_arguments),
+                searcher="bayesopt",
+                type="promotion",
+                search_options=search_options(method_arguments),
+                resource_attr=method_arguments.resource_attr,
+            ),
+        )
     ),
     Methods.MOBSTER_INDEP: lambda method_arguments: HyperbandScheduler(
-        **default_arguments(method_arguments),
-        config_space=conv_numeric_only(method_arguments),
-        searcher="bayesopt",
-        type="promotion",
-        search_options=dict(
-            search_options(method_arguments),
-            model="gp_independent",
-        ),
-        resource_attr=method_arguments.resource_attr,
+        **default_arguments(
+            method_arguments,
+            dict(
+                config_space=conv_numeric_only(method_arguments),
+                searcher="bayesopt",
+                type="promotion",
+                search_options=dict(
+                    search_options(method_arguments),
+                    model="gp_independent",
+                ),
+                resource_attr=method_arguments.resource_attr,
+            ),
+        )
     ),
     Methods.HYPERTUNE_INDEP: lambda method_arguments: HyperbandScheduler(
-        **default_arguments(method_arguments),
-        config_space=conv_numeric_only(method_arguments),
-        searcher="hypertune",
-        type="promotion",
-        search_options=dict(
-            search_options(method_arguments),
-            model="gp_independent",
-        ),
-        resource_attr=method_arguments.resource_attr,
+        **default_arguments(
+            method_arguments,
+            dict(
+                config_space=conv_numeric_only(method_arguments),
+                searcher="hypertune",
+                type="promotion",
+                search_options=dict(
+                    search_options(method_arguments),
+                    model="gp_independent",
+                ),
+                resource_attr=method_arguments.resource_attr,
+            ),
+        )
     ),
     Methods.HYPERTUNE_JOINT: lambda method_arguments: HyperbandScheduler(
-        **default_arguments(method_arguments),
-        config_space=conv_numeric_only(method_arguments),
-        searcher="hypertune",
-        type="promotion",
-        search_options=dict(
-            search_options(method_arguments),
-            model="gp_multitask",
-        ),
-        resource_attr=method_arguments.resource_attr,
+        **default_arguments(
+            method_arguments,
+            dict(
+                config_space=conv_numeric_only(method_arguments),
+                searcher="hypertune",
+                type="promotion",
+                search_options=dict(
+                    search_options(method_arguments),
+                    model="gp_multitask",
+                ),
+                resource_attr=method_arguments.resource_attr,
+            ),
+        )
     ),
     Methods.SYNCHB: lambda method_arguments: SynchronousGeometricHyperbandScheduler(
-        **default_arguments(method_arguments),
-        config_space=conv_numeric_only(method_arguments),
-        searcher="random",
-        search_options=search_options(method_arguments),
-        resource_attr=method_arguments.resource_attr,
+        **default_arguments(
+            method_arguments,
+            dict(
+                config_space=conv_numeric_only(method_arguments),
+                searcher="random",
+                search_options=search_options(method_arguments),
+                resource_attr=method_arguments.resource_attr,
+            ),
+        )
     ),
     Methods.BOHB: lambda method_arguments: SynchronousGeometricHyperbandScheduler(
-        **default_arguments(method_arguments),
-        config_space=conv_numeric_only(method_arguments),
-        searcher="kde",
-        search_options=search_options(method_arguments),
-        resource_attr=method_arguments.resource_attr,
+        **default_arguments(
+            method_arguments,
+            dict(
+                config_space=conv_numeric_only(method_arguments),
+                searcher="kde",
+                search_options=search_options(method_arguments),
+                resource_attr=method_arguments.resource_attr,
+            ),
+        )
     ),
 }

@@ -75,14 +75,21 @@ def search_options(args: MethodArguments) -> Dict[str, Any]:
     return result
 
 
-def default_arguments(args: MethodArguments) -> Dict[str, Any]:
-    return dict(
-        dict() if args.scheduler_kwargs is None else args.scheduler_kwargs,
-        mode=args.mode,
-        metric=args.metric,
-        max_resource_attr=args.max_resource_attr,
-        random_seed=args.random_seed,
+def default_arguments(
+    args: MethodArguments,
+    extra_args: Dict[str, Any],
+) -> Dict[str, Any]:
+    result = dict() if args.scheduler_kwargs is None else args.scheduler_kwargs.copy()
+    result.update(
+        dict(
+            mode=args.mode,
+            metric=args.metric,
+            max_resource_attr=args.max_resource_attr,
+            random_seed=args.random_seed,
+        )
     )
+    result.update(extra_args)
+    return result
 
 
 def convert_categorical_to_ordinal(config_space: Dict[str, Any]) -> Dict[str, Any]:

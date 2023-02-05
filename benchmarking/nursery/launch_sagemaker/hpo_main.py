@@ -20,13 +20,13 @@ from syne_tune.util import recursive_merge
 
 extra_args = [
     dict(
-        name="--grace_period",
+        name="grace_period",
         type=int,
         default=1,
         help="Minimum resource level in Hyperband",
     ),
     dict(
-        name="--reduction_factor",
+        name="reduction_factor",
         type=int,
         default=3,
         help="Reduction factor in Hyperband",

@@ -21,12 +21,12 @@ from syne_tune.util import recursive_merge
 
 extra_args = [
     dict(
-        name="--num_brackets",
+        name="num_brackets",
         type=int,
         help="Number of brackets",
     ),
     dict(
-        name="--num_samples",
+        name="num_samples",
         type=int,
         default=50,
         help="Number of samples for Hyper-Tune distribution",

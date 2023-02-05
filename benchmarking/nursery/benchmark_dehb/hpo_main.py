@@ -21,7 +21,7 @@ from syne_tune.util import recursive_merge
 
 extra_args = [
     dict(
-        name="--num_brackets",
+        name="num_brackets",
         type=int,
         help="Number of brackets",
     ),

@@ -53,76 +53,116 @@ def conv_numeric_then_rest(margs) -> Dict[str, Any]:
 
 methods = {
     Methods.ASHA: lambda method_arguments: HyperbandScheduler(
-        **default_arguments(method_arguments),
-        config_space=conv_numeric_only(method_arguments),
-        searcher="random",
-        type="promotion",
-        search_options=search_options(method_arguments),
-        resource_attr=method_arguments.resource_attr,
+        **default_arguments(
+            method_arguments,
+            dict(
+                config_space=conv_numeric_only(method_arguments),
+                searcher="random",
+                type="promotion",
+                search_options=search_options(method_arguments),
+                resource_attr=method_arguments.resource_attr,
+            ),
+        )
     ),
     Methods.SYNCHB: lambda method_arguments: SynchronousGeometricHyperbandScheduler(
-        **default_arguments(method_arguments),
-        config_space=conv_numeric_only(method_arguments),
-        searcher="random",
-        search_options=search_options(method_arguments),
-        resource_attr=method_arguments.resource_attr,
+        **default_arguments(
+            method_arguments,
+            dict(
+                config_space=conv_numeric_only(method_arguments),
+                searcher="random",
+                search_options=search_options(method_arguments),
+                resource_attr=method_arguments.resource_attr,
+            ),
+        )
     ),
     Methods.DEHB: lambda method_arguments: GeometricDifferentialEvolutionHyperbandScheduler(
-        **default_arguments(method_arguments),
-        config_space=conv_numeric_only(method_arguments),
-        searcher="random_encoded",
-        search_options=search_options(method_arguments),
-        resource_attr=method_arguments.resource_attr,
+        **default_arguments(
+            method_arguments,
+            dict(
+                config_space=conv_numeric_only(method_arguments),
+                searcher="random_encoded",
+                search_options=search_options(method_arguments),
+                resource_attr=method_arguments.resource_attr,
+            ),
+        )
     ),
     Methods.BOHB: lambda method_arguments: SynchronousGeometricHyperbandScheduler(
-        **default_arguments(method_arguments),
-        config_space=conv_numeric_only(method_arguments),
-        searcher="kde",
-        search_options=search_options(method_arguments),
-        resource_attr=method_arguments.resource_attr,
+        **default_arguments(
+            method_arguments,
+            dict(
+                config_space=conv_numeric_only(method_arguments),
+                searcher="kde",
+                search_options=search_options(method_arguments),
+                resource_attr=method_arguments.resource_attr,
+            ),
+        )
     ),
     Methods.ASHA_ORD: lambda method_arguments: HyperbandScheduler(
-        **default_arguments(method_arguments),
-        config_space=conv_numeric_then_rest(method_arguments),
-        searcher="random",
-        type="promotion",
-        search_options=search_options(method_arguments),
-        resource_attr=method_arguments.resource_attr,
+        **default_arguments(
+            method_arguments,
+            dict(
+                config_space=conv_numeric_then_rest(method_arguments),
+                searcher="random",
+                type="promotion",
+                search_options=search_options(method_arguments),
+                resource_attr=method_arguments.resource_attr,
+            ),
+        )
     ),
     Methods.SYNCHB_ORD: lambda method_arguments: SynchronousGeometricHyperbandScheduler(
-        **default_arguments(method_arguments),
-        config_space=conv_numeric_then_rest(method_arguments),
-        searcher="random",
-        search_options=search_options(method_arguments),
-        resource_attr=method_arguments.resource_attr,
+        **default_arguments(
+            method_arguments,
+            dict(
+                config_space=conv_numeric_then_rest(method_arguments),
+                searcher="random",
+                search_options=search_options(method_arguments),
+                resource_attr=method_arguments.resource_attr,
+            ),
+        )
     ),
     Methods.DEHB_ORD: lambda method_arguments: GeometricDifferentialEvolutionHyperbandScheduler(
-        **default_arguments(method_arguments),
-        config_space=conv_numeric_then_rest(method_arguments),
-        searcher="random_encoded",
-        search_options=search_options(method_arguments),
-        resource_attr=method_arguments.resource_attr,
+        **default_arguments(
+            method_arguments,
+            dict(
+                config_space=conv_numeric_then_rest(method_arguments),
+                searcher="random_encoded",
+                search_options=search_options(method_arguments),
+                resource_attr=method_arguments.resource_attr,
+            ),
+        )
     ),
     Methods.BOHB_ORD: lambda method_arguments: SynchronousGeometricHyperbandScheduler(
-        **default_arguments(method_arguments),
-        config_space=conv_numeric_then_rest(method_arguments),
-        searcher="kde",
-        search_options=search_options(method_arguments),
-        resource_attr=method_arguments.resource_attr,
+        **default_arguments(
+            method_arguments,
+            dict(
+                config_space=conv_numeric_then_rest(method_arguments),
+                searcher="kde",
+                search_options=search_options(method_arguments),
+                resource_attr=method_arguments.resource_attr,
+            ),
+        )
     ),
     Methods.ASHA_STOP: lambda method_arguments: HyperbandScheduler(
-        **default_arguments(method_arguments),
-        config_space=conv_numeric_only(method_arguments),
-        searcher="random",
-        type="stopping",
-        search_options=search_options(method_arguments),
-        resource_attr=method_arguments.resource_attr,
+        **default_arguments(
+            method_arguments,
+            dict(
+                config_space=conv_numeric_only(method_arguments),
+                searcher="random",
+                type="stopping",
+                search_options=search_options(method_arguments),
+                resource_attr=method_arguments.resource_attr,
+            ),
+        )
     ),
     Methods.SYNCMOBSTER: lambda method_arguments: SynchronousGeometricHyperbandScheduler(
-        **default_arguments(method_arguments),
-        config_space=conv_numeric_only(method_arguments),
-        searcher="bayesopt",
-        search_options=search_options(method_arguments),
-        resource_attr=method_arguments.resource_attr,
+        **default_arguments(
+            method_arguments,
+            dict(
+                config_space=conv_numeric_only(method_arguments),
+                searcher="bayesopt",
+                search_options=search_options(method_arguments),
+                resource_attr=method_arguments.resource_attr,
+            ),
+        )
     ),
 }
