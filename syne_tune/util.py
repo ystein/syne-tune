@@ -224,30 +224,40 @@ def dict_get(params: Dict[str, Any], key: str, default: Any) -> Any:
     return default if v is None else v
 
 
-def recursive_merge(a: Dict[str, Any], b: Dict[str, Any]) -> Dict[str, Any]:
+def recursive_merge(
+    a: Dict[str, Any],
+    b: Dict[str, Any],
+    stop_keys: Optional[List[str]] = None,
+) -> Dict[str, Any]:
     """
     Merge dictionaries ``a`` and ``b``, where ``b`` takes precedence. We
     typically use this to modify a dictionary ``a``, so ``b`` is smaller
-    than ``a``.
+    than ``a``. Further recursion is stopped on any node with key in
+    ``stop_keys``. Use this for dictionary-valued entries not to be merged,
+    but to be replaced by what is in ``b``.
 
     :param a: Dictionary
     :param b: Dictionary (can be empty)
+    :param stop_keys: See above, optional
     :return: Merged dictionary
     """
     if b:
+        if stop_keys is None:
+            stop_keys = []
         result = dict()
         keys_b = set(b.keys())
         for k, va in a.items():
             if k in keys_b:
                 keys_b.remove(k)
                 vb = b[k]
-                if isinstance(va, dict):
+                stop_recursion = k in stop_keys
+                if isinstance(va, dict) and not stop_recursion:
                     assert isinstance(
                         vb, dict
                     ), f"k={k} has dict value in a, but not in b:\n{va}\n{vb}"
                     result[k] = recursive_merge(va, vb)
                 else:
-                    assert not isinstance(
+                    assert stop_recursion or not isinstance(
                         vb, dict
                     ), f"k={k} has dict value in b, but not in a:\n{va}\n{vb}"
                     result[k] = vb

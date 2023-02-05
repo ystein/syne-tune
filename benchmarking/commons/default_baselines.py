@@ -43,6 +43,7 @@ def RandomSearch(method_arguments: MethodArguments, **kwargs):
                 ),
             ),
             kwargs,
+            stop_keys=["config_space"],
         )
     )
 
@@ -58,6 +59,7 @@ def BayesianOptimization(method_arguments: MethodArguments, **kwargs):
                 ),
             ),
             kwargs,
+            stop_keys=["config_space"],
         )
     )
 
@@ -74,6 +76,7 @@ def ASHA(method_arguments: MethodArguments, **kwargs):
                 ),
             ),
             kwargs,
+            stop_keys=["config_space"],
         )
     )
 
@@ -90,6 +93,7 @@ def DyHPO(method_arguments: MethodArguments, **kwargs):
                 ),
             ),
             kwargs,
+            stop_keys=["config_space"],
         )
     )
 
@@ -106,6 +110,7 @@ def HyperTune(method_arguments: MethodArguments, **kwargs):
                 ),
             ),
             kwargs,
+            stop_keys=["config_space"],
         )
     )
 
@@ -122,6 +127,7 @@ def MOBSTER(method_arguments: MethodArguments, **kwargs):
                 ),
             ),
             kwargs,
+            stop_keys=["config_space"],
         )
     )
 
@@ -138,6 +144,7 @@ def BOHB(method_arguments: MethodArguments, **kwargs):
                 ),
             ),
             kwargs,
+            stop_keys=["config_space"],
         )
     )
 
@@ -154,6 +161,7 @@ def SyncHyperband(method_arguments: MethodArguments, **kwargs):
                 ),
             ),
             kwargs,
+            stop_keys=["config_space"],
         )
     )
 
@@ -170,6 +178,7 @@ def SyncBOHB(method_arguments: MethodArguments, **kwargs):
                 ),
             ),
             kwargs,
+            stop_keys=["config_space"],
         )
     )
 
@@ -186,6 +195,7 @@ def DEHB(method_arguments: MethodArguments, **kwargs):
                 ),
             ),
             kwargs,
+            stop_keys=["config_space"],
         )
     )
 
@@ -202,6 +212,7 @@ def SyncMOBSTER(method_arguments: MethodArguments, **kwargs):
                 ),
             ),
             kwargs,
+            stop_keys=["config_space"],
         )
     )
 
@@ -217,5 +228,6 @@ def KDE(method_arguments: MethodArguments, **kwargs):
                 ),
             ),
             kwargs,
+            stop_keys=["config_space"],
         )
     )
