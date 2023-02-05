@@ -80,7 +80,6 @@ _ARGUMENT_KEYS = {
 _DEFAULT_OPTIONS = {
     "resource_attr": "epoch",
     "grace_period": 1,
-    "reduction_factor": 3,
     "brackets": 1,
     "type": "stopping",
     "searcher_data": "rungs",
@@ -100,6 +99,7 @@ _CONSTRAINTS = {
     "resource_attr": String(),
     "grace_period": Integer(1, None),
     "reduction_factor": Float(2, None),
+    "rung_increment": Integer(1, None),
     "brackets": Integer(1, None),
     "type": Categorical(tuple(RUNG_SYSTEMS.keys())),
     "searcher_data": Categorical(("rungs", "all", "rungs_and_last")),
@@ -175,12 +175,18 @@ class HyperbandScheduler(FIFOScheduler, MultiFidelitySchedulerMixin):
     These rung levels (positive, strictly increasing) can be specified via
     ``rung_levels``, the largest must be ``<= max_t``.
     If ``rung_levels`` is not given, they are specified by ``grace_period``
-    and ``reduction_factor``. If :math:`r_{min}` is ``grace_period``,
-    :math:`\eta` is ``reduction_factor``, then rung levels are
-    :math:`\mathrm{round}(r_{min} \eta^j), j=0, 1, \dots`.
-    This is the default choice for successive halving (Hyperband).
-    Note: If ``rung_levels`` is given, then ``grace_period``, ``reduction_factor``
-    are ignored. If they are given, a warning is logged.
+    and ``reduction_factor`` or ``rung_increment``:
+
+    * If :math:`r_{min}` is ``grace_period``, :math:`\eta` is
+      ``reduction_factor``, then rung levels are
+      :math:`\mathrm{round}(r_{min} \eta^j), j=0, 1, \dots`. This is the default
+      choice for successive halving (Hyperband).
+    * If ``rung_increment`` is given, but not ``reduction_factor``, then rung
+      levels are :math:`r_{min} + j \nu, j=0, 1, \dots`, where :math:`\nu` is
+      ``rung_increment``.
+
+    If ``rung_levels`` is given, then ``grace_period``, ``reduction_factor``,
+    ``rung_increment`` are ignored. If they are given, a warning is logged.
 
     The rung levels determine the quantiles to be used in the stop/go
     decisions. If rung levels are :math:`r_j`, define
@@ -250,11 +256,15 @@ class HyperbandScheduler(FIFOScheduler, MultiFidelitySchedulerMixin):
     :param reduction_factor: Parameter to determine rung levels. Ignored
         if ``rung_levels`` is given. Must be :math:`\ge 2`, defaults to 3
     :type reduction_factor: float, optional
+    :param rung_increment: Parameter to determine rung levels. Ignored
+        if ``rung_levels`` or ``reduction_factor`` are given. Must be
+        postive
+    :type rung_increment: int, optional
     :param rung_levels: If given, prescribes the set of rung levels to
         be used. Must contain positive integers, strictly increasing.
-        This information overrides ``grace_period`` and ``reduction_factor``.
-        Note that the stop/promote rule in the successive halving scheduler
-        is set based on the ratio of successive rung levels.
+        This information overrides ``grace_period``, ``reduction_factor``,
+        ``rung_increment``. Note that the stop/promote rule in the successive
+        halving scheduler is set based on the ratio of successive rung levels.
     :type rung_levels: ``List[int]``, optional
     :param brackets: Number of brackets to be used in Hyperband. Each
         bracket has a different grace period, all share ``max_t``
@@ -385,6 +395,11 @@ class HyperbandScheduler(FIFOScheduler, MultiFidelitySchedulerMixin):
         kwargs = check_and_merge_defaults(
             kwargs, set(), _DEFAULT_OPTIONS, _CONSTRAINTS, dict_name="scheduler_options"
         )
+        if (
+            kwargs.get("reduction_factor") is None
+            and kwargs.get("rung_increment") is None
+        ):
+            kwargs["reduction_factor"] = 3
         scheduler_type = kwargs["type"]
         self.scheduler_type = scheduler_type
         self._resource_attr = kwargs["resource_attr"]
@@ -401,7 +416,8 @@ class HyperbandScheduler(FIFOScheduler, MultiFidelitySchedulerMixin):
                 "num_brackets": kwargs["brackets"],
                 "rung_levels": kwargs.get("rung_levels"),
                 "grace_period": kwargs["grace_period"],
-                "reduction_factor": kwargs["reduction_factor"],
+                "reduction_factor": kwargs.get("reduction_factor"),
+                "rung_increment": kwargs.get("rung_increment"),
             }
         else:
             self._num_brackets_info = None
@@ -418,16 +434,22 @@ class HyperbandScheduler(FIFOScheduler, MultiFidelitySchedulerMixin):
         rung_levels = kwargs.get("rung_levels")
         if rung_levels is not None:
             assert isinstance(rung_levels, list)
-            if ("grace_period" in kwargs) or ("reduction_factor" in kwargs):
+            if (
+                ("grace_period" in kwargs)
+                or ("reduction_factor" in kwargs)
+                or ("rung_increment" in kwargs)
+            ):
                 logger.warning(
                     "Since rung_levels is given, the values grace_period = "
-                    f"{kwargs.get('grace_period')} and reduction_factor = "
-                    f"{kwargs.get('reduction_factor')} are ignored!"
+                    f"{kwargs.get('grace_period')}, reduction_factor = "
+                    f"{kwargs.get('reduction_factor')} and rung_increment = "
+                    f"{kwargs.get('rung_increment')} are ignored!"
                 )
         rung_levels = hyperband_rung_levels(
             rung_levels,
             grace_period=kwargs["grace_period"],
-            reduction_factor=kwargs["reduction_factor"],
+            reduction_factor=kwargs.get("reduction_factor"),
+            rung_increment=kwarg.get("rung_increment"),
             max_t=self.max_t,
         )
         do_snapshots = kwargs["do_snapshots"]
@@ -527,6 +549,7 @@ class HyperbandScheduler(FIFOScheduler, MultiFidelitySchedulerMixin):
                 self._num_brackets_info["rung_levels"],
                 grace_period=self._num_brackets_info["grace_period"],
                 reduction_factor=self._num_brackets_info["reduction_factor"],
+                rung_increment=self._num_brackets_info["rung_increment"],
                 max_t=self.max_t,
             )
             num_brackets = min(
@@ -961,7 +984,8 @@ def _is_positive_int(x):
 def hyperband_rung_levels(
     rung_levels: Optional[List[int]],
     grace_period: int,
-    reduction_factor: int,
+    reduction_factor: Optional[float],
+    rung_increment: Optional[int],
     max_t: int,
 ) -> List[int]:
     """Creates ``rung_levels`` from ``grace_period``, ``reduction_factor``
@@ -972,6 +996,7 @@ def hyperband_rung_levels(
     :param rung_levels: If given, this is returned (but see above)
     :param grace_period: See :class:`~syne_tune.optimizer.schedulers.HyperbandScheduler`
     :param reduction_factor: See :class:`~syne_tune.optimizer.schedulers.HyperbandScheduler`
+    :param rung_increment: See :class:`~syne_tune.optimizer.schedulers.HyperbandScheduler`
     :param max_t: See :class:`~syne_tune.optimizer.schedulers.HyperbandScheduler`
     :return: List of rung levels
     """
@@ -992,18 +1017,25 @@ def hyperband_rung_levels(
     else:
         # Rung levels given by grace_period, reduction_factor, max_t
         assert _is_positive_int(grace_period)
-        assert reduction_factor >= 2
         assert _is_positive_int(max_t)
         assert (
             max_t > grace_period
         ), f"max_t ({max_t}) must be greater than grace_period ({grace_period})"
-        rf = reduction_factor
-        min_t = grace_period
-        max_rungs = 0
-        while min_t * np.power(rf, max_rungs) < max_t:
-            max_rungs += 1
-        rung_levels = [int(round(min_t * np.power(rf, k))) for k in range(max_rungs)]
-        assert rung_levels[-1] <= max_t  # Sanity check
+        if reduction_factor is not None:
+            assert reduction_factor >= 2
+            rf = reduction_factor
+            min_t = grace_period
+            max_rungs = 0
+            while min_t * np.power(rf, max_rungs) < max_t:
+                max_rungs += 1
+            rung_levels = [
+                int(round(min_t * np.power(rf, k))) for k in range(max_rungs)
+            ]
+            assert rung_levels[-1] <= max_t  # Sanity check
+        else:
+            assert rung_increment is not None
+            assert _is_positive_int(rung_increment)
+            rung_levels = list(range(grace_period, max_t, rung_increment))
     if rung_levels[-1] == max_t:
         rung_levels = rung_levels[:-1]
     return rung_levels

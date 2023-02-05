@@ -30,16 +30,22 @@ extra_args = [
         type=float,
         help="Parameter for DyHPO: Probability of making SH promotion decision",
     ),
+    dict(
+        name="rung_increment",
+        type=int,
+        default=1,
+        help="Increment between rung levels",
+    ),
 ]
 
 
 def map_extra_args(args, method: str, method_kwargs: Dict[str, Any]) -> Dict[str, Any]:
-    if method == Methods.DYHPO and args.probability_sh is not None:
-        scheduler_kwargs = {
-            "search_options": {
+    if method == Methods.DYHPO:
+        scheduler_kwargs = {"rung_increment": args.rung_increment}
+        if args.probability_sh is not None:
+            scheduler_kwargs["search_options"] = {
                 "rung_system_kwargs": {"probability_sh": args.probability_sh},
-            },
-        }
+            }
     else:
         scheduler_kwargs = dict()
     if args.num_brackets is not None:
