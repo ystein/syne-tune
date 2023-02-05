@@ -127,13 +127,6 @@ class MyGPMultiFidelitySearcher(GPMultiFidelitySearcher):
             )
         ]
         num_new = len(configs_new)  # Can be less than before
-        # DEBUG!!
-        # configs_paused = configs_paused + [
-        #     self.config_space_ext.get(config, 2)
-        #     for config in configs_new[:3]
-        # ]
-        # resources_all = resources_all + ([2] * 3)
-        # END DEBUG
         configs_all = configs_paused + configs_new
         resources_all.extend([min_resource] * num_new)
         num_all = len(resources_all)
@@ -184,9 +177,9 @@ class MyGPMultiFidelitySearcher(GPMultiFidelitySearcher):
             scores_for_resource = candidates_scorer.score(
                 [configs_all[pos] for pos in ind_for_resource]
             )
+            scores[ind_for_resource] = scores_for_resource
             # DEBUG:
             _debug_print_info(resource, scores_for_resource, candidates_scorer)
-            scores[ind_for_resource] = scores_for_resource
 
         # Pick the winner
         best_ind = np.argmin(scores)

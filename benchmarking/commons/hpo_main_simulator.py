@@ -14,6 +14,7 @@ from typing import Optional, List, Union, Dict, Any
 import numpy as np
 import itertools
 from tqdm import tqdm
+import logging
 
 from benchmarking.commons.baselines import MethodArguments, MethodDefinitions
 from benchmarking.commons.benchmark_definitions.common import (
@@ -38,6 +39,8 @@ from syne_tune.optimizer.schedulers.transfer_learning import (
 )
 from syne_tune.stopping_criterion import StoppingCriterion
 from syne_tune.tuner import Tuner
+
+logger = logging.getLogger(__name__)
 
 
 SurrogateBenchmarkDefinitions = Union[
@@ -285,17 +288,19 @@ def main(
         if extra_args is not None:
             assert map_extra_args is not None
             method_kwargs = map_extra_args(args, method, method_kwargs)
-        scheduler = methods[method](
-            MethodArguments(
+        method_kwargs.update(
+            dict(
                 config_space=config_space,
                 metric=benchmark.metric,
                 mode=benchmark.mode,
                 random_seed=random_seed,
                 resource_attr=resource_attr,
                 verbose=args.verbose,
-                **method_kwargs,
             )
         )
+        if args.verbose:
+            logger.info(f"Creating {method} with MethodArguments:\n" + str(method_kwargs))
+        scheduler = methods[method](MethodArguments(**method_kwargs))
 
         stop_criterion = StoppingCriterion(
             max_wallclock_time=benchmark.max_wallclock_time,

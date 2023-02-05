@@ -11,10 +11,10 @@
 # express or implied. See the License for the specific language governing
 # permissions and limitations under the License.
 from typing import Optional, List, Callable, Dict, Any
-
 import numpy as np
 import itertools
 from tqdm import tqdm
+import logging
 
 from syne_tune.backend import LocalBackend
 from syne_tune.stopping_criterion import StoppingCriterion
@@ -30,6 +30,8 @@ from benchmarking.commons.hpo_main_common import (
     extra_metadata,
 )
 from benchmarking.commons.utils import get_master_random_seed, effective_random_seed
+
+logger = logging.getLogger(__name__)
 
 
 RealBenchmarkDefinitions = Callable[..., Dict[str, RealBenchmarkDefinition]]
@@ -110,17 +112,19 @@ def create_objects_for_tuner(
     if extra_args is not None:
         assert map_extra_args is not None
         method_kwargs = map_extra_args(args, method, method_kwargs)
-    scheduler = methods[method](
-        MethodArguments(
+    method_kwargs.update(
+        dict(
             config_space=benchmark.config_space,
             metric=benchmark.metric,
             mode=benchmark.mode,
             random_seed=effective_random_seed(master_random_seed, seed),
             resource_attr=benchmark.resource_attr,
             verbose=verbose,
-            **method_kwargs,
         )
     )
+    if verbose:
+        logger.info(f"Creating {method} with MethodArguments:\n" + str(method_kwargs))
+    scheduler = methods[method](MethodArguments(**method_kwargs))
     stop_criterion = StoppingCriterion(
         max_wallclock_time=benchmark.max_wallclock_time,
         max_num_evaluations=benchmark.max_num_evaluations,
