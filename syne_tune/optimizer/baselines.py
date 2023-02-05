@@ -250,6 +250,7 @@ class HyperTune(HyperbandScheduler):
         )
 
 
+# TODO: Document differences!!
 class DyHPO(HyperbandScheduler):
     """Dynamic Gray-Box Hyperparameter Optimization (DyHPO)
 
@@ -304,6 +305,11 @@ class DyHPO(HyperbandScheduler):
                     "DyHPO does not support debug_log=True at the moment. Switching it off"
                 )
             search_options[k] = False
+        if (
+            kwargs.get("reduction_factor") is None
+            and kwargs.get("rung_increment") is None
+        ):
+            kwargs["rung_increment"] = 1
         super(DyHPO, self).__init__(
             config_space=config_space,
             metric=metric,

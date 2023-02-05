@@ -10,11 +10,7 @@
 # on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
 # express or implied. See the License for the specific language governing
 # permissions and limitations under the License.
-from benchmarking.commons.baselines import (
-    search_options,
-    default_arguments,
-)
-from syne_tune.optimizer.baselines import (
+from benchmarking.commons.default_baselines import (
     RandomSearch,
     BayesianOptimization,
     DyHPO,
@@ -32,54 +28,11 @@ class Methods:
 
 
 methods = {
-    Methods.RS: lambda method_arguments: RandomSearch(
-        **default_arguments(
-            method_arguments,
-            dict(
-                config_space=method_arguments.config_space,
-                search_options=search_options(method_arguments),
-            ),
-        )
-    ),
-    Methods.BO: lambda method_arguments: BayesianOptimization(
-        **default_arguments(
-            method_arguments,
-            dict(
-                config_space=method_arguments.config_space,
-                search_options=search_options(method_arguments),
-            ),
-        )
-    ),
-    Methods.ASHA: lambda method_arguments: ASHA(
-        **default_arguments(
-            method_arguments,
-            dict(
-                config_space=method_arguments.config_space,
-                type="promotion",
-                search_options=search_options(method_arguments),
-                resource_attr=method_arguments.resource_attr,
-            ),
-        )
-    ),
-    Methods.DYHPO: lambda method_arguments: DyHPO(
-        **default_arguments(
-            method_arguments,
-            dict(
-                config_space=method_arguments.config_space,
-                search_options=search_options(method_arguments),
-                resource_attr=method_arguments.resource_attr,
-            ),
-        )
-    ),
+    Methods.RS: lambda method_arguments: RandomSearch(method_arguments),
+    Methods.BO: lambda method_arguments: BayesianOptimization(method_arguments),
+    Methods.ASHA: lambda method_arguments: ASHA(method_arguments, type="promotion"),
+    Methods.DYHPO: lambda method_arguments: DyHPO(method_arguments),
     Methods.MOBSTER: lambda method_arguments: MOBSTER(
-        **default_arguments(
-            method_arguments,
-            dict(
-                config_space=method_arguments.config_space,
-                type="promotion",
-                search_options=search_options(method_arguments),
-                resource_attr=method_arguments.resource_attr,
-            ),
-        )
+        method_arguments, type="promotion"
     ),
 }
