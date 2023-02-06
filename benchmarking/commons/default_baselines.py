@@ -87,7 +87,9 @@ def REA(method_arguments: MethodArguments, **kwargs):
 
 
 def ConstrainedBayesianOptimization(method_arguments: MethodArguments, **kwargs):
-    return _ConstrainedBayesianOptimization(**_baseline_kwargs(method_arguments, kwargs))
+    return _ConstrainedBayesianOptimization(
+        **_baseline_kwargs(method_arguments, kwargs)
+    )
 
 
 def ASHA(method_arguments: MethodArguments, **kwargs):
@@ -115,7 +117,9 @@ def ASHABORE(method_arguments: MethodArguments, **kwargs):
 
 
 def SyncHyperband(method_arguments: MethodArguments, **kwargs):
-    return _SyncHyperband(**_baseline_kwargs(method_arguments, kwargs, is_multifid=True))
+    return _SyncHyperband(
+        **_baseline_kwargs(method_arguments, kwargs, is_multifid=True)
+    )
 
 
 def SyncBOHB(method_arguments: MethodArguments, **kwargs):
