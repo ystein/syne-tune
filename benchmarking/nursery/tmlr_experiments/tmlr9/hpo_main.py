@@ -10,26 +10,12 @@
 # on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
 # express or implied. See the License for the specific language governing
 # permissions and limitations under the License.
-from benchmarking.commons.default_baselines import (
-    RandomSearch,
-    BayesianOptimization,
-    ASHA,
-    MOBSTER,
+from benchmarking.commons.hpo_main_simulator import main
+from benchmarking.nursery.tmlr_experiments.tmlr8.baselines import methods
+from benchmarking.nursery.tmlr_experiments.tmlr8.benchmark_definitions import (
+    benchmark_definitions,
 )
 
 
-class Methods:
-    RS = "RS"
-    BO = "BO"
-    ASHA = "ASHA"
-    MOBSTER = "MOBSTER"
-
-
-methods = {
-    Methods.RS: lambda method_arguments: RandomSearch(method_arguments),
-    Methods.BO: lambda method_arguments: BayesianOptimization(method_arguments),
-    Methods.ASHA: lambda method_arguments: ASHA(method_arguments, type="promotion"),
-    Methods.MOBSTER: lambda method_arguments: MOBSTER(
-        method_arguments, type="promotion"
-    ),
-}
+if __name__ == "__main__":
+    main(methods, benchmark_definitions)

@@ -16,6 +16,7 @@ from benchmarking.commons.default_baselines import (
     ASHA,
     MOBSTER,
     HyperTune,
+    DyHPO,
     SyncHyperband,
     SyncMOBSTER,
 )
@@ -28,6 +29,7 @@ class Methods:
     ASHA = "ASHA"
     MOBSTER = "MOBSTER"
     HYPERTUNE = "HyperTune"
+    DYHPO = "DYHPO"
     MSR = "MSR"
     SYNCSH = "SyncSH"
     SYNCHB = "SyncHB"
@@ -44,6 +46,7 @@ methods = {
     Methods.HYPERTUNE: lambda method_arguments: HyperTune(
         method_arguments, type="promotion"
     ),
+    Methods.DYHPO: lambda method_arguments: DyHPO(method_arguments),
     Methods.SYNCSH: lambda method_arguments: SyncHyperband(
         method_arguments, brackets=1
     ),

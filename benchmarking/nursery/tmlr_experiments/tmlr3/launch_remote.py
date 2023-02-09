@@ -22,7 +22,7 @@ from benchmarking.nursery.tmlr_experiments.tmlr3.baselines import methods
 if __name__ == "__main__":
 
     def _is_expensive_method(method: str) -> bool:
-        return method in {"BO", "MOBSTER", "HyperTune", "SyncMOBSTER"}
+        return method in {"BO", "MOBSTER", "HyperTune", "DYHPO", "SyncMOBSTER"}
 
     entry_point = Path(__file__).parent / "hpo_main.py"
     launch_remote(

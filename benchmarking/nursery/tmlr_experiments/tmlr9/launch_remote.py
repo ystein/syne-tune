@@ -13,16 +13,16 @@
 from pathlib import Path
 
 from benchmarking.commons.launch_remote_simulator import launch_remote
-from benchmarking.nursery.tmlr_experiments.tmlr6.benchmark_definitions import (
+from benchmarking.nursery.tmlr_experiments.tmlr8.benchmark_definitions import (
     benchmark_definitions,
 )
-from benchmarking.nursery.tmlr_experiments.tmlr6.baselines import methods
+from benchmarking.nursery.tmlr_experiments.tmlr8.baselines import methods
 
 
 if __name__ == "__main__":
 
     def _is_expensive_method(method: str) -> bool:
-        return method not in {"BOHB", "SyncBOHB", "DEHB"}
+        return True
 
     entry_point = Path(__file__).parent / "hpo_main.py"
     launch_remote(

@@ -10,26 +10,17 @@
 # on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
 # express or implied. See the License for the specific language governing
 # permissions and limitations under the License.
-from benchmarking.commons.default_baselines import (
-    RandomSearch,
-    BayesianOptimization,
-    ASHA,
-    MOBSTER,
+from benchmarking.commons.benchmark_definitions import (
+    nas201_benchmark_definitions,
+    yahpo_nb301_benchmark_definitions,
+    fcnet_benchmark_definitions,
+    lcbench_selected_benchmark_definitions,
 )
 
 
-class Methods:
-    RS = "RS"
-    BO = "BO"
-    ASHA = "ASHA"
-    MOBSTER = "MOBSTER"
-
-
-methods = {
-    Methods.RS: lambda method_arguments: RandomSearch(method_arguments),
-    Methods.BO: lambda method_arguments: BayesianOptimization(method_arguments),
-    Methods.ASHA: lambda method_arguments: ASHA(method_arguments, type="promotion"),
-    Methods.MOBSTER: lambda method_arguments: MOBSTER(
-        method_arguments, type="promotion"
-    ),
+benchmark_definitions = {
+    **nas201_benchmark_definitions,
+    **yahpo_nb301_benchmark_definitions,
+    **fcnet_benchmark_definitions,
+    **lcbench_selected_benchmark_definitions,
 }

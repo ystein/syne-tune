@@ -25,7 +25,7 @@ class Methods:
     MOBSTER_M52_RW = "MOBSTER-M52-RW"
     HYPERTUNE_JOINT = "HyperTune-JOINT"
     BOHB = "BOHB"
-    BORE = "BORE"
+    ASHABORE = "ASHABORE"
     SYNCBOHB = "SyncBOHB"
     DEHB = "DEHB"
 
@@ -47,7 +47,9 @@ methods = {
         search_options=dict(model="gp_multitask"),
     ),
     Methods.BOHB: lambda method_arguments: BOHB(method_arguments, type="promotion"),
-    Methods.BORE: lambda method_arguments: ASHABORE(method_arguments, type="promotion"),
+    Methods.ASHABORE: lambda method_arguments: ASHABORE(
+        method_arguments, type="promotion"
+    ),
     Methods.SYNCBOHB: lambda method_arguments: SyncBOHB(method_arguments),
     Methods.DEHB: lambda method_arguments: DEHB(method_arguments),
 }
