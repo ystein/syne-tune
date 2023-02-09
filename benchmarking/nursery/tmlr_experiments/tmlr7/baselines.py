@@ -10,20 +10,11 @@
 # on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
 # express or implied. See the License for the specific language governing
 # permissions and limitations under the License.
-from benchmarking.commons.baselines import (
-    search_options,
-)
-from syne_tune.optimizer.baselines import (
+from benchmarking.commons.default_baselines import (
     ASHA,
     MOBSTER,
     HyperTune,
-    SyncHyperband,
-    SyncMOBSTER,
-    SyncBOHB,
-    DEHB,
 )
-from syne_tune.optimizer.schedulers import HyperbandScheduler
-from syne_tune.optimizer.schedulers.searchers.bore import MultiFidelityBore
 
 
 class Methods:
@@ -34,51 +25,18 @@ class Methods:
 
 methods = {
     Methods.ASHA_4BR: lambda method_arguments: ASHA(
-        config_space=method_arguments.config_space,
-        search_options=search_options(method_arguments),
+        method_arguments,
         type="promotion",
         brackets=4,
-        mode=method_arguments.mode,
-        metric=method_arguments.metric,
-        max_resource_attr=method_arguments.max_resource_attr,
-        resource_attr=method_arguments.resource_attr,
-        random_seed=method_arguments.random_seed,
-        **(
-            method_arguments.scheduler_kwargs
-            if method_arguments.scheduler_kwargs is not None
-            else dict()
-        ),
     ),
     Methods.MOBSTER_4BR: lambda method_arguments: MOBSTER(
-        config_space=method_arguments.config_space,
-        search_options=search_options(method_arguments),
+        method_arguments,
         type="promotion",
         brackets=4,
-        mode=method_arguments.mode,
-        metric=method_arguments.metric,
-        max_resource_attr=method_arguments.max_resource_attr,
-        resource_attr=method_arguments.resource_attr,
-        random_seed=method_arguments.random_seed,
-        **(
-            method_arguments.scheduler_kwargs
-            if method_arguments.scheduler_kwargs is not None
-            else dict()
-        ),
     ),
     Methods.HYPERTUNE_4BR: lambda method_arguments: HyperTune(
-        config_space=method_arguments.config_space,
-        search_options=search_options(method_arguments),
+        method_arguments,
         type="promotion",
         brackets=4,
-        mode=method_arguments.mode,
-        metric=method_arguments.metric,
-        max_resource_attr=method_arguments.max_resource_attr,
-        resource_attr=method_arguments.resource_attr,
-        random_seed=method_arguments.random_seed,
-        **(
-            method_arguments.scheduler_kwargs
-            if method_arguments.scheduler_kwargs is not None
-            else dict()
-        ),
     ),
 }

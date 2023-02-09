@@ -14,15 +14,13 @@ from benchmarking.commons.benchmark_definitions import (
     nas201_benchmark_definitions,
     yahpo_nb301_benchmark_definitions,
     fcnet_benchmark_definitions,
+    lcbench_selected_benchmark_definitions,
 )
 
 
-nb201_key = "nas201-cifar100"
-
-# We use all four FCNet datasets here, to be safe, but only CIFAR100 for
-# NB201
 benchmark_definitions = {
-    nb201_key: nas201_benchmark_definitions[nb201_key],
+    **nas201_benchmark_definitions,
     **yahpo_nb301_benchmark_definitions,
     **fcnet_benchmark_definitions,
+    **lcbench_selected_benchmark_definitions,
 }

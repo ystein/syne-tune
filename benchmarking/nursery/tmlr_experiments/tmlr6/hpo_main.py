@@ -17,28 +17,5 @@ from benchmarking.nursery.tmlr_experiments.tmlr6.benchmark_definitions import (
 )
 
 
-extra_args = [
-    dict(
-        name="--grace_period",
-        type=int,
-        default=1,
-        help="Minimum resource level in Hyperband",
-    ),
-    dict(
-        name="--reduction_factor",
-        type=int,
-        default=3,
-        help="Reduction factor in Hyperband",
-    ),
-]
-
-
-def map_extra_args(args) -> dict:
-    return {
-        "grace_period": args.grace_period,
-        "reduction_factor": args.reduction_factor,
-    }
-
-
 if __name__ == "__main__":
-    main(methods, benchmark_definitions, extra_args, map_extra_args)
+    main(methods, benchmark_definitions)

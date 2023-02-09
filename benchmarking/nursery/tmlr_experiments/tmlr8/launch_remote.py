@@ -17,10 +17,6 @@ from benchmarking.nursery.tmlr_experiments.tmlr8.benchmark_definitions import (
     benchmark_definitions,
 )
 from benchmarking.nursery.tmlr_experiments.tmlr8.baselines import methods
-from benchmarking.nursery.tmlr_experiments.tmlr8.hpo_main import (
-    extra_args,
-    map_extra_args,
-)
 
 
 if __name__ == "__main__":
@@ -33,7 +29,5 @@ if __name__ == "__main__":
         entry_point=entry_point,
         methods=methods,
         benchmark_definitions=benchmark_definitions,
-        extra_args=extra_args,
-        map_extra_args=map_extra_args,
         is_expensive_method=_is_expensive_method,
     )
