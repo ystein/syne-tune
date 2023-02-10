@@ -27,9 +27,20 @@ class Methods:
 
 methods = {
     Methods.RS: lambda method_arguments: RandomSearch(method_arguments),
-    Methods.BO: lambda method_arguments: BayesianOptimization(method_arguments),
     Methods.ASHA: lambda method_arguments: ASHA(method_arguments, type="promotion"),
+    Methods.BO: lambda method_arguments: BayesianOptimization(
+        method_arguments,
+        search_options=dict(
+            opt_skip_init_length=400,
+            opt_skip_period=10,
+        ),
+    ),
     Methods.MOBSTER: lambda method_arguments: MOBSTER(
-        method_arguments, type="promotion"
+        method_arguments,
+        type="promotion",
+        search_options=dict(
+            opt_skip_init_length=400,
+            opt_skip_period=10,
+        ),
     ),
 }
