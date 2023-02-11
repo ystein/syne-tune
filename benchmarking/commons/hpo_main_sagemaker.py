@@ -19,6 +19,7 @@ from benchmarking.commons.hpo_main_common import (
     parse_args as _parse_args,
     ExtraArgsType,
     MapExtraArgsType,
+    PostProcessingType,
 )
 from benchmarking.commons.hpo_main_local import (
     RealBenchmarkDefinitions,
@@ -129,6 +130,7 @@ def main(
     benchmark_definitions: RealBenchmarkDefinitions,
     extra_args: Optional[ExtraArgsType] = None,
     map_extra_args: Optional[MapExtraArgsType] = None,
+    post_processing: Optional[PostProcessingType] = None,
 ):
     """
     Runs experiment with SageMaker backend.
@@ -144,6 +146,9 @@ def main(
     :param extra_args: Extra arguments for command line parser. Optional
     :param map_extra_args: Maps ``args`` returned by :func:`parse_args` to dictionary
         for extra argument values. Needed if ``extra_args`` is given
+    :param post_processing: Called after tuning has finished, passing the tuner
+        as argument. Can be used for postprocessing, such as output or storage
+        of extra information
     """
     args, method_names, seeds = parse_args(methods, extra_args)
     experiment_tag = args.experiment_tag
@@ -206,3 +211,5 @@ def main(
         start_jobs_without_delay=args.start_jobs_without_delay,
     )
     tuner.run()
+    if post_processing is not None:
+        post_processing(tuner)

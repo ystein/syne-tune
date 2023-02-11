@@ -27,6 +27,7 @@ from benchmarking.commons.hpo_main_common import (
     get_metadata,
     ExtraArgsType,
     MapExtraArgsType,
+    PostProcessingType,
     extra_metadata,
 )
 from benchmarking.commons.utils import get_master_random_seed, effective_random_seed
@@ -172,6 +173,7 @@ def main(
     benchmark_definitions: RealBenchmarkDefinitions,
     extra_args: Optional[ExtraArgsType] = None,
     map_extra_args: Optional[MapExtraArgsType] = None,
+    post_processing: Optional[PostProcessingType] = None,
 ):
     """
     Runs sequence of experiments with local backend sequentially. The loop runs
@@ -189,6 +191,9 @@ def main(
         command line arguments
     :param extra_args: Extra arguments for command line parser. Optional
     :param map_extra_args: See above, optional
+    :param post_processing: Called after tuning has finished, passing the tuner
+        as argument. Can be used for postprocessing, such as output or storage
+        of extra information
     """
     args, method_names, seeds = parse_args(methods, extra_args)
     experiment_tag = args.experiment_tag
@@ -223,3 +228,5 @@ def main(
             **tuner_kwargs,
         )
         tuner.run()
+        if post_processing is not None:
+            post_processing(tuner)
