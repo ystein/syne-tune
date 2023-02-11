@@ -13,10 +13,10 @@
 from pathlib import Path
 
 from benchmarking.commons.launch_remote_simulator import launch_remote
-from benchmarking.nursery.tmlr_experiments.tmlr8.benchmark_definitions import (
+from benchmarking.nursery.tmlr_experiments.tmlr9.benchmark_definitions import (
     benchmark_definitions,
 )
-from benchmarking.nursery.tmlr_experiments.tmlr8.baselines import methods
+from benchmarking.nursery.tmlr_experiments.tmlr9.baselines import methods
 
 
 if __name__ == "__main__":

@@ -14,24 +14,26 @@ from benchmarking.commons.default_baselines import (
     BayesianOptimization,
     MOBSTER,
     HyperTune,
+    DyHPO,
 )
 
 
 class Methods:
-    BO_SKIP20 = "BO_SKIP10"
-    MOBSTER_SKIP20 = "MOBSTER_SKIP10"
-    HYPERTUNE_SKIP20 = "HyperTune_SKIP10"
+    BO_SKIP10 = "BO-SKIP10"
+    MOBSTER_SKIP10 = "MOBSTER-SKIP10"
+    HYPERTUNE_SKIP10 = "HyperTune-SKIP10"
+    DYHPO_SKIP10 = "DYHPO-SKIP10"
 
 
 methods = {
-    Methods.BO_SKIP20: lambda method_arguments: BayesianOptimization(
+    Methods.BO_SKIP10: lambda method_arguments: BayesianOptimization(
         method_arguments,
         search_options=dict(
             opt_skip_init_length=400,
             opt_skip_period=10,
         ),
     ),
-    Methods.MOBSTER_SKIP20: lambda method_arguments: MOBSTER(
+    Methods.MOBSTER_SKIP10: lambda method_arguments: MOBSTER(
         method_arguments,
         type="promotion",
         search_options=dict(
@@ -39,9 +41,16 @@ methods = {
             opt_skip_period=10,
         ),
     ),
-    Methods.HYPERTUNE_SKIP20: lambda method_arguments: HyperTune(
+    Methods.HYPERTUNE_SKIP10: lambda method_arguments: HyperTune(
         method_arguments,
         type="promotion",
+        search_options=dict(
+            opt_skip_init_length=400,
+            opt_skip_period=10,
+        ),
+    ),
+    Methods.DYHPO_SKIP10: lambda method_arguments: DyHPO(
+        method_arguments,
         search_options=dict(
             opt_skip_init_length=400,
             opt_skip_period=10,

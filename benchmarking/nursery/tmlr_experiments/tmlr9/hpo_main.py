@@ -11,8 +11,8 @@
 # express or implied. See the License for the specific language governing
 # permissions and limitations under the License.
 from benchmarking.commons.hpo_main_simulator import main
-from benchmarking.nursery.tmlr_experiments.tmlr8.baselines import methods
-from benchmarking.nursery.tmlr_experiments.tmlr8.benchmark_definitions import (
+from benchmarking.nursery.tmlr_experiments.tmlr9.baselines import methods
+from benchmarking.nursery.tmlr_experiments.tmlr9.benchmark_definitions import (
     benchmark_definitions,
 )
 
