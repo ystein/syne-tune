@@ -82,7 +82,7 @@ def parse_args(
             dict(
                 name="warm_pool",
                 type=int,
-                default=0,
+                default=1,
                 help=(
                     "If 1, the SageMaker managed warm pools feature is used. "
                     "This can be more expensive, but also reduces startup "

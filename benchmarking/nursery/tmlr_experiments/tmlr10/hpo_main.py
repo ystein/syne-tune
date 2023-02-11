@@ -10,21 +10,12 @@
 # on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
 # express or implied. See the License for the specific language governing
 # permissions and limitations under the License.
-from pathlib import Path
-
-from benchmarking.commons.launch_remote_local import launch_remote
+from benchmarking.commons.hpo_main_sagemaker import main
 from benchmarking.commons.benchmark_definitions import (
     real_benchmark_definitions as benchmark_definitions,
 )
-from benchmarking.nursery.launch_local.baselines import methods
-from benchmarking.nursery.launch_local.hpo_main import extra_args
+from benchmarking.nursery.tmlr_experiments.tmlr10.baselines import methods
 
 
 if __name__ == "__main__":
-    entry_point = Path(__file__).parent / "hpo_main.py"
-    launch_remote(
-        entry_point=entry_point,
-        methods=methods,
-        benchmark_definitions=benchmark_definitions,
-        extra_args=extra_args,
-    )
+    main(methods, benchmark_definitions)
