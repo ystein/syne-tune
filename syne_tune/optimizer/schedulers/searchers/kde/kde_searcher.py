@@ -272,7 +272,10 @@ class KernelDensityEstimator(StochasticAndFilterDuplicatesSearcher):
     def _get_config(self, **kwargs) -> Optional[Dict[str, Any]]:
         suggestion = self._next_initial_config()
         if suggestion is None:
-            models = self._train_kde(np.array(self.X), np.array(self.y))
+            if self.y:
+                models = self._train_kde(np.array(self.X), np.array(self.y))
+            else:
+                models = None
 
             if models is None or self.random_state.rand() < self.random_fraction:
                 # return random candidate because a) we don't have enough data points or
@@ -362,6 +365,7 @@ class KernelDensityEstimator(StochasticAndFilterDuplicatesSearcher):
     def _train_kde(
         self, train_data: np.ndarray, train_targets: np.ndarray
     ) -> Optional[Tuple[Any, Any]]:
+        train_data = train_data.reshape((train_targets.size, -1))
         n_good = self._good_data_size(train_data.shape)
         if n_good is None:
             return None

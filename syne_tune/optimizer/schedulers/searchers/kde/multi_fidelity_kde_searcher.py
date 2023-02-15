@@ -107,6 +107,7 @@ class MultiFidelityKernelDensityEstimator(KernelDensityEstimator):
         :param train_targets: Training targets
         :return: Tuple of good model, bad model; or ``None``
         """
+        train_data = train_data.reshape((train_targets.size, -1))
         num_features = train_data.shape[1]
         resource = self._highest_resource_model_can_fit(num_features)
         if resource is None:
