@@ -88,6 +88,7 @@ What's New?
    tutorials/developer/README
    tutorials/pasha/pasha
    tutorials/transfer_learning/transfer_learning
+   tutorials/demo_offsite/README
 
 .. toctree::
    :name: API docs
