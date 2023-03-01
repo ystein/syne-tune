@@ -26,9 +26,9 @@ Benchmarking
 
 Experimentation with Syne Tune is substantially simplified by the ``benchmarking``
 mechanism, as demonstrated here. More details are given in
-`this tutorial <../>`_.
+`this tutorial <../benchmarking/README.html>`_.
 
-Next steps:
+**Next steps**:
 
 * Include code for plotting results (as has been used here)
 
@@ -43,7 +43,7 @@ improved a number of mechanisms:
 * Much improved SIM tracking and sprint planning
 * Starting more initiatives to gain internal adoption in AWS and beyond
 
-Next steps:
+**Next steps**:
 
 * We are in contact with various teams across Amazon and collect their requirements
   for integrating Syne Tune.
@@ -64,7 +64,9 @@ and on cheap instances:
   to run many more tests, and catch bugs or performance degredations early
 
 We spent efforts to incorporate a large number of publicly available surrogate
-benchmarks. Next steps:
+benchmarks.
+
+**Next steps**:
 
 * Integrate additional publicly available surrogate benchmarks
 * Suite of integration and regression tests, based on simulation on the existing
@@ -82,7 +84,7 @@ this tutorial, model-based multi-fidelity methods provide good results with
 substantially less resources across a wide range of benchmarks. Syne Tune also
 provides a range of synchronous multi-fidelity methods.
 
-Next steps:
+**Next steps**:
 
 * Currently, AMT offers random search, Bayesian optimization, and a variant of
   ASHA. Our results across the board show that mode-based multi-fidelity methods
@@ -132,7 +134,7 @@ our own.
   ``latency``. Results have been published in this
   `AWS blog post <https://aws.amazon.com/blogs/machine-learning/hyperparameter-optimization-for-fine-tuning-pre-trained-transformer-models-from-hugging-face/>`_.
 
-Next steps:
+**Next steps**:
 
 * Aaron is exploring multi-objective tuning as part of a shared goal to
   integrate *Neural Architecture Search (NAS)* into AMT
