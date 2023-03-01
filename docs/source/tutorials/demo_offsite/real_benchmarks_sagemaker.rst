@@ -19,7 +19,8 @@ modified from open source code in much the same way as in the example above.
 
 In this experiment, we would like to compare different methods w.r.t. their
 scalability with the number of workers. To this end, we run a number of HPO
-methods with 2, 4, and 8 workers:
+methods with 2, 4, and 8 workers (we show only 2 of the 4 methods we compare,
+for simplicity):
 
 .. literalinclude:: ../../../../benchmarking/nursery/tmlr_experiments/tmlr10/baselines.py
    :caption: benchmarking/nursery/tmlr_experiments/tmlr10/baselines.py
@@ -50,11 +51,12 @@ Let us run this:
 .. code-block:: bash
 
    python benchmarking/nursery/tmlr_experiments/tmlr10/launch_remote.py \
-     --experiment_tag demo_offsite_local --benchmark transformer_wikitext2 \
+     --experiment_tag demo-offsite-sagemaker --benchmark transformer_wikitext2 \
      --n_workers 2  --warm_pool 1 --scale_max_wallclock_time 1 --num_seeds 1
 
-In order to save time, we only launch one random repetition (seed) and ask
-for two workers. Two further options are relevant:
+In order to save time, we only launch one random repetition (seed), for two
+methods instead of four, and ask for two workers. Two further options are
+relevant:
 
 * ``--warm_pool 1`` activates the recently launched SageMaker warm pooling
   feature, which cuts startup delays by quite a bit

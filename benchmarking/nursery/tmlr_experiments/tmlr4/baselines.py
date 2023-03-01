@@ -14,9 +14,6 @@ from benchmarking.commons.default_baselines import (
     BayesianOptimization,
     ASHA,
     MOBSTER,
-    DyHPO,
-    SyncHyperband,
-    SyncMOBSTER,
 )
 
 
@@ -24,9 +21,6 @@ class Methods:
     BO = "BO"
     ASHA = "ASHA"
     MOBSTER = "MOBSTER"
-    DYHPO = "DYHPO"
-    SYNCHB = "SyncHB"
-    SYNCMOBSTER = "SyncMOBSTER"
 
 
 methods = {
@@ -35,7 +29,4 @@ methods = {
     Methods.MOBSTER: lambda method_arguments: MOBSTER(
         method_arguments, type="promotion"
     ),
-    Methods.DYHPO: lambda method_arguments: DyHPO(method_arguments),
-    Methods.SYNCHB: lambda method_arguments: SyncHyperband(method_arguments),
-    Methods.SYNCMOBSTER: lambda method_arguments: SyncMOBSTER(method_arguments),
 }

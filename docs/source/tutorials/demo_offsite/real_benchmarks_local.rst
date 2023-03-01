@@ -161,7 +161,7 @@ First, we need to specify which methods to compare with each other.
 * You can change defaults here (e.g., ``type="promotion"``), and use different
   values for different ``methods`` entries
 * All methods you specify here, will be compared against each other. In this
-  example, we compare 6 methods
+  example, we compare 6 methods (only 3 are listed here, for simplicity)
 
 Next, we need to specify the benchmarks on which methods should be compared.
 This is done in terms of a function with signature
@@ -228,12 +228,12 @@ Let us run this:
 .. code-block:: bash
 
    python benchmarking/nursery/tmlr_experiments/tmlr4/launch_remote.py \
-     --experiment_tag demo_offsite_local --benchmark resnet_cifar10 \
+     --experiment_tag demo-offsite-local --benchmark resnet_cifar10 \
      --num_seeds 1
 
-In order to save time, we only launch one random repetition (seed). Still, these
-are 6 SageMaker training jobs, one for each method. Let us have a look at
-the *SageMaker Console*.
+In order to save time, we only launch one random repetition (seed), for 3
+methods instead of 6. Still, these are 3 SageMaker training jobs, one for each
+method. Let us have a look at the *SageMaker Console*.
 
 I ran all of this beforehand:
 
