@@ -13,3 +13,4 @@ evaluations.
    real_benchmarks_local
    real_benchmarks_sagemaker
    different_methods
+   what_is_new
