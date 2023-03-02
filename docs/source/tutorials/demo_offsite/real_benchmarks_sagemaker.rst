@@ -66,10 +66,9 @@ relevant:
   workers, while the default is 4, so the default ``max_wallclock_time`` is
   doubled
 
-This command is launching four SageMaker training jobs, running the experiment
+This command is launching two SageMaker training jobs, running the experiment
 for each method. Each of these spawns two training jobs at any given time,
-running the model training. Let us have a look at the *SageMaker Console*
-(where the warm pooling feature can also be observed).
+running the model training. We will look at the console in a moment.
 
 I ran all of this beforehand, for 5 seeds. If your quota allows for that,
 you can run these 20 experiments in parallel, each of which use
@@ -102,3 +101,6 @@ Apart from demonstrating the viability of distributed tuning with the
 SageMaker backend, these results show that automated tuning is not solved
 by running more parallel hardware, if decisions are not done in an
 intelligent way.
+
+Let us now have a look at the *SageMaker Console* (where the warm pooling
+feature can also be observed).
