@@ -230,3 +230,9 @@ class DyHPORungSystem(PromotionRungSystem):
             "promoted_by_dyhpo": histogram[ScheduleDecision.PROMOTE_DYHPO],
             "started_by_dyhpo": histogram[ScheduleDecision.START_DYHPO],
         }
+
+    def support_early_checkpoint_removal(self) -> bool:
+        """
+        Early checkpoint removal currently not supported for DyHPO
+        """
+        return False

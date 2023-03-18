@@ -120,11 +120,12 @@ class StoreResultsCallback(TunerCallback):
         return pd.DataFrame(self.results)
 
     def on_tuning_start(self, tuner):
-        # we set the path of the csv file once the tuner is created since the path may change when the tuner is stop
-        # and resumed again on a different machine.
+        # We set the path of the csv file once the tuner is created, since the
+        # path may change when the tuner is stopped and resumed again on a
+        # different machine.
         self.csv_file = str(tuner.tuner_path / ST_RESULTS_DATAFRAME_FILENAME)
-        # we only save results every ``results_update_frequency`` seconds as this operation
-        # may be expensive on remote storage.
+        # We only save results every ``results_update_frequency`` seconds as
+        # this operation may be expensive on remote storage.
         self.save_results_at_frequency = RegularCallback(
             lambda: self.store_results(),
             call_seconds_frequency=tuner.results_update_interval,
@@ -142,7 +143,7 @@ class StoreResultsCallback(TunerCallback):
                 dump_json_with_numpy(final_results, path)
 
     def on_tuning_end(self):
-        # store the results in case some results were not committed yet (since they are saved every
-        # ``results_update_interval`` seconds)
+        # Store the results in case some results were not committed yet (since
+        # they are saved every ``results_update_interval`` seconds)
         self.store_results()
         self._write_final_results()
