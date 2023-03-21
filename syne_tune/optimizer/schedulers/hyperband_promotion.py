@@ -10,12 +10,13 @@
 # on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
 # express or implied. See the License for the specific language governing
 # permissions and limitations under the License.
-from typing import Optional, List, Dict, Any, Tuple
+from typing import Optional, List, Dict, Any, Tuple, Union
 
 from syne_tune.optimizer.schedulers.hyperband_stopping import (
     RungEntry,
     Rung,
     RungSystem,
+    PausedTrialsResult,
 )
 
 
@@ -245,20 +246,14 @@ class PromotionRungSystem(RungSystem):
                 + "all milestones"
             )
             milestone_reached = True
-            try:
-                rung_pos = next(
-                    i for i, v in enumerate(self._rungs) if v.level == milestone
-                )
+            rung_pos = self._rung_pos_for_level(milestone)
+            if rung_pos is not None:
                 # Register metric_value at rung level (as not promoted)
                 rung = self._rungs[rung_pos]
                 self._register_metrics_at_rung_level(trial_id, result, rung)
                 next_milestone = (
                     self._rungs[rung_pos - 1].level if rung_pos > 0 else self._max_t
                 )
-            except StopIteration:
-                # ``milestone`` not a rung level. This can happen, in particular
-                # if ``milestone == self._max_t``
-                pass
         return {
             "task_continues": not milestone_reached,
             "milestone_reached": milestone_reached,
@@ -273,3 +268,24 @@ class PromotionRungSystem(RungSystem):
     @staticmethod
     def does_pause_resume() -> bool:
         return True
+
+    def support_early_checkpoint_removal(self) -> bool:
+        return True
+
+    def paused_trials(self, resource: Optional[int] = None) -> PausedTrialsResult:
+        result = []
+        if resource is None:
+            rungs = self._rungs
+        else:
+            rung_pos = self._rung_pos_for_level(resource)
+            assert rung_pos is not None, f"resource = {resource} is not a rung level"
+            rungs = [self._rungs[rung_pos]]
+        for rung in rungs:
+            if resource is None:
+                append_tpl = (rung.level,)
+            else:
+                append_tpl = ()
+            for pos, entry in enumerate(rung.data):
+                if not entry.was_promoted:
+                    result.append((entry.trial_id, pos, entry.metric_val) + append_tpl)
+        return result
