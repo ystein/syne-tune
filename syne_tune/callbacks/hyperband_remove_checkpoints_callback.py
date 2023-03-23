@@ -10,9 +10,11 @@
 # on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
 # express or implied. See the License for the specific language governing
 # permissions and limitations under the License.
-from typing import List, Tuple
+from typing import List, Tuple, Dict, Any
 import numpy as np
 import logging
+from operator import itemgetter
+import time
 
 from syne_tune.try_import import try_import_gpsearchers_message
 
@@ -22,6 +24,9 @@ except ImportError:
     logging.info(try_import_gpsearchers_message())
 
 from syne_tune.tuner_callback import TunerCallback
+from syne_tune.backend.simulator_backend.simulator_backend import SimulatorBackend
+from syne_tune.backend.trial_status import Trial
+from syne_tune.optimizer.scheduler import SchedulerDecision
 from syne_tune.optimizer.schedulers import HyperbandScheduler
 from syne_tune.optimizer.schedulers.hyperband_stopping import PausedTrialsResult
 
@@ -38,6 +43,13 @@ def _bernoulli_relative_entropy(q_probs: np.ndarray, p_probs: np.ndarray) -> np.
     result[q_probs >= 1] = 0
     result[q_probs < 0] = np.inf
     return result
+
+
+class TrialStatus:
+    RUNNING = 0
+    PAUSED_WITH_CHECKPOINT = 1
+    PAUSED_NO_CHECKPOINT = 2
+    STOPPED_OR_COMPLETED = 3
 
 
 class HyperbandRemoveCheckpointsCallback(TunerCallback):
@@ -64,6 +76,14 @@ class HyperbandRemoveCheckpointsCallback(TunerCallback):
 
     TODO: This probability should be estimated, even for every rung level!
 
+    .. note::
+       The true maximum number of trials with checkpoints may be larger than
+       ``max_num_checkpoints``. The number is determined here by
+       :meth:`on_trial_result` and :meth:`on_trial_complete`, so that trials
+       are only counted once they report for the first time. Also, if a paused
+       trial without checkpoint is resumed, it is counted only with its first
+       report.
+
     :param max_num_checkpoints: Once the total number of checkpoints surpasses
         this number, we remove some.
     :param max_wallclock_time: Maximum time of the experiment
@@ -79,8 +99,10 @@ class HyperbandRemoveCheckpointsCallback(TunerCallback):
         self._tuner = None
         self.max_num_checkpoints = max_num_checkpoints
         self._max_wallclock_time = max_wallclock_time
-        self._trials_with_checkpoints_removed = None
         self._prob_new_is_better = prob_new_is_better
+        self._trials_with_checkpoints_removed = None
+        self._trial_status = None
+        self._start_time = None
 
     def _check_and_initialize(self, tuner):
         scheduler = tuner.scheduler
@@ -88,13 +110,22 @@ class HyperbandRemoveCheckpointsCallback(TunerCallback):
             scheduler, HyperbandScheduler
         ), f"This callback only supports HyperbandScheduler"
         self._terminator = scheduler.terminator
-        self._tuner = tuner  # Do we need this?
+        self._trial_backend = tuner.trial_backend
+        assert not isinstance(
+            self._trial_backend, SimulatorBackend
+        ), "Checkpoint removal not supported for SimulatorBackend"
 
     def on_tuning_start(self, tuner):
         self._check_and_initialize(tuner)
         # Contains ``(trial_id, level)`` for paused trials whose checkpoints
-        # were removed.
+        # were removed. Note that ``trial_id`` is not enough, since a paused trial
+        # can have its checkpoint removed, then be resumed and paused again (at a
+        # higher rung level) with a checkpoint
         self._trials_with_checkpoints_removed = set()
+        # Maps ``trial_id`` to ``TrialStatus``. Used to count the number of
+        # trials with checkpoints
+        self._trial_status = dict()
+        self._start_time = time.perf_counter()
 
     def _filter_paused_trials(
         self, paused_trials: PausedTrialsResult
@@ -107,7 +138,7 @@ class HyperbandRemoveCheckpointsCallback(TunerCallback):
 
     def _compute_scores(
         self, trials_to_score: List[Tuple[str, int, float, int]], time_ratio: float
-    ) -> List[Tuple[str, float]]:
+    ) -> List[Tuple[str, float, int]]:
         r"""
         Computes scores for paused trials in ``trials_to_score``, with entries
         ``(trial_id, rank, metric_val, level)``. These are approximations of
@@ -117,7 +148,7 @@ class HyperbandRemoveCheckpointsCallback(TunerCallback):
 
         :param trials_to_score: See above
         :param time_ratio: See above
-        :return: List of ``(trial_id, score_val)``
+        :return: List of ``(trial_id, score_val, level)``
         """
         info_rungs = self._terminator.information_for_rungs()
         lens_rung = {x[0]: x[1] for x in info_rungs}
@@ -131,15 +162,55 @@ class HyperbandRemoveCheckpointsCallback(TunerCallback):
         ranks = np.array(ranks)
         lens = np.array(lens)
         prom_quants = np.array(prom_quants)
-        levels = np.array(levels)
         q_probs = ((time_ratio + 1) * prom_quants - ranks / lens) / time_ratio
         # TODO: Probability should depend on level
         p_probs = np.full_like(q_probs, self._prob_new_is_better)
         scores = np.log(levels) / time_ratio - lens * _bernoulli_relative_entropy(
             q_probs, p_probs
         )
-        return list(zip(trial_ids, scores))
+        return list(zip(trial_ids, scores, levels))
+
+    def _count_trials_with_checkpoints(self) -> int:
+        has_checkpoint = {TrialStatus.RUNNING, TrialStatus.PAUSED_WITH_CHECKPOINT}
+        return sum(status in has_checkpoint for status in self._trial_status.values())
+
+    def _remove_checkpoint_of(self, trial_id: str, level: int):
+        self._tuner.trial_backend.delete_checkpoint(int(trial_id))
+        self._trial_status[trial_id] = TrialStatus.PAUSED_NO_CHECKPOINT
+        self._trials_with_checkpoints_removed.add((trial_id, int(level)))
+
+    def _get_time_ratio(self) -> float:
+        current_time = time.perf_counter()
+        time_elapsed = current_time - self._start_time
+        time_left = self._max_wallclock_time - time_elapsed
+        return max(time_left, 1e-3) / max(time_elapsed, 1e-3)
 
     def on_loop_end(self):
-        for trial_id in self._tuner.scheduler.trials_checkpoints_can_be_removed():
-            self._tuner.trial_backend.delete_checkpoint(trial_id)
+        num_trials_with_checkpoints = self._count_trials_with_checkpoints()
+        num_to_remove = num_trials_with_checkpoints - self.max_num_checkpoints
+        if num_to_remove > 0:
+            paused_trials_with_checkpoints = self._filter_paused_trials(
+                self._terminator.paused_trials()
+            )
+            time_ratio = self._get_time_ratio()
+            scores = self._compute_scores(paused_trials_with_checkpoints, time_ratio)
+            num = min(num_to_remove, len(paused_trials_with_checkpoints))
+            for trial_id, _, level in sorted(scores, key=itemgetter(1))[:num]:
+                self._remove_checkpoint_of(trial_id, level)
+
+    def on_trial_complete(self, trial: Trial, result: Dict[str, Any]):
+        trial_id = str(trial.trial_id)
+        self._trial_status[trial_id] = TrialStatus.STOPPED_OR_COMPLETED
+
+    def on_trial_result(
+        self, trial: Trial, status: str, result: Dict[str, Any], decision: str
+    ):
+        trial_id = str(trial.trial_id)
+        if decision == SchedulerDecision.CONTINUE:
+            new_status = TrialStatus.RUNNING
+        elif decision == SchedulerDecision.PAUSE:
+            new_status = TrialStatus.PAUSED_WITH_CHECKPOINT
+        else:
+            assert decision == SchedulerDecision.STOP  # Sanity check
+            new_status = TrialStatus.STOPPED_OR_COMPLETED
+        self._trial_status[trial_id] = new_status
