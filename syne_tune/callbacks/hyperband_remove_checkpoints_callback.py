@@ -59,10 +59,10 @@ class HyperbandRemoveCheckpointsCallback(TunerCallback):
     types which pause trials at rung levels).
 
     In this scheduler, any paused trial can in principle be resumed in the
-    past, which is why we remove checkpoints speculatively. The idea is to
+    future, which is why we remove checkpoints speculatively. The idea is to
     keep the total number of checkpoints no larger than ``max_num_checkpoints``.
     If this limit is reached, we rank all currently paused trials which still
-    have a checkpoint and remove checkpoints for those who score worst. If a
+    have a checkpoint and remove checkpoints for those with lowest scores. If a
     trial is resumed whose checkpoint has been removed, we have to train from
     scratch, at a cost proportional to the rung level the trial is paused at.
     The score is an approximation to this expected cost, the product of rung
@@ -96,13 +96,14 @@ class HyperbandRemoveCheckpointsCallback(TunerCallback):
         max_wallclock_time: int,
         prob_new_is_better: float,
     ):
-        self._tuner = None
         self.max_num_checkpoints = max_num_checkpoints
         self._max_wallclock_time = max_wallclock_time
         self._prob_new_is_better = prob_new_is_better
         self._trials_with_checkpoints_removed = None
         self._trial_status = None
         self._start_time = None
+        self._terminator = None
+        self._trial_backend = None
 
     def _check_and_initialize(self, tuner):
         scheduler = tuner.scheduler
@@ -153,19 +154,19 @@ class HyperbandRemoveCheckpointsCallback(TunerCallback):
         info_rungs = self._terminator.information_for_rungs()
         lens_rung = {x[0]: x[1] for x in info_rungs}
         prom_quants_rung = {x[0]: x[2] for x in info_rungs}
-        trial_ids, ranks, lens, prom_quants, levels = zip(
+        trial_ids, ranks, rung_lens, prom_quants, levels = zip(
             *[
-                (trial_id, rank, lens_rung[level], prom_quants_rung[level], level)
+                (trial_id, rank + 1, lens_rung[level], prom_quants_rung[level], level)
                 for trial_id, rank, _, level in trials_to_score
             ]
         )
-        ranks = np.array(ranks)
-        lens = np.array(lens)
+        ranks = np.array(ranks)  # ranks starting from 1 (not 0)
+        rung_lens = np.array(rung_lens)
         prom_quants = np.array(prom_quants)
-        q_probs = ((time_ratio + 1) * prom_quants - ranks / lens) / time_ratio
+        q_probs = ((time_ratio + 1) * prom_quants - ranks / rung_lens) / time_ratio
         # TODO: Probability should depend on level
         p_probs = np.full_like(q_probs, self._prob_new_is_better)
-        scores = np.log(levels) / time_ratio - lens * _bernoulli_relative_entropy(
+        scores = np.log(levels) / time_ratio - rung_lens * _bernoulli_relative_entropy(
             q_probs, p_probs
         )
         return list(zip(trial_ids, scores, levels))
@@ -175,15 +176,15 @@ class HyperbandRemoveCheckpointsCallback(TunerCallback):
         return sum(status in has_checkpoint for status in self._trial_status.values())
 
     def _remove_checkpoint_of(self, trial_id: str, level: int):
-        self._tuner.trial_backend.delete_checkpoint(int(trial_id))
+        self._trial_backend.delete_checkpoint(int(trial_id))
         self._trial_status[trial_id] = TrialStatus.PAUSED_NO_CHECKPOINT
         self._trials_with_checkpoints_removed.add((trial_id, int(level)))
 
     def _get_time_ratio(self) -> float:
         current_time = time.perf_counter()
         time_elapsed = current_time - self._start_time
-        time_left = self._max_wallclock_time - time_elapsed
-        return max(time_left, 1e-3) / max(time_elapsed, 1e-3)
+        time_remaining = self._max_wallclock_time - time_elapsed
+        return max(time_remaining, 1e-3) / max(time_elapsed, 1e-3)
 
     def on_loop_end(self):
         num_trials_with_checkpoints = self._count_trials_with_checkpoints()
