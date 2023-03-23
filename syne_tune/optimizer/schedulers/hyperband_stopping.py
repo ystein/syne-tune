@@ -108,9 +108,7 @@ class Rung:
         return g * values[1] + (1 - g) * values[0]
 
 
-PausedTrialsResult = Union[
-    List[Tuple[str, int, float]], List[Tuple[str, int, float, int]]
-]
+PausedTrialsResult = List[Tuple[str, int, float, int]]
 
 
 class RungSystem:
@@ -272,8 +270,7 @@ class RungSystem:
         ``(trial_id, rank, metric_val, level)``, where ``level`` is
         the rung level, and ``rank`` is the rank of the trial in the rung
         (0 for the best metric value). If ``resource`` is given, only the
-        paused trials in the rung of this level are returned, as
-        ``(trial_id, rank, metric_val)``.
+        paused trials in the rung of this level are returned.
 
         :param resource: If given, paused trials of only this rung level are
             returned. Otherwise, all paused trials are returned
@@ -281,12 +278,13 @@ class RungSystem:
         """
         return []
 
-    def rung_sizes(self) -> List[Tuple[int, int]]:
+    def information_for_rungs(self) -> List[Tuple[int, int, float]]:
         """
-        :return: List of ``(resource, num_entries)``, where ``resource`` is a
-            rung level and ``num_entries`` the number of entries in the rung
+        :return: List of ``(resource, num_entries, prom_quant)``, where
+            ``resource`` is a rung level, ``num_entries`` the number of entries
+            in the rung, and ``prom_quant`` the promotion quantile
         """
-        return [(rung.level, len(rung)) for rung in self._rungs]
+        return [(rung.level, len(rung), rung.prom_quant) for rung in self._rungs]
 
     def _rung_pos_for_level(self, level: int) -> Optional[int]:
         try:

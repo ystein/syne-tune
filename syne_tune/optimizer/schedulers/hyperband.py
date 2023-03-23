@@ -13,7 +13,7 @@
 import copy
 import logging
 from dataclasses import dataclass
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 
 import numpy as np
 
@@ -30,7 +30,10 @@ from syne_tune.optimizer.schedulers.hyperband_rush import (
     RUSHPromotionRungSystem,
     RUSHStoppingRungSystem,
 )
-from syne_tune.optimizer.schedulers.hyperband_stopping import StoppingRungSystem
+from syne_tune.optimizer.schedulers.hyperband_stopping import (
+    StoppingRungSystem,
+    PausedTrialsResult,
+)
 from syne_tune.optimizer.schedulers.searchers.dyhpo.hyperband_dyhpo import (
     DyHPORungSystem,
     DEFAULT_SH_PROBABILITY,
@@ -1204,3 +1207,30 @@ class HyperbandBracketManager:
     def snapshot_rungs(self, bracket_id):
         rung_sys, skip_rungs = self._get_rung_system_for_bracket_id(bracket_id)
         return rung_sys.snapshot_rungs(skip_rungs)
+
+    def paused_trials(self, resource: Optional[int] = None) -> PausedTrialsResult:
+        """
+        Only for pause and resume schedulers (:meth:`does_pause_resume` returns
+        ``True``), where trials can be paused at certain rung levels only.
+        If ``resource`` is not given, returns list of all paused trials
+        ``(trial_id, rank, metric_val, level)``, where ``level`` is
+        the rung level, and ``rank`` is the rank of the trial in the rung
+        (0 for the best metric value). If ``resource`` is given, only the
+        paused trials in the rung of this level are returned, as
+        ``(trial_id, rank, metric_val)``.
+
+        :param resource: If given, paused trials of only this rung level are
+            returned. Otherwise, all paused trials are returned
+        :return: See above
+        """
+        return [
+            entry for rs in self._rung_systems for entry in rs.paused_trials(resource)
+        ]
+
+    def information_for_rungs(self) -> List[Tuple[int, int, float]]:
+        """
+        :return: List of ``(resource, num_entries, prom_quant)``, where
+            ``resource`` is a rung level, ``num_entries`` the number of entries
+            in the rung, and ``prom_quant`` the promotion quantile
+        """
+        return self._rung_systems[0].information_for_rungs()
