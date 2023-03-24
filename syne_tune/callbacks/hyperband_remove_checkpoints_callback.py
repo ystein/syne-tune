@@ -19,7 +19,7 @@ import time
 from syne_tune.try_import import try_import_gpsearchers_message
 
 try:
-    from scipy.special import xlogy
+    from scipy.special import betainc
 except ImportError:
     logging.info(try_import_gpsearchers_message())
 
@@ -31,17 +31,14 @@ from syne_tune.optimizer.schedulers import HyperbandScheduler
 from syne_tune.optimizer.schedulers.hyperband_stopping import PausedTrialsResult
 
 
-def _q_log_q_div_p(q_probs: np.ndarray, p_probs: np.ndarray) -> np.ndarray:
-    return xlogy(q_probs, q_probs) - xlogy(q_probs, p_probs)
-
-
-def _bernoulli_relative_entropy(q_probs: np.ndarray, p_probs: np.ndarray) -> np.ndarray:
-    q_clipped = np.clip(q_probs, 1e-7, 1 - 1e-7)
-    result = _q_log_q_div_p(q_clipped, p_probs) + _q_log_q_div_p(
-        1.0 - q_clipped, 1.0 - p_probs
-    )
-    result[q_probs >= 1] = 0
-    result[q_probs < 0] = np.inf
+def _binomial_cdf(
+    u_vals: np.ndarray, n_vals: np.ndarray, p_vals: np.ndarray
+) -> np.ndarray:
+    a_vals = np.maximum(n_vals - u_vals, 1e-7)
+    b_vals = np.maximum(u_vals + 1, 1e-7)
+    result = betainc(a_vals, b_vals, 1 - p_vals)
+    result[u_vals < 0] = 0
+    result[u_vals >= n_vals] = 1
     return result
 
 
@@ -163,11 +160,12 @@ class HyperbandRemoveCheckpointsCallback(TunerCallback):
         ranks = np.array(ranks)  # ranks starting from 1 (not 0)
         rung_lens = np.array(rung_lens)
         prom_quants = np.array(prom_quants)
-        q_probs = ((time_ratio + 1) * prom_quants - ranks / rung_lens) / time_ratio
+        n_vals = time_ratio * rung_lens
+        u_vals = (time_ratio + 1) * prom_quants * rung_lens - ranks
         # TODO: Probability should depend on level
-        p_probs = np.full_like(q_probs, self._prob_new_is_better)
-        scores = np.log(levels) / time_ratio - rung_lens * _bernoulli_relative_entropy(
-            q_probs, p_probs
+        p_vals = np.full_like(n_vals, self._prob_new_is_better)
+        scores = _binomial_cdf(u_vals=u_vals, n_vals=n_vals, p_vals=p_vals) * np.array(
+            levels
         )
         return list(zip(trial_ids, scores, levels))
 
