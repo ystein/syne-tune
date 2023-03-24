@@ -34,6 +34,15 @@ from syne_tune.optimizer.schedulers.hyperband_stopping import PausedTrialsResult
 def _binomial_cdf(
     u_vals: np.ndarray, n_vals: np.ndarray, p_vals: np.ndarray
 ) -> np.ndarray:
+    r"""
+    Computes binomial cumulative distribution function :math:`P(X \le u)`, where
+    :math:`X\sim \mathrm{bin}(n, p)`.
+
+    :param u_vals: Values for :math:`u`
+    :param n_vals: Values for :math:`n`
+    :param p_vals: Values for :math:`p`
+    :return: CDF values
+    """
     a_vals = np.maximum(n_vals - u_vals, 1e-7)
     b_vals = np.maximum(u_vals + 1, 1e-7)
     result = betainc(a_vals, b_vals, 1 - p_vals)
@@ -212,20 +221,9 @@ class HyperbandRemoveCheckpointsCallback(TunerCallback):
             estimator = self._estimator_overall
         return estimator.posterior_mean()
 
-    def _compute_scores(
-        self, trials_to_score: List[Tuple[str, int, float, int]], time_ratio: float
-    ) -> List[Tuple[str, float, int]]:
-        r"""
-        Computes scores for paused trials in ``trials_to_score``, with entries
-        ``(trial_id, rank, metric_val, level)``. These are approximations of
-        expected cost of checkpoint removal. ``time_ratio`` is the ratio between
-        time left and time already spent for the experiment, called :math:`\beta`
-        in the note.
-
-        :param trials_to_score: See above
-        :param time_ratio: See above
-        :return: List of ``(trial_id, score_val, level)``
-        """
+    def _prepare_score_inputs(
+        self, trials_to_score: List[Tuple[str, int, float, int]]
+    ) -> (List[str], List[int], np.ndarray, np.ndarray, np.ndarray, np.ndarray):
         info_rungs = self._terminator.information_for_rungs()
         lens_rung = {r: n for r, n, _ in info_rungs}
         prom_quants_rung = {r: alpha for r, _, alpha in info_rungs}
@@ -247,6 +245,30 @@ class HyperbandRemoveCheckpointsCallback(TunerCallback):
         rung_lens = np.array(rung_lens)
         prom_quants = np.array(prom_quants)
         p_vals = np.array(p_vals)
+        return trial_ids, levels, ranks, rung_lens, prom_quants, p_vals
+
+    def _compute_scores(
+        self, trials_to_score: List[Tuple[str, int, float, int]], time_ratio: float
+    ) -> List[Tuple[str, float, int]]:
+        r"""
+        Computes scores for paused trials in ``trials_to_score``, with entries
+        ``(trial_id, rank, metric_val, level)``. These are approximations of
+        expected cost of checkpoint removal. ``time_ratio`` is the ratio between
+        time left and time already spent for the experiment, called :math:`\beta`
+        in the note.
+
+        :param trials_to_score: See above
+        :param time_ratio: See above
+        :return: List of ``(trial_id, score_val, level)``
+        """
+        (
+            trial_ids,
+            levels,
+            ranks,
+            rung_lens,
+            prom_quants,
+            p_vals,
+        ) = self._prepare_score_inputs(trials_to_score)
         n_vals = time_ratio * rung_lens
         u_vals = (time_ratio + 1) * prom_quants * rung_lens - ranks
         scores = _binomial_cdf(u_vals=u_vals, n_vals=n_vals, p_vals=p_vals) * np.array(
