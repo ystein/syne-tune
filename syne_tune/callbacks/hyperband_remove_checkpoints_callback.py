@@ -270,8 +270,7 @@ class HyperbandRemoveCheckpointsCallback(TunerCallback):
         return max(time_remaining, 1e-3) / max(time_elapsed, 1e-3)
 
     def on_loop_end(self):
-        num_trials_with_checkpoints = self._count_trials_with_checkpoints()
-        num_to_remove = num_trials_with_checkpoints - self.max_num_checkpoints
+        num_to_remove = self._count_trials_with_checkpoints() - self.max_num_checkpoints
         if num_to_remove > 0:
             paused_trials_with_checkpoints = self._filter_paused_trials(
                 self._terminator.paused_trials()
@@ -289,13 +288,16 @@ class HyperbandRemoveCheckpointsCallback(TunerCallback):
     def _update_estimators(self, trial_id: str, result: Dict[str, Any]):
         metric_val = float(result[self._metric])
         level = int(result[self._resource_attr])
+        # Paused trials with checkpoints at rung level ``level``
         paused_trials_with_checkpoints = self._filter_paused_trials(
             self._terminator.paused_trials(resource=level)
         )
+        # How many of these are better/worse than the new arrival? Note that the
+        # new arrival may already be in that list
         data = [
             self._metric_sign * (metric_val - mv) <= 0
-            for id, _, mv, _ in paused_trials_with_checkpoints
-            if id != trial_id
+            for tid, _, mv, _ in paused_trials_with_checkpoints
+            if tid != trial_id
         ]
         if data:
             for estimator in [self.estimator_for_rung(level), self._estimator_overall]:
@@ -313,4 +315,5 @@ class HyperbandRemoveCheckpointsCallback(TunerCallback):
             assert decision == SchedulerDecision.STOP  # Sanity check
             new_status = TrialStatus.STOPPED_OR_COMPLETED
         self._trial_status[trial_id] = new_status
+        # This new arrival provides data for updating our estimators
         self._update_estimators(trial_id, result)
