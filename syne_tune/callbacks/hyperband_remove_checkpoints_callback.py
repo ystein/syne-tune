@@ -49,6 +49,41 @@ class TrialStatus:
     STOPPED_OR_COMPLETED = 3
 
 
+class BetaBinomialEstimator:
+    """
+    Estimator of the probability :math:`p = P(X = 1)` for a variable :math:`X`
+    with Bernoulli distribution. This is using a Beta prior, which is
+    conjugate to the binomial likelihood. The prior is parameterized by
+    effective sample size ``beta_size`` (:math:`a + b`) and mean ``beta_mean``
+    (:math:`a / (a + b)`).
+    """
+
+    def __init__(self, beta_mean: float, beta_size: float):
+        assert 0 < beta_mean < 1
+        assert beta_size > 0
+        self._beta_a = beta_mean * beta_size
+        self._beta_size = beta_size
+        self._num_one = 0
+        self._num_total = 0
+
+    def update(self, data: List[bool]):
+        self._num_one += sum(data)
+        self._num_total += len(data)
+
+    @property
+    def num_one(self) -> int:
+        return self._num_one
+
+    @property
+    def num_total(self):
+        return self._num_total
+
+    def posterior_mean(self) -> float:
+        a_posterior = self._beta_a + self._num_one
+        aplusb_posterior = self._beta_size + self._num_total
+        return a_posterior / aplusb_posterior
+
+
 class HyperbandRemoveCheckpointsCallback(TunerCallback):
     """
     Implements speculative early removal of checkpoints of paused trials for
@@ -68,10 +103,16 @@ class HyperbandRemoveCheckpointsCallback(TunerCallback):
     spent and remaining for the experiment, so we need ``max_wallclock_time``.
     Details are given in a technical report.
 
-    ``prob_new_is_better`` is the probability that a new trial arriving at a
-    rung ranks better than an existing paused one.
-
-    TODO: This probability should be estimated, even for every rung level!
+    The probability of getting resumed also depends on the probability
+    :math:`p_r` that a new trial arriving at rung :math:`r` ranks better than
+    an existing paused one with a checkpoint. These probabilities are estimated
+    here. For each new arrival at a rung, we obtain one datapoint for every
+    paused trial with checkpoint there. We use Bayesian estimators with Beta
+    prior given by mean ``prior_beta_mean`` and sample size ``prior_beta_size``.
+    The mean should be :math:`< 1/2`). We also run an estimator for an overall
+    probability :math:`p`, which is fed by all datapoints. This estimator is
+    used as long as there are less than :math:`min_data_at_rung` datapoints at
+    rung :math:`r`.
 
     .. note::
        The true maximum number of trials with checkpoints may be larger than
@@ -84,20 +125,39 @@ class HyperbandRemoveCheckpointsCallback(TunerCallback):
     :param max_num_checkpoints: Once the total number of checkpoints surpasses
         this number, we remove some.
     :param max_wallclock_time: Maximum time of the experiment
-    :param prob_new_is_better: See above
+    :param metric: Name of metric in ``result`` of :meth:`on_trial_result`
+    :param resource_attr: Name of resource attribute in ``result`` of
+        :meth:`on_trial_result`
+    :param mode: "min" or "max"
+    :param prior_beta_mean: Parameter of Beta prior for estimators
+    :param prior_beta_size: Parameter of Beta prior for estimators
+    :param min_data_at_rung: See above
     """
 
     def __init__(
         self,
         max_num_checkpoints: int,
         max_wallclock_time: int,
-        prob_new_is_better: float,
+        metric: str,
+        resource_attr: str,
+        mode: str,
+        prior_beta_mean: float,
+        prior_beta_size: float,
+        min_data_at_rung: int = 5,
     ):
         self.max_num_checkpoints = max_num_checkpoints
         self._max_wallclock_time = max_wallclock_time
-        self._prob_new_is_better = prob_new_is_better
+        self._metric = metric
+        self._resource_attr = resource_attr
+        assert mode in ["min", "max"]
+        self._metric_sign = -1 if mode == "max" else 1
+        self._prior_beta_mean = prior_beta_mean
+        self._prior_beta_size = prior_beta_size
+        self._min_data_at_rung = min_data_at_rung
         self._trials_with_checkpoints_removed = None
         self._trial_status = None
+        self._estimator_for_rung = None
+        self._estimator_overall = None
         self._start_time = None
         self._terminator = None
         self._trial_backend = None
@@ -124,6 +184,11 @@ class HyperbandRemoveCheckpointsCallback(TunerCallback):
         # trials with checkpoints
         self._trial_status = dict()
         self._start_time = time.perf_counter()
+        # See header comment
+        self._estimator_for_rung = dict()
+        self._estimator_overall = BetaBinomialEstimator(
+            beta_mean=self._prior_beta_mean, beta_size=self._prior_beta_size
+        )
 
     def _filter_paused_trials(
         self, paused_trials: PausedTrialsResult
@@ -133,6 +198,19 @@ class HyperbandRemoveCheckpointsCallback(TunerCallback):
             for entry in paused_trials
             if (entry[0], entry[-1]) not in self._trials_with_checkpoints_removed
         ]
+
+    def estimator_for_rung(self, level: int) -> BetaBinomialEstimator:
+        if level not in self._estimator_for_rung:
+            self._estimator_for_rung[level] = BetaBinomialEstimator(
+                beta_mean=self._prior_beta_mean, beta_size=self._prior_beta_size
+            )
+        return self._estimator_for_rung[level]
+
+    def _probability_for_rung(self, level: int) -> float:
+        estimator = self.estimator_for_rung(level)
+        if estimator.num_total < self._min_data_at_rung:
+            estimator = self._estimator_overall
+        return estimator.posterior_mean()
 
     def _compute_scores(
         self, trials_to_score: List[Tuple[str, int, float, int]], time_ratio: float
@@ -149,21 +227,28 @@ class HyperbandRemoveCheckpointsCallback(TunerCallback):
         :return: List of ``(trial_id, score_val, level)``
         """
         info_rungs = self._terminator.information_for_rungs()
-        lens_rung = {x[0]: x[1] for x in info_rungs}
-        prom_quants_rung = {x[0]: x[2] for x in info_rungs}
-        trial_ids, ranks, rung_lens, prom_quants, levels = zip(
+        lens_rung = {r: n for r, n, _ in info_rungs}
+        prom_quants_rung = {r: alpha for r, _, alpha in info_rungs}
+        pvals_rung = {r: self._probability_for_rung(r) for r, _, _ in info_rungs}
+        trial_ids, ranks, levels, rung_lens, prom_quants, p_vals = zip(
             *[
-                (trial_id, rank + 1, lens_rung[level], prom_quants_rung[level], level)
+                (
+                    trial_id,
+                    rank + 1,
+                    level,
+                    lens_rung[level],
+                    prom_quants_rung[level],
+                    pvals_rung[level],
+                )
                 for trial_id, rank, _, level in trials_to_score
             ]
         )
         ranks = np.array(ranks)  # ranks starting from 1 (not 0)
         rung_lens = np.array(rung_lens)
         prom_quants = np.array(prom_quants)
+        p_vals = np.array(p_vals)
         n_vals = time_ratio * rung_lens
         u_vals = (time_ratio + 1) * prom_quants * rung_lens - ranks
-        # TODO: Probability should depend on level
-        p_vals = np.full_like(n_vals, self._prob_new_is_better)
         scores = _binomial_cdf(u_vals=u_vals, n_vals=n_vals, p_vals=p_vals) * np.array(
             levels
         )
@@ -201,6 +286,21 @@ class HyperbandRemoveCheckpointsCallback(TunerCallback):
         trial_id = str(trial.trial_id)
         self._trial_status[trial_id] = TrialStatus.STOPPED_OR_COMPLETED
 
+    def _update_estimators(self, trial_id: str, result: Dict[str, Any]):
+        metric_val = float(result[self._metric])
+        level = int(result[self._resource_attr])
+        paused_trials_with_checkpoints = self._filter_paused_trials(
+            self._terminator.paused_trials(resource=level)
+        )
+        data = [
+            self._metric_sign * (metric_val - mv) <= 0
+            for id, _, mv, _ in paused_trials_with_checkpoints
+            if id != trial_id
+        ]
+        if data:
+            for estimator in [self.estimator_for_rung(level), self._estimator_overall]:
+                estimator.update(data)
+
     def on_trial_result(
         self, trial: Trial, status: str, result: Dict[str, Any], decision: str
     ):
@@ -213,3 +313,4 @@ class HyperbandRemoveCheckpointsCallback(TunerCallback):
             assert decision == SchedulerDecision.STOP  # Sanity check
             new_status = TrialStatus.STOPPED_OR_COMPLETED
         self._trial_status[trial_id] = new_status
+        self._update_estimators(trial_id, result)

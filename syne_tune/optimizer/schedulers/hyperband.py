@@ -1216,8 +1216,7 @@ class HyperbandBracketManager:
         ``(trial_id, rank, metric_val, level)``, where ``level`` is
         the rung level, and ``rank`` is the rank of the trial in the rung
         (0 for the best metric value). If ``resource`` is given, only the
-        paused trials in the rung of this level are returned, as
-        ``(trial_id, rank, metric_val)``.
+        paused trials in the rung of this level are returned.
 
         :param resource: If given, paused trials of only this rung level are
             returned. Otherwise, all paused trials are returned
