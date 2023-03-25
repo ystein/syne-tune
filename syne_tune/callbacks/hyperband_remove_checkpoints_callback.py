@@ -30,6 +30,8 @@ from syne_tune.optimizer.scheduler import SchedulerDecision
 from syne_tune.optimizer.schedulers import HyperbandScheduler
 from syne_tune.optimizer.schedulers.hyperband_stopping import PausedTrialsResult
 
+logger = logging.getLogger(__name__)
+
 
 def _binomial_cdf(
     u_vals: np.ndarray, n_vals: np.ndarray, p_vals: np.ndarray
@@ -223,11 +225,12 @@ class HyperbandRemoveCheckpointsCallback(TunerCallback):
 
     def _prepare_score_inputs(
         self, trials_to_score: List[Tuple[str, int, float, int]]
-    ) -> (List[str], List[int], np.ndarray, np.ndarray, np.ndarray, np.ndarray):
+    ) -> (List[str], np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray):
         info_rungs = self._terminator.information_for_rungs()
         lens_rung = {r: n for r, n, _ in info_rungs}
         prom_quants_rung = {r: alpha for r, _, alpha in info_rungs}
         pvals_rung = {r: self._probability_for_rung(r) for r, _, _ in info_rungs}
+        logger.info(f"Probabilities p_r per rung level r:\n{pvals_rung}")
         trial_ids, ranks, levels, rung_lens, prom_quants, p_vals = zip(
             *[
                 (
@@ -249,7 +252,7 @@ class HyperbandRemoveCheckpointsCallback(TunerCallback):
 
     def _compute_scores(
         self, trials_to_score: List[Tuple[str, int, float, int]], time_ratio: float
-    ) -> List[Tuple[str, float, int]]:
+    ) -> List[Tuple[str, float, int, int, int]]:
         r"""
         Computes scores for paused trials in ``trials_to_score``, with entries
         ``(trial_id, rank, metric_val, level)``. These are approximations of
@@ -259,7 +262,7 @@ class HyperbandRemoveCheckpointsCallback(TunerCallback):
 
         :param trials_to_score: See above
         :param time_ratio: See above
-        :return: List of ``(trial_id, score_val, level)``
+        :return: List of ``(trial_id, score_val, level, rank, rung_len)``
         """
         (
             trial_ids,
@@ -271,10 +274,8 @@ class HyperbandRemoveCheckpointsCallback(TunerCallback):
         ) = self._prepare_score_inputs(trials_to_score)
         n_vals = time_ratio * rung_lens
         u_vals = (time_ratio + 1) * prom_quants * rung_lens - ranks
-        scores = _binomial_cdf(u_vals=u_vals, n_vals=n_vals, p_vals=p_vals) * np.array(
-            levels
-        )
-        return list(zip(trial_ids, scores, levels))
+        scores = _binomial_cdf(u_vals=u_vals, n_vals=n_vals, p_vals=p_vals) * levels
+        return list(zip(trial_ids, scores, levels, ranks, rung_lens))
 
     def _count_trials_with_checkpoints(self) -> int:
         has_checkpoint = {TrialStatus.RUNNING, TrialStatus.PAUSED_WITH_CHECKPOINT}
@@ -298,10 +299,17 @@ class HyperbandRemoveCheckpointsCallback(TunerCallback):
                 self._terminator.paused_trials()
             )
             time_ratio = self._get_time_ratio()
+            logger.info(f"Time ratio beta = {time_ratio}")
             scores = self._compute_scores(paused_trials_with_checkpoints, time_ratio)
             num = min(num_to_remove, len(paused_trials_with_checkpoints))
-            for trial_id, _, level in sorted(scores, key=itemgetter(1))[:num]:
+            trials_to_remove = sorted(scores, key=itemgetter(1))[:num]
+            msg_parts = [f"Removing checkpoints of {num} paused trials:"]
+            for trial_id, score_val, level, rank, rung_len in trials_to_remove:
                 self._remove_checkpoint_of(trial_id, level)
+                msg_parts.append(
+                    f"  trial_id {trial_id}, level = {level}, rank = {rank} (of {rung_len}): score = {score_val}"
+                )
+            logger.info("\n".join(msg_parts))
 
     def on_trial_complete(self, trial: Trial, result: Dict[str, Any]):
         trial_id = str(trial.trial_id)

@@ -276,3 +276,16 @@ class TrialScheduler:
             return self.mode
         else:
             raise NotImplementedError
+
+    def params_early_checkpoint_removal(self) -> Optional[Dict[str, Any]]:
+        """
+        Some schedulers support the early removal of checkpoints for paused
+        trials. This is done by a special callback in :class:`~syne_tune.Tuner`,
+        created by
+        :func:``~syne_tune.callbacks.checkpoint_removal_factory.early_checkpoint_removal_factory`.
+        The arguments for the callback constructor are provided here.
+
+        :return: Arguments for callback constructor, or ``None`` if early
+            checkpoint removal is not supported
+        """
+        return None
