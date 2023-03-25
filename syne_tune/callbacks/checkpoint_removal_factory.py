@@ -38,7 +38,7 @@ def early_checkpoint_removal_factory(
     if isinstance(scheduler, HyperbandScheduler) and isinstance(
         scheduler.terminator, PromotionRungSystem
     ):
-        callback = HyperbandRemoveCheckpointsCallback(
-            **scheduler.params_early_checkpoint_removal()
-        )
+        callback_kwargs = scheduler.params_early_checkpoint_removal()
+        if callback_kwargs is not None:
+            callback = HyperbandRemoveCheckpointsCallback(**callback_kwargs)
     return callback

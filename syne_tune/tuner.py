@@ -24,6 +24,9 @@ from syne_tune.backend.trial_backend import (
     TrialIdAndResultList,
 )
 from syne_tune.backend.trial_status import Status, Trial, TrialResult
+from syne_tune.callbacks.checkpoint_removal_factory import (
+    early_checkpoint_removal_factory,
+)
 from syne_tune.config_space import config_space_to_json_dict
 from syne_tune.constants import ST_TUNER_CREATION_TIMESTAMP, ST_TUNER_START_TIMESTAMP
 from syne_tune.optimizer.scheduler import SchedulerDecision, TrialScheduler
@@ -189,6 +192,16 @@ class Tuner:
         self.tuning_status = None
         self.tuner_saver = None
         self.status_printer = None
+        self._initialize_early_checkpoint_removal()
+
+    def _initialize_early_checkpoint_removal(self):
+        """
+        If the scheduler supports early checkpoint removal, the specific callback
+        for this is created here and appended to ``self.callbacks``.
+        """
+        callback = early_checkpoint_removal_factory(self.scheduler)
+        if callback is not None:
+            self.callbacks.append(callback)
 
     def run(self):
         """Launches the tuning."""
