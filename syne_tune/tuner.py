@@ -201,7 +201,16 @@ class Tuner:
         """
         callback = early_checkpoint_removal_factory(self.scheduler)
         if callback is not None:
-            self.callbacks.append(callback)
+            if self.trial_backend.delete_checkpoints:
+                self.callbacks.append(callback)
+            else:
+                logger.warning(
+                    "Since trial_backend.delete_checkpoints == False, early "
+                    "checkpoint removal is not activated, even though the "
+                    "scheduler supports it. You can activate early checkpoint "
+                    "removal by creating the trial backend with "
+                    "delete_checkpoints=True."
+                )
 
     def run(self):
         """Launches the tuning."""

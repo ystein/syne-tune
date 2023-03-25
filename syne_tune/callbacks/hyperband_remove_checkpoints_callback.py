@@ -140,9 +140,11 @@ class HyperbandRemoveCheckpointsCallback(TunerCallback):
     :param resource_attr: Name of resource attribute in ``result`` of
         :meth:`on_trial_result`
     :param mode: "min" or "max"
-    :param prior_beta_mean: Parameter of Beta prior for estimators
-    :param prior_beta_size: Parameter of Beta prior for estimators
-    :param min_data_at_rung: See above
+    :param prior_beta_mean: Parameter of Beta prior for estimators. Defaults
+        to 0.33
+    :param prior_beta_size: Parameter of Beta prior for estimators. Defaults
+        to 2
+    :param min_data_at_rung: See above. Defaults to 5
     """
 
     def __init__(
@@ -152,8 +154,8 @@ class HyperbandRemoveCheckpointsCallback(TunerCallback):
         metric: str,
         resource_attr: str,
         mode: str,
-        prior_beta_mean: float,
-        prior_beta_size: float,
+        prior_beta_mean: float = 0.33,
+        prior_beta_size: float = 2,
         min_data_at_rung: int = 5,
     ):
         self.max_num_checkpoints = max_num_checkpoints
