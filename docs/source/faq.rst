@@ -359,17 +359,18 @@ speculative early checkpoint removal, by passing
 :class:`~syne_tune.optimizer.baselines.HyperTune`). This is a ``kwargs``
 dictionary with the following arguments:
 
-* ``max_num_checkpoints``: Maximum number of trials with checkpoints being retained.
-  Once more than this number of trials with checkpoints are present, checkpoints
-  are removed selectively. This number must be significantly larger than the
-  number of workers, since running trials will always write checkpoints. Note
-  that the true maximum number of trials with checkpoints may be larger than
-  ``max_num_checkpoints`` temporarily, because trials are only counted once
-  they report a result for the first time.
+* ``max_num_checkpoints``: This is mandatory. Maximum number of trials with
+  checkpoints being retained. Once more than this number of trials with
+  checkpoints are present, checkpoints are removed selectively. This number must
+  be significantly larger than the number of workers, since running trials will
+  always write checkpoints. Note that the true maximum number of trials with
+  checkpoints may be larger than ``max_num_checkpoints`` temporarily, because
+  trials are only counted once they report a result for the first time.
 * ``max_wallclock_time``: Maximum time in seconds the experiment is run for. This
-  is the same as passed to :class:`~syne_tune.StoppingCriterion`. Speculative
-  checkpoint removal can only be used if the stopping criterion includes
-  ``max_wallclock_time``.
+  is the same as passed to :class:`~syne_tune.StoppingCriterion`, and if you use
+  an instance of this as ``stop_criterion`` passed to :class:`~syne_tune.Tuner`,
+  the value is taken from there. Speculative checkpoint removal can only be used
+  if the stopping criterion includes ``max_wallclock_time``.
 * ``prior_beta_mean``: The method depends on the probability of the event
   that a trial arriving at a rung ranks better than a random paused trial
   with checkpoint at this rung. These probabilities are estimated for each

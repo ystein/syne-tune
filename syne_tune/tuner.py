@@ -199,7 +199,9 @@ class Tuner:
         If the scheduler supports early checkpoint removal, the specific callback
         for this is created here and appended to ``self.callbacks``.
         """
-        callback = early_checkpoint_removal_factory(self.scheduler)
+        callback = early_checkpoint_removal_factory(
+            scheduler=self.scheduler, stop_criterion=self.stop_criterion
+        )
         if callback is not None:
             if self.trial_backend.delete_checkpoints:
                 self.callbacks.append(callback)

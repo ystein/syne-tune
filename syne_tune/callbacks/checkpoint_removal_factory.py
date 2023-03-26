@@ -10,19 +10,22 @@
 # on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
 # express or implied. See the License for the specific language governing
 # permissions and limitations under the License.
-from typing import Optional
+from typing import Optional, Callable
 
-from syne_tune.tuner_callback import TunerCallback
 from syne_tune.callbacks.hyperband_remove_checkpoints_callback import (
     HyperbandRemoveCheckpointsCallback,
 )
 from syne_tune.optimizer.scheduler import TrialScheduler
 from syne_tune.optimizer.schedulers import HyperbandScheduler
 from syne_tune.optimizer.schedulers.hyperband_promotion import PromotionRungSystem
+from syne_tune.stopping_criterion import StoppingCriterion
+from syne_tune.tuner_callback import TunerCallback
+from syne_tune.tuning_status import TuningStatus
 
 
 def early_checkpoint_removal_factory(
     scheduler: TrialScheduler,
+    stop_criterion: Callable[[TuningStatus], bool],
 ) -> Optional[TunerCallback]:
     """
     Early checkpoint removal is implemented by callbacks, which depend on which
@@ -30,7 +33,7 @@ def early_checkpoint_removal_factory(
     not supported.
 
     :param scheduler: Scheduler for which early checkpoint removal is requested
-    :param kwargs: Arguments to constructor of callback
+    :param stop_criterion: Stop criterion as passed to :class:`~syne_tune.Tuner`
     :return: Callback for early checkpoint removal, or ``None`` if this is not
         supported for the scheduler
     """
@@ -40,5 +43,10 @@ def early_checkpoint_removal_factory(
     ):
         callback_kwargs = scheduler.params_early_checkpoint_removal()
         if callback_kwargs is not None:
+            if isinstance(stop_criterion, StoppingCriterion):
+                # Obtain ``max_wallclock_time`` from stopping criterion
+                max_wallclock_time = stop_criterion.max_wallclock_time
+                if max_wallclock_time is not None:
+                    callback_kwargs["max_wallclock_time"] = max_wallclock_time
             callback = HyperbandRemoveCheckpointsCallback(**callback_kwargs)
     return callback

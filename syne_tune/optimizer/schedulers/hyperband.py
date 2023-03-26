@@ -384,10 +384,9 @@ class HyperbandScheduler(FIFOScheduler, MultiFidelitySchedulerMixin):
         of checkpoints is done, see
         :class:`~syne_tune.callbacks.hyperband_remove_checkpoints_callback.HyperbandRemoveCheckpointsCallback`.
         The constructor arguments for the ``HyperbandRemoveCheckpointsCallback``
-        must be given here (keys ``max_num_checkpoints``, ``max_wallclock_time``,
-        ``prior_beta_mean``, ``prior_beta_size`` are mandatory).
-        This feature is used only for scheduler types which pause and resume
-        trials.
+        must be given here, if they cannot be inferred (key ``max_num_checkpoints``
+        is mandatory). This feature is used only for scheduler types which pause
+        and resume trials.
     :type early_checkpoint_removal_kwargs: Dict[str, Any], optional
     """
 
@@ -505,12 +504,7 @@ class HyperbandScheduler(FIFOScheduler, MultiFidelitySchedulerMixin):
         self, callback_kwargs: Optional[Dict[str, Any]]
     ):
         if callback_kwargs is not None:
-            for name in [
-                "max_num_checkpoints",
-                "max_wallclock_time",
-                "prior_beta_mean",
-                "prior_beta_size",
-            ]:
+            for name in ["max_num_checkpoints"]:
                 assert (
                     name in callback_kwargs
                 ), f"early_checkpoint_removal_kwargs must contain '{name}' entry"
