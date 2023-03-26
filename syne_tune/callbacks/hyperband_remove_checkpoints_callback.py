@@ -351,7 +351,7 @@ class HyperbandRemoveCheckpointsCallback(TunerCallback):
         trial_id = str(trial.trial_id)
         self._trial_status[trial_id] = TrialStatus.RUNNING
 
-    def on_trial_resume(self, trial: Trial):
+    def on_resume_trial(self, trial: Trial):
         trial_id = str(trial.trial_id)
         self._trial_status[trial_id] = TrialStatus.RUNNING
         level = self._trials_with_checkpoints_removed.get(trial_id)

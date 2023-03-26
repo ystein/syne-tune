@@ -114,7 +114,7 @@ class TunerCallback:
         """
         pass
 
-    def on_trial_resume(self, trial: Trial):
+    def on_resume_trial(self, trial: Trial):
         """Called just after a trial is resumed
 
         :param trial: Trial which has just been resumed

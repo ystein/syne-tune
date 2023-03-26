@@ -525,7 +525,7 @@ class Tuner:
                 trial_id=suggestion.checkpoint_trial_id, new_config=suggestion.config
             )
             for callback in self.callbacks:
-                callback.on_trial_resume(trial)
+                callback.on_resume_trial(trial)
             return trial
 
     def _handle_failure(self, done_trials_statuses: Dict[int, Tuple[Trial, str]]):
