@@ -125,14 +125,6 @@ class HyperbandRemoveCheckpointsCallback(TunerCallback):
     used as long as there are less than :math:`min_data_at_rung` datapoints at
     rung :math:`r`.
 
-    .. note::
-       The true maximum number of trials with checkpoints may be larger than
-       ``max_num_checkpoints``. The number is determined here by
-       :meth:`on_trial_result` and :meth:`on_trial_complete`, so that trials
-       are only counted once they report for the first time. Also, if a paused
-       trial without checkpoint is resumed, it is counted only with its first
-       report.
-
     :param max_num_checkpoints: Once the total number of checkpoints surpasses
         this number, we remove some.
     :param max_wallclock_time: Maximum time of the experiment
@@ -171,6 +163,7 @@ class HyperbandRemoveCheckpointsCallback(TunerCallback):
         self._trial_status = None
         self._estimator_for_rung = None
         self._estimator_overall = None
+        self._trials_resumed_without_checkpoint = None
         self._start_time = None
         self._terminator = None
         self._trial_backend = None
@@ -188,15 +181,16 @@ class HyperbandRemoveCheckpointsCallback(TunerCallback):
 
     def on_tuning_start(self, tuner):
         self._check_and_initialize(tuner)
-        # Contains ``(trial_id, level)`` for paused trials whose checkpoints
-        # were removed. Note that ``trial_id`` is not enough, since a paused trial
-        # can have its checkpoint removed, then be resumed and paused again (at a
-        # higher rung level) with a checkpoint
-        self._trials_with_checkpoints_removed = set()
+        # For any paused trial with checkpoint removed, this dict maps ``trial_id`` to
+        # ``level`` (where this trial is paused)
+        self._trials_with_checkpoints_removed = dict()
         # Maps ``trial_id`` to ``TrialStatus``. Used to count the number of
         # trials with checkpoints
         self._trial_status = dict()
         self._start_time = time.perf_counter()
+        # Collects entries ``(trial_id, level)`` from ``_trials_with_checkpoints_removed``
+        # which were nevertheless resumed
+        self._trials_resumed_without_checkpoint = []
         # See header comment
         self._estimator_for_rung = dict()
         self._estimator_overall = BetaBinomialEstimator(
@@ -209,7 +203,7 @@ class HyperbandRemoveCheckpointsCallback(TunerCallback):
         return [
             entry
             for entry in paused_trials
-            if (entry[0], entry[-1]) not in self._trials_with_checkpoints_removed
+            if entry[0] not in self._trials_with_checkpoints_removed
         ]
 
     def estimator_for_rung(self, level: int) -> BetaBinomialEstimator:
@@ -286,7 +280,7 @@ class HyperbandRemoveCheckpointsCallback(TunerCallback):
     def _remove_checkpoint_of(self, trial_id: str, level: int):
         self._trial_backend.delete_checkpoint(int(trial_id))
         self._trial_status[trial_id] = TrialStatus.PAUSED_NO_CHECKPOINT
-        self._trials_with_checkpoints_removed.add((trial_id, int(level)))
+        self._trials_with_checkpoints_removed[trial_id] = level
 
     def _get_time_ratio(self) -> float:
         current_time = time.perf_counter()
@@ -316,6 +310,7 @@ class HyperbandRemoveCheckpointsCallback(TunerCallback):
     def on_trial_complete(self, trial: Trial, result: Dict[str, Any]):
         trial_id = str(trial.trial_id)
         self._trial_status[trial_id] = TrialStatus.STOPPED_OR_COMPLETED
+        self._trials_with_checkpoints_removed.pop(trial_id, None)
 
     def _update_estimators(self, trial_id: str, result: Dict[str, Any]):
         metric_val = float(result[self._metric])
@@ -341,11 +336,32 @@ class HyperbandRemoveCheckpointsCallback(TunerCallback):
         trial_id = str(trial.trial_id)
         if decision == SchedulerDecision.CONTINUE:
             new_status = TrialStatus.RUNNING
-        elif decision == SchedulerDecision.PAUSE:
-            new_status = TrialStatus.PAUSED_WITH_CHECKPOINT
         else:
-            assert decision == SchedulerDecision.STOP  # Sanity check
-            new_status = TrialStatus.STOPPED_OR_COMPLETED
+            if decision == SchedulerDecision.PAUSE:
+                new_status = TrialStatus.PAUSED_WITH_CHECKPOINT
+            else:
+                assert decision == SchedulerDecision.STOP  # Sanity check
+                new_status = TrialStatus.STOPPED_OR_COMPLETED
+            self._trials_with_checkpoints_removed.pop(trial_id, None)
         self._trial_status[trial_id] = new_status
         # This new arrival provides data for updating our estimators
         self._update_estimators(trial_id, result)
+
+    def on_start_trial(self, trial: Trial):
+        trial_id = str(trial.trial_id)
+        self._trial_status[trial_id] = TrialStatus.RUNNING
+
+    def on_trial_resume(self, trial: Trial):
+        trial_id = str(trial.trial_id)
+        self._trial_status[trial_id] = TrialStatus.RUNNING
+        level = self._trials_with_checkpoints_removed.get(trial_id)
+        if level is not None:
+            self._trials_resumed_without_checkpoint.append((trial_id, level))
+            del self._trials_with_checkpoints_removed[trial_id]
+
+    def trials_resumed_without_checkpoint(self) -> List[Tuple[str, int]]:
+        """
+        :return: List of ``(trial_id, level)`` for trials which were resumed, even
+            though their checkpoint was removed
+        """
+        return self._trials_resumed_without_checkpoint

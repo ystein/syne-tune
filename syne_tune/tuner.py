@@ -443,7 +443,7 @@ class Tuner:
         # - scheduler decided to interrupt them.
         # Note: ``done_trials`` includes trials which are paused.
         done_trials_statuses = self._update_running_trials(
-            trial_status_dict, new_results, callbacks=self.callbacks
+            trial_status_dict, new_results
         )
         trial_status_dict.update(done_trials_statuses)
 
@@ -519,6 +519,8 @@ class Tuner:
                 checkpoint_trial_id=suggestion.checkpoint_trial_id,
             )
             self.scheduler.on_trial_add(trial=trial)
+            for callback in self.callbacks:
+                callback.on_start_trial(trial)
             logger.info(f"(trial {trial.trial_id}) - scheduled {suggestion}")
             return trial
         else:
@@ -530,6 +532,8 @@ class Tuner:
             trial = self.trial_backend.resume_trial(
                 trial_id=suggestion.checkpoint_trial_id, new_config=suggestion.config
             )
+            for callback in self.callbacks:
+                callback.on_trial_resume(trial)
             return trial
 
     def _handle_failure(self, done_trials_statuses: Dict[int, Tuple[Trial, str]]):
@@ -564,7 +568,6 @@ class Tuner:
         self,
         trial_status_dict: TrialAndStatusInformation,
         new_results: TrialIdAndResultList,
-        callbacks: List[TunerCallback],
     ) -> TrialAndStatusInformation:
         """
         Updates schedulers with new results and sends decision to stop/pause
@@ -579,7 +582,6 @@ class Tuner:
         :param trial_status_dict: Information on trials from
             ``trial_backend.fetch_status_results``
         :param new_results: New results from ``trial_backend.fetch_status_results``
-        :param callbacks: ``on_trial_result`` for these callbacks is called here
         :return: Dictionary mapping trial-ids that are finished to status
         """
         # gets the list of jobs from running_jobs that are done
@@ -593,7 +595,7 @@ class Tuner:
                 self.last_seen_result_per_trial[trial_id] = result
                 decision = self.scheduler.on_trial_result(trial=trial, result=result)
 
-                for callback in callbacks:
+                for callback in self.callbacks:
                     callback.on_trial_result(
                         trial=trial,
                         status=status,
@@ -652,7 +654,7 @@ class Tuner:
                 if trial_id not in done_trials:
                     self.scheduler.on_trial_complete(trial, last_result)
                 if status == Status.completed:
-                    for callback in callbacks:
+                    for callback in self.callbacks:
                         callback.on_trial_complete(trial, last_result)
                 done_trials[trial_id] = (trial, status)
 
