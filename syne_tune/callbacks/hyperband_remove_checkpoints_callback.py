@@ -288,6 +288,13 @@ class HyperbandRemoveCheckpointsCallback(TunerCallback):
         time_remaining = self._max_wallclock_time - time_elapsed
         return max(time_remaining, 1e-3) / max(time_elapsed, 1e-3)
 
+    def _log_estimator_status(self):
+        msg_parts = ["Status of p_r estimators:"]
+        for r, estimator in self._estimator_for_rung.items():
+            msg_parts.append(f"r={r}: n={estimator.num_total}")
+        msg_parts.append(f"overall: n={self._estimator_overall.num_total}")
+        logger.info("\n".join(msg_parts))
+
     def on_loop_end(self):
         num_to_remove = self._count_trials_with_checkpoints() - self.max_num_checkpoints
         if num_to_remove > 0:
@@ -296,6 +303,7 @@ class HyperbandRemoveCheckpointsCallback(TunerCallback):
             )
             time_ratio = self._get_time_ratio()
             logger.info(f"Time ratio beta = {time_ratio}")
+            self._log_estimator_status()
             scores = self._compute_scores(paused_trials_with_checkpoints, time_ratio)
             num = min(num_to_remove, len(paused_trials_with_checkpoints))
             trials_to_remove = sorted(scores, key=itemgetter(1))[:num]

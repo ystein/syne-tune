@@ -12,20 +12,10 @@
 # permissions and limitations under the License.
 import itertools
 from typing import Optional, Callable, Dict, Any
-
 import numpy as np
 from tqdm import tqdm
 import logging
 
-from syne_tune.backend.sagemaker_backend.sagemaker_utils import (
-    backend_path_not_synced_to_s3,
-)
-from syne_tune.backend import LocalBackend
-from syne_tune.remote.remote_metrics_callback import RemoteTuningMetricsCallback
-from syne_tune.stopping_criterion import StoppingCriterion
-from syne_tune.tuner import Tuner
-from syne_tune.tuner_callback import StoreResultsCallback
-from syne_tune.util import sanitize_sagemaker_name
 from benchmarking.commons.baselines import MethodArguments, MethodDefinitions
 from benchmarking.commons.benchmark_definitions.common import RealBenchmarkDefinition
 from benchmarking.commons.hpo_main_common import (
@@ -42,8 +32,14 @@ from benchmarking.commons.hpo_main_common import (
 )
 from benchmarking.commons.utils import get_master_random_seed, effective_random_seed
 from syne_tune.backend import LocalBackend
+from syne_tune.backend.sagemaker_backend.sagemaker_utils import (
+    backend_path_not_synced_to_s3,
+)
+from syne_tune.remote.remote_metrics_callback import RemoteTuningMetricsCallback
 from syne_tune.stopping_criterion import StoppingCriterion
 from syne_tune.tuner import Tuner
+from syne_tune.tuner_callback import StoreResultsCallback
+from syne_tune.util import sanitize_sagemaker_name
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +69,12 @@ LOCAL_BACKEND_EXTRA_PARAMETERS = [
         type=str2bool,
         default=True,
         help="Remote tuning publishes metrics to Sagemaker console?",
+    ),
+    dict(
+        name="delete_checkpoints",
+        type=str2bool,
+        default=False,
+        help="Remove checkpoints of trials once no longer needed?",
     ),
 ]
 
@@ -241,7 +243,10 @@ def start_benchmark_local_backend(
         print(
             f"Starting experiment ({method}/{benchmark_name}/{seed}) of {experiment_tag}"
         )
-        trial_backend = LocalBackend(entry_point=str(benchmark.script))
+        trial_backend = LocalBackend(
+            entry_point=str(benchmark.script),
+            delete_checkpoints=configuration.delete_checkpoints,
+        )
 
         tuner_kwargs = create_objects_for_tuner(
             configuration,
