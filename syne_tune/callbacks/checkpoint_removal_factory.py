@@ -15,6 +15,7 @@ from typing import Optional, Callable
 from syne_tune.callbacks.hyperband_remove_checkpoints_callback import (
     HyperbandRemoveCheckpointsCallback,
 )
+from syne_tune.callbacks.remove_checkpoints_callback import RemoveCheckpointsCallback
 from syne_tune.optimizer.scheduler import TrialScheduler
 from syne_tune.optimizer.schedulers import HyperbandScheduler
 from syne_tune.stopping_criterion import StoppingCriterion
@@ -37,16 +38,24 @@ def early_checkpoint_removal_factory(
         supported for the scheduler
     """
     callback = None
-    if (
-        isinstance(scheduler, HyperbandScheduler)
-        and scheduler.terminator.support_early_checkpoint_removal()
-    ):
-        callback_kwargs = scheduler.params_early_checkpoint_removal()
-        if callback_kwargs is not None:
+    callback_kwargs = scheduler.params_early_checkpoint_removal()
+    if callback_kwargs is not None:
+        # Scheduler supports early checkpoint removal
+        if (
+            isinstance(scheduler, HyperbandScheduler)
+            and scheduler.terminator.support_early_checkpoint_removal()
+        ):
+            # Special case: Promotion-based asynchronous successive halving
             if isinstance(stop_criterion, StoppingCriterion):
                 # Obtain ``max_wallclock_time`` from stopping criterion
                 max_wallclock_time = stop_criterion.max_wallclock_time
                 if max_wallclock_time is not None:
                     callback_kwargs["max_wallclock_time"] = max_wallclock_time
             callback = HyperbandRemoveCheckpointsCallback(**callback_kwargs)
+        else:
+            assert len(callback_kwargs) == 0, (
+                "params_early_checkpoint_removal of your scheduler returns "
+                "arguments, which are not used in RemoveCheckpointsCallback"
+            )
+            callback = RemoveCheckpointsCallback()
     return callback
