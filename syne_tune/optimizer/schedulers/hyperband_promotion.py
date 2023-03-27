@@ -278,8 +278,7 @@ class PromotionRungSystem(RungSystem):
             rungs = self._rungs
         else:
             rung_pos = self._rung_pos_for_level(resource)
-            assert rung_pos is not None, f"resource = {resource} is not a rung level"
-            rungs = [self._rungs[rung_pos]]
+            rungs = [] if rung_pos is None else [self._rungs[rung_pos]]
         for rung in rungs:
             for pos, entry in enumerate(rung.data):
                 if not entry.was_promoted:

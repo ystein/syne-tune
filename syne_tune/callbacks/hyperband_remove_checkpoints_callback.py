@@ -190,7 +190,6 @@ class HyperbandRemoveCheckpointsCallback(TunerCallback):
         ), "Checkpoint removal not supported for SimulatorBackend"
 
     def on_tuning_start(self, tuner):
-        logger.info("*** on_tuning_start ***")  # DEBUG
         self._check_and_initialize(tuner)
         # For any paused trial with checkpoint removed, this dict maps ``trial_id`` to
         # ``level`` (where this trial is paused)
@@ -237,7 +236,7 @@ class HyperbandRemoveCheckpointsCallback(TunerCallback):
         lens_rung = {r: n for r, n, _ in info_rungs}
         prom_quants_rung = {r: alpha for r, _, alpha in info_rungs}
         pvals_rung = {r: self._probability_for_rung(r) for r, _, _ in info_rungs}
-        logger.info(f"Probabilities p_r per rung level r:\n{pvals_rung}")
+        logger.info(f"*** Probabilities p_r per rung level r:\n{pvals_rung}")
         trial_ids, ranks, levels, rung_lens, prom_quants, p_vals = zip(
             *[
                 (
@@ -300,7 +299,7 @@ class HyperbandRemoveCheckpointsCallback(TunerCallback):
         return max(time_remaining, 1e-3) / max(time_elapsed, 1e-3)
 
     def _log_estimator_status(self):
-        msg_parts = ["Status of p_r estimators:"]
+        msg_parts = ["*** Status of p_r estimators:"]
         for r, estimator in self._estimator_for_rung.items():
             msg_parts.append(f"r={r}: n={estimator.num_total}")
         msg_parts.append(f"overall: n={self._estimator_overall.num_total}")
@@ -315,7 +314,7 @@ class HyperbandRemoveCheckpointsCallback(TunerCallback):
                 self._terminator.paused_trials()
             )
             time_ratio = self._get_time_ratio()
-            logger.info(f"Time ratio beta = {time_ratio}")
+            logger.info(f"*** Time ratio beta = {time_ratio}")
             self._log_estimator_status()
             scores = self._compute_scores(paused_trials_with_checkpoints, time_ratio)
             num = min(num_to_remove, len(paused_trials_with_checkpoints))
@@ -336,7 +335,8 @@ class HyperbandRemoveCheckpointsCallback(TunerCallback):
     def _update_estimators(self, trial_id: str, result: Dict[str, Any]):
         metric_val = float(result[self._metric])
         level = int(result[self._resource_attr])
-        # Paused trials with checkpoints at rung level ``level``
+        # Paused trials with checkpoints at rung level ``level``. If ``level`` is
+        # not a rung level, this is an empty list
         paused_trials_with_checkpoints = self._filter_paused_trials(
             self._terminator.paused_trials(resource=level)
         )
@@ -348,7 +348,7 @@ class HyperbandRemoveCheckpointsCallback(TunerCallback):
             if tid != trial_id
         ]
         if data:
-            logger.info(f"New data for estimators: {data}")  # DEBUG
+            logger.info(f"*** New data for estimators: {data}")  # DEBUG
             for estimator in [self.estimator_for_rung(level), self._estimator_overall]:
                 estimator.update(data)
 
@@ -366,7 +366,8 @@ class HyperbandRemoveCheckpointsCallback(TunerCallback):
                 new_status = TrialStatus.STOPPED_OR_COMPLETED
             self._trials_with_checkpoints_removed.pop(trial_id, None)
         self._trial_status[trial_id] = new_status
-        # This new arrival provides data for updating our estimators
+        # This new arrival provides data for updating our estimators, if it falls on
+        # a rung level
         self._update_estimators(trial_id, result)
 
     def on_start_trial(self, trial: Trial):
