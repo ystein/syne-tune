@@ -503,7 +503,6 @@ class HyperbandScheduler(FIFOScheduler, MultiFidelitySchedulerMixin):
     def _initialize_early_checkpoint_removal(
         self, callback_kwargs: Optional[Dict[str, Any]]
     ):
-        logger.info("*** _initialize_early_checkpoint_removal")  # DEBUG
         if callback_kwargs is not None:
             for name in ["max_num_checkpoints"]:
                 assert (
@@ -515,7 +514,6 @@ class HyperbandScheduler(FIFOScheduler, MultiFidelitySchedulerMixin):
                 resource_attr=self._resource_attr,
                 mode=self.mode,
             )
-            logger.info(f"callback_kwargs = {callback_kwargs}")  # DEBUG
         self._early_checkpoint_removal_kwargs = callback_kwargs
 
     def does_pause_resume(self) -> bool:

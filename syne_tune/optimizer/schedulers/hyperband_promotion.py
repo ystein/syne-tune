@@ -281,11 +281,7 @@ class PromotionRungSystem(RungSystem):
             assert rung_pos is not None, f"resource = {resource} is not a rung level"
             rungs = [self._rungs[rung_pos]]
         for rung in rungs:
-            if resource is None:
-                append_tpl = (rung.level,)
-            else:
-                append_tpl = ()
             for pos, entry in enumerate(rung.data):
                 if not entry.was_promoted:
-                    result.append((entry.trial_id, pos, entry.metric_val) + append_tpl)
+                    result.append((entry.trial_id, pos, entry.metric_val, rung.level))
         return result
