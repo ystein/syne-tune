@@ -167,16 +167,16 @@ class HyperbandRemoveCheckpointsCallback(TunerCallback):
         self._start_time = None
         self._terminator = None
         self._trial_backend = None
-        logger.info(
-            "Creating HyperbandRemoveCheckpointsCallback: "
-            f"max_num_checkpoints = {max_num_checkpoints}, "
-            f"max_wallclock_time = {max_wallclock_time}, "
-            f"metric = {metric}, "
-            f"resource_attr = {resource_attr}, "
-            f"prior_beta_mean = {prior_beta_mean}, "
-            f"prior_beta_size = {prior_beta_size}, "
-            f"min_data_at_rung = {min_data_at_rung}, "
-        )  # DEBUG
+        # logger.info(
+        #    "Creating HyperbandRemoveCheckpointsCallback: "
+        #    f"max_num_checkpoints = {max_num_checkpoints}, "
+        #    f"max_wallclock_time = {max_wallclock_time}, "
+        #    f"metric = {metric}, "
+        #    f"resource_attr = {resource_attr}, "
+        #    f"prior_beta_mean = {prior_beta_mean}, "
+        #    f"prior_beta_size = {prior_beta_size}, "
+        #    f"min_data_at_rung = {min_data_at_rung}, "
+        # )  # DEBUG
 
     def _check_and_initialize(self, tuner):
         scheduler = tuner.scheduler
@@ -236,7 +236,7 @@ class HyperbandRemoveCheckpointsCallback(TunerCallback):
         lens_rung = {r: n for r, n, _ in info_rungs}
         prom_quants_rung = {r: alpha for r, _, alpha in info_rungs}
         pvals_rung = {r: self._probability_for_rung(r) for r, _, _ in info_rungs}
-        logger.info(f"*** Probabilities p_r per rung level r:\n{pvals_rung}")
+        # logger.info(f"*** Probabilities p_r per rung level r:\n{pvals_rung}")
         trial_ids, ranks, levels, rung_lens, prom_quants, p_vals = zip(
             *[
                 (
@@ -307,15 +307,15 @@ class HyperbandRemoveCheckpointsCallback(TunerCallback):
 
     def on_loop_end(self):
         num_checkpoints = self._count_trials_with_checkpoints()
-        logger.info(f"*** Number of checkpoints: {num_checkpoints}")  # DEBUG
+        # logger.info(f"*** Number of checkpoints: {num_checkpoints}")  # DEBUG
         num_to_remove = num_checkpoints - self.max_num_checkpoints
         if num_to_remove > 0:
             paused_trials_with_checkpoints = self._filter_paused_trials(
                 self._terminator.paused_trials()
             )
             time_ratio = self._get_time_ratio()
-            logger.info(f"*** Time ratio beta = {time_ratio}")
-            self._log_estimator_status()
+            # logger.info(f"*** Time ratio beta = {time_ratio}")
+            # self._log_estimator_status()
             scores = self._compute_scores(paused_trials_with_checkpoints, time_ratio)
             num = min(num_to_remove, len(paused_trials_with_checkpoints))
             trials_to_remove = sorted(scores, key=itemgetter(1))[:num]
@@ -348,7 +348,7 @@ class HyperbandRemoveCheckpointsCallback(TunerCallback):
             if tid != trial_id
         ]
         if data:
-            logger.info(f"*** New data for estimators: {data}")  # DEBUG
+            # logger.info(f"*** New data for estimators: {data}")  # DEBUG
             for estimator in [self.estimator_for_rung(level), self._estimator_overall]:
                 estimator.update(data)
 
