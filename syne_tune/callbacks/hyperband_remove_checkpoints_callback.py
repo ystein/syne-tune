@@ -16,41 +16,17 @@ import logging
 from operator import itemgetter
 import time
 
-from syne_tune.try_import import try_import_gpsearchers_message
-
-try:
-    from scipy.special import betainc
-except ImportError:
-    logging.info(try_import_gpsearchers_message())
-
 from syne_tune.tuner_callback import TunerCallback
 from syne_tune.backend.simulator_backend.simulator_backend import SimulatorBackend
 from syne_tune.backend.trial_status import Trial
+from syne_tune.callbacks.hyperband_remove_checkpoints_score import (
+    compute_probabilities_of_getting_resumed,
+)
 from syne_tune.optimizer.scheduler import SchedulerDecision
 from syne_tune.optimizer.schedulers import HyperbandScheduler
 from syne_tune.optimizer.schedulers.hyperband_stopping import PausedTrialsResult
 
 logger = logging.getLogger(__name__)
-
-
-def _binomial_cdf(
-    u_vals: np.ndarray, n_vals: np.ndarray, p_vals: np.ndarray
-) -> np.ndarray:
-    r"""
-    Computes binomial cumulative distribution function :math:`P(X \le u)`, where
-    :math:`X\sim \mathrm{bin}(n, p)`.
-
-    :param u_vals: Values for :math:`u`
-    :param n_vals: Values for :math:`n`
-    :param p_vals: Values for :math:`p`
-    :return: CDF values
-    """
-    a_vals = np.maximum(n_vals - u_vals, 1e-7)
-    b_vals = np.maximum(u_vals + 1, 1e-7)
-    result = betainc(a_vals, b_vals, 1 - p_vals)
-    result[u_vals < 0] = 0
-    result[u_vals >= n_vals] = 1
-    return result
 
 
 class TrialStatus:
@@ -132,6 +108,8 @@ class HyperbandRemoveCheckpointsCallback(TunerCallback):
     :param resource_attr: Name of resource attribute in ``result`` of
         :meth:`on_trial_result`
     :param mode: "min" or "max"
+    :param approx_steps: Number of approximation steps in score computation.
+        Computations scale cubically in this number
     :param prior_beta_mean: Parameter of Beta prior for estimators. Defaults
         to 0.33
     :param prior_beta_size: Parameter of Beta prior for estimators. Defaults
@@ -146,6 +124,7 @@ class HyperbandRemoveCheckpointsCallback(TunerCallback):
         metric: str,
         resource_attr: str,
         mode: str,
+        approx_steps: int = 10,
         prior_beta_mean: float = 0.33,
         prior_beta_size: float = 2,
         min_data_at_rung: int = 5,
@@ -156,6 +135,7 @@ class HyperbandRemoveCheckpointsCallback(TunerCallback):
         self._resource_attr = resource_attr
         assert mode in ["min", "max"]
         self._metric_sign = -1 if mode == "max" else 1
+        self._approx_steps = approx_steps
         self._prior_beta_mean = prior_beta_mean
         self._prior_beta_size = prior_beta_size
         self._min_data_at_rung = min_data_at_rung
@@ -164,6 +144,7 @@ class HyperbandRemoveCheckpointsCallback(TunerCallback):
         self._estimator_for_rung = None
         self._estimator_overall = None
         self._trials_resumed_without_checkpoint = None
+        self._num_checkpoints_removed = None
         self._start_time = None
         self._terminator = None
         self._trial_backend = None
@@ -201,11 +182,16 @@ class HyperbandRemoveCheckpointsCallback(TunerCallback):
         # Collects entries ``(trial_id, level)`` from ``_trials_with_checkpoints_removed``
         # which were nevertheless resumed
         self._trials_resumed_without_checkpoint = []
+        self._num_checkpoints_removed = 0
         # See header comment
         self._estimator_for_rung = dict()
         self._estimator_overall = BetaBinomialEstimator(
             beta_mean=self._prior_beta_mean, beta_size=self._prior_beta_size
         )
+
+    @property
+    def num_checkpoints_removed(self) -> int:
+        return self._num_checkpoints_removed
 
     def _filter_paused_trials(
         self, paused_trials: PausedTrialsResult
@@ -251,6 +237,7 @@ class HyperbandRemoveCheckpointsCallback(TunerCallback):
             ]
         )
         ranks = np.array(ranks)  # ranks starting from 1 (not 0)
+        levels = np.array(levels)
         rung_lens = np.array(rung_lens)
         prom_quants = np.array(prom_quants)
         p_vals = np.array(p_vals)
@@ -278,9 +265,17 @@ class HyperbandRemoveCheckpointsCallback(TunerCallback):
             prom_quants,
             p_vals,
         ) = self._prepare_score_inputs(trials_to_score)
-        n_vals = time_ratio * rung_lens
-        u_vals = (time_ratio + 1) * prom_quants * rung_lens - ranks
-        scores = _binomial_cdf(u_vals=u_vals, n_vals=n_vals, p_vals=p_vals) * levels
+        scores = (
+            compute_probabilities_of_getting_resumed(
+                ranks=ranks,
+                rung_lens=rung_lens,
+                prom_quants=prom_quants,
+                p_vals=p_vals,
+                time_ratio=time_ratio,
+                approx_steps=self._approx_steps,
+            )
+            * levels
+        )
         return list(zip(trial_ids, scores, levels, ranks, rung_lens))
 
     def _count_trials_with_checkpoints(self) -> int:
@@ -291,6 +286,7 @@ class HyperbandRemoveCheckpointsCallback(TunerCallback):
         self._trial_backend.delete_checkpoint(int(trial_id))
         self._trial_status[trial_id] = TrialStatus.PAUSED_NO_CHECKPOINT
         self._trials_with_checkpoints_removed[trial_id] = level
+        self._num_checkpoints_removed += 1
 
     def _get_time_ratio(self) -> float:
         current_time = time.perf_counter()

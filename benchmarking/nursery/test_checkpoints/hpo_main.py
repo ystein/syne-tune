@@ -26,10 +26,13 @@ from syne_tune.callbacks.hyperband_remove_checkpoints_callback import (
 def post_processing(tuner: Tuner):
     callback = tuner.callbacks[-1]
     if isinstance(callback, HyperbandRemoveCheckpointsCallback):
+        logging.info(
+            f"Number of checkpoints removed: {callback.num_checkpoints_removed}"
+        )
         trials_resumed = callback.trials_resumed_without_checkpoint()
         if trials_resumed:
             logging.info(
-                f"The following trials were resumed without a checkpoint:\n{trials_resumed}"
+                f"The following {len(trials_resumed)}trials were resumed without a checkpoint:\n{trials_resumed}"
             )
         else:
             logging.info("No trials were resumed without a checkpoint")
