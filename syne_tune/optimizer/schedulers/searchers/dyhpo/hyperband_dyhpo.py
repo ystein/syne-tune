@@ -223,12 +223,10 @@ class DyHPORungSystem(PromotionRungSystem):
     def schedule_records(self) -> List[Tuple[str, int, int]]:
         return self._schedule_records
 
-    def summary_schedule_records(self) -> str:
+    def summary_schedule_records(self) -> Dict[str, Any]:
         histogram = Counter([x[1] for x in self._schedule_records])
-        msg_parts = [
-            "Summary of DyHPO on_task_schedule decisions:",
-            f"  Promoted by SH:    {histogram[ScheduleDecision.PROMOTE_SH]}",
-            f"  Promoted by DyHPO: {histogram[ScheduleDecision.PROMOTE_DYHPO]}",
-            f"  Started by DyHPO:  {histogram[ScheduleDecision.START_DYHPO]}",
-        ]
-        return "\n".join(msg_parts)
+        return {
+            "promoted_by_sh": histogram[ScheduleDecision.PROMOTE_SH],
+            "promoted_by_dyhpo": histogram[ScheduleDecision.PROMOTE_DYHPO],
+            "started_by_dyhpo": histogram[ScheduleDecision.START_DYHPO],
+        }

@@ -10,9 +10,10 @@
 # on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
 # express or implied. See the License for the specific language governing
 # permissions and limitations under the License.
+from typing import Optional
 import logging
 
-from syne_tune.tuner_callback import StoreResultsCallback
+from syne_tune.results_callback import StoreResultsCallback, FinalResultsComposer
 from syne_tune.backend.simulator_backend.simulator_backend import SimulatorBackend
 from syne_tune import Tuner
 from syne_tune.constants import ST_TUNER_TIME
@@ -46,13 +47,19 @@ class SimulatorCallback(StoreResultsCallback):
     ``ST_TUNER_TIME`` fields in the results received. This allows us to keep
     both :class:`~syne_tune.Tuner` and ``TuningStatus`` independent of the time
     keeper.
+
+    :param final_results_composer: Optional. If given, this is called in
+        :meth:`on_tuning_end`, and the resulting dictionary is written as
+        ``{tuner.tuner_path}/{ST_FINAL_RESULTS_FILENAME}``.
     """
 
-    def __init__(self):
+    def __init__(self, final_results_composer: Optional[FinalResultsComposer] = None):
         # Note: ``results_update_interval`` is w.r.t. real time, not
         # simulated time. Storing results intermediately is not important for
         # the simulator backend, so the default is larger
-        super().__init__(add_wallclock_time=True)
+        super().__init__(
+            add_wallclock_time=True, final_results_composer=final_results_composer
+        )
         self._tuner_sleep_time = None
         self._time_keeper = None
         self._tuner = None

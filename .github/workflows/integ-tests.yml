@@ -111,7 +111,7 @@ jobs:
     with:
       script-path: examples/launch_transfer_learning_example.py
 
-  launch_height_simple:
+  launch_height_final_results:
     uses: ./.github/workflows/run-syne-tune.yml
     with:
-      script-path: examples/launch_height_simple.py
+      script-path: examples/launch_height_final_results.py

@@ -123,6 +123,22 @@ place. In the same way, extra arguments passed to baseline wrappers in
 :mod:`benchmarking.commons.default_baselines` are recursively merged into the
 arguments determined by the default logic.
 
+Writing Final Results
+~~~~~~~~~~~~~~~~~~~~~
+
+By default, Syne Tune writes result files ``metadata.json``, ``results.csv.zip``,
+and ``tuner.dill`` for every experiment, see
+`here <../../faq.html#what-does-the-output-of-the-tuning-contain>`__. It is
+often convenient to write additional results at the end of the experiment
+(in contrast, ``results.csv.zip`` contains time-stamped results obtained along
+the tuning). This can be done by passing ``final_results_composer`` of type
+:class:`~syne_tune.results_callback.FinalResultsComposer` when creating the
+:class:`~syne_tune.results_callback.StoreResultsCallback` callback, which
+is passed in ``callbacks`` to :class:`~syne_tune.Tuner`. You can use this
+mechanism by passing a :class:`~syne_tune.results_callback.FinalResultsComposer`
+object as ``final_results`` to ``main``. A complete example is
+``benchmarking/nursery/benchmark_dyhpo <../../benchmarking/benchmark_dyhpo.html>`__.
+
 Launching Experiments Locally
 -----------------------------
 

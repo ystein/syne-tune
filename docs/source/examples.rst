@@ -438,6 +438,21 @@ Plot Results of Tuning Experiment
 Makes use of :ref:`train_height.py <train_height_script>`.
 
 
+Write Final Results at End of Experiment
+========================================
+
+.. literalinclude:: ../../examples/launch_height_final_results.py
+   :caption: examples/launch_height_final_results.py
+   :start-after: # permissions and limitations under the License.
+
+Makes use of :ref:`train_height.py <train_height_script>`.
+
+An example for how to write final results at the end of an experiment. These
+results are extracted from the tuner and its dependent objects (scheduler,
+trial backend) at the end of the experiment. The composition of final results
+must be customized by the user.
+
+
 Pass Configuration as JSON File to Training Script
 ==================================================
 

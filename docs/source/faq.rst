@@ -221,10 +221,12 @@ What does the output of the tuning contain?
 ===========================================
 
 Syne Tune stores the following files ``metadata.json``, ``results.csv.zip``,
-and ``tuner.dill`` which are respectively metadata of the tuning job, results
-obtained at each time-step and state of the tuner. If you create the
+and ``tuner.dill``, which are respectively metadata of the tuning job, results
+obtained at each time-step, and state of the tuner. If you create the
 :class:`~syne_tune.Tuner` with ``save_tuner=False``, the ``tuner.dill`` file is
-not written.
+not written. Optionally, at the end of tuning,
+`results can be written to <#how-can-i-write-extra-results-at-the-end-of-an-experiment>`__
+``final-results.json``.
 
 How can I enable trial checkpointing?
 =====================================
@@ -746,3 +748,22 @@ The complete example is
 Note that entries automatically appended to the configuration by Syne Tune, such
 as :const:`~syne_tune.constants.ST_CHECKPOINT_DIR`, are passed as command line
 arguments in any case.
+
+How can I write extra results at the end of an experiment?
+==========================================================
+
+By default, Syne Tune is writing
+`these result files at the end of an experiment <#what-does-the-output-of-the-tuning-contain>`__.
+It is often convenient to extract extra results from the tuner and its dependent
+objects (scheduler, trial backend) at the end of the experiment. This can be
+done, as demonstrated in
+`examples/launch_height_config_json.py <examples.html#write-final-results-at-end-of-experiment>`__.
+If this feature is used, extra results are written to ``final-results.json``
+along with the other result files.
+
+.. note::
+   Final results can also be extracted by loading the tuner object from the
+   ``tuner.dill`` file and using some specialized code. However, this can be
+   expensive to do over many experiments, and also requires specialized code
+   to be applied to extract the desired results, which can be tedious for
+   experiments done a while ago.

@@ -19,7 +19,14 @@ import pandas as pd
 from dataclasses import dataclass
 from pathlib import Path
 
-from syne_tune.constants import ST_TUNER_TIME, ST_TUNER_CREATION_TIMESTAMP
+from syne_tune.constants import (
+    ST_TUNER_TIME,
+    ST_TUNER_CREATION_TIMESTAMP,
+    ST_METADATA_FILENAME,
+    ST_RESULTS_DATAFRAME_FILENAME,
+    ST_FINAL_RESULTS_FILENAME,
+    ST_TUNER_DILL_FILENAME,
+)
 from syne_tune import Tuner
 from syne_tune.util import experiment_path, s3_experiment_path
 from syne_tune.try_import import try_import_aws_message
@@ -39,6 +46,7 @@ class ExperimentResult:
     :param name: Name of experiment
     :param results: Dataframe containing results of experiment
     :param metadata: Metadata stored along with results
+    :param final_results: Final results stored optionally
     :param tuner: :class:`~syne_tune.Tuner` object stored along with results
     :param path: local path where the experiment is stored
     """
@@ -46,6 +54,7 @@ class ExperimentResult:
     name: str
     results: pd.DataFrame
     metadata: Dict[str, Any]
+    final_results: Optional[Dict[str, Any]]
     tuner: Tuner
     path: Path
 
@@ -140,7 +149,13 @@ def download_single_experiment(
     parts_path = s3_path.replace("s3://", "").split("/")
     s3_bucket = parts_path[0]
     s3_key = "/".join(parts_path[1:])
-    for file in ["metadata.json", "results.csv.zip", "tuner.dill"]:
+    result_files = [
+        ST_METADATA_FILENAME,
+        ST_RESULTS_DATAFRAME_FILENAME,
+        ST_FINAL_RESULTS_FILENAME,
+        ST_TUNER_DILL_FILENAME,
+    ]
+    for file in result_files:
         try:
             logging.info(f"downloading {file} on {s3_path}")
             s3.download_file(s3_bucket, f"{s3_key}/{file}", str(tgt_dir / file))
@@ -166,7 +181,7 @@ def load_experiment(
     :return: Result object
     """
     path = experiment_path(tuner_name, local_path)
-    metadata_path = path / "metadata.json"
+    metadata_path = path / ST_METADATA_FILENAME
     if not (metadata_path.exists()) and download_if_not_found:
         logging.info(
             f"experiment {tuner_name} not found locally, trying to get it from s3."
@@ -180,12 +195,19 @@ def load_experiment(
     except FileNotFoundError:
         metadata = None
     try:
-        if (path / "results.csv.zip").exists():
-            results = pd.read_csv(path / "results.csv.zip")
+        results_fname = ST_RESULTS_DATAFRAME_FILENAME
+        if (path / results_fname).exists():
+            results = pd.read_csv(path / results_fname)
         else:
-            results = pd.read_csv(path / "results.csv")
+            results = pd.read_csv(path / results_fname[:-4])
     except Exception:
         results = None
+    final_results_path = path / ST_FINAL_RESULTS_FILENAME
+    try:
+        with open(final_results_path, "r") as f:
+            final_results = json.load(f)
+    except FileNotFoundError:
+        final_results = None
     if load_tuner:
         try:
             tuner = Tuner.load(str(path))
@@ -198,6 +220,7 @@ def load_experiment(
     return ExperimentResult(
         name=tuner.name if tuner is not None else path.stem,
         results=results,
+        final_results=final_results,
         tuner=tuner,
         metadata=metadata,
         path=path,
@@ -236,7 +259,7 @@ def get_metadata(
     """
     path_filter = _impute_filter(path_filter)
     res = dict()
-    for metadata_path in root.glob("**/metadata.json"):
+    for metadata_path in root.glob(f"**/{ST_METADATA_FILENAME}"):
         path = metadata_path.parent
         if path_filter(str(path)):
             try:
@@ -276,7 +299,7 @@ def list_experiments(
     path_filter = _impute_filter(path_filter)
     experiment_filter = _impute_filter(experiment_filter)
     res = []
-    for metadata_path in root.glob("**/metadata.json"):
+    for metadata_path in root.glob(f"**/{ST_METADATA_FILENAME}"):
         path = metadata_path.parent
         tuner_name = path.name
         if path_filter(str(metadata_path)):
