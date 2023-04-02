@@ -64,18 +64,25 @@ class StoreResultsCallback(TunerCallback):
     :param final_results_composer: Optional. If given, this is called in
         :meth:`on_tuning_end`, and the resulting dictionary is written as
         ``{tuner.tuner_path}/{ST_FINAL_RESULTS_FILENAME}``.
+    :param store_final_results_intermediately: If ``True`` and
+        ``final_results_composer``, final results are written together
+        with time-stamped results, so if the experiment is terminated
+        before reaching the end, the most recent results can be used.
+        Defaults to ``True``.
     """
 
     def __init__(
         self,
         add_wallclock_time: bool = True,
         final_results_composer: Optional[FinalResultsComposer] = None,
+        store_final_results_intermediately: bool = True,
     ):
         self.results = []
         self.csv_file = None
         self.save_results_at_frequency = None
         self.add_wallclock_time = add_wallclock_time
         self._final_results_composer = final_results_composer
+        self._store_final_results_intermediately = store_final_results_intermediately
         self._start_time_stamp = None
         self._tuner = None
 
@@ -115,6 +122,8 @@ class StoreResultsCallback(TunerCallback):
         """
         if self.csv_file is not None:
             self.dataframe().to_csv(self.csv_file, index=False)
+        if self._store_final_results_intermediately:
+            self._write_final_results()
 
     def dataframe(self) -> pd.DataFrame:
         return pd.DataFrame(self.results)
@@ -146,4 +155,5 @@ class StoreResultsCallback(TunerCallback):
         # Store the results in case some results were not committed yet (since
         # they are saved every ``results_update_interval`` seconds)
         self.store_results()
-        self._write_final_results()
+        if not self._store_final_results_intermediately:
+            self._write_final_results()
