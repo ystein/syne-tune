@@ -95,6 +95,7 @@ class HyperbandRemoveCheckpointsCommon(TunerCallback):
         self._trial_status = None
         self._trials_resumed_without_checkpoint = None
         self._num_checkpoints_removed = None
+        self._num_trials_paused = None
         self._terminator = None
         self._trial_backend = None
 
@@ -121,6 +122,7 @@ class HyperbandRemoveCheckpointsCommon(TunerCallback):
         # which were nevertheless resumed
         self._trials_resumed_without_checkpoint = []
         self._num_checkpoints_removed = 0
+        self._num_trials_paused = 0
 
     @property
     def num_checkpoints_removed(self) -> int:
@@ -193,6 +195,11 @@ class HyperbandRemoveCheckpointsCommon(TunerCallback):
         else:
             if decision == SchedulerDecision.PAUSE:
                 new_status = TrialStatus.PAUSED_WITH_CHECKPOINT
+                if self._trial_status[trial_id] not in (
+                    TrialStatus.PAUSED_WITH_CHECKPOINT,
+                    TrialStatus.PAUSED_NO_CHECKPOINT,
+                ):
+                    self._num_trials_paused += 1
             else:
                 assert decision == SchedulerDecision.STOP  # Sanity check
                 new_status = TrialStatus.STOPPED_OR_COMPLETED
@@ -230,6 +237,7 @@ class HyperbandRemoveCheckpointsCommon(TunerCallback):
         sum_resource = sum(level for _, level in trials_resumed)
         return {
             "num_removed": self.num_checkpoints_removed,
+            "num_paused": self._num_trials_paused,
             "cost_resources": sum_resource,
             "trials_resumed": trials_resumed,
         }
