@@ -221,22 +221,23 @@ class HyperbandRemoveCheckpointsCommon(TunerCallback):
         """
         return self._trials_resumed_without_checkpoint
 
-    def final_results(self) -> Dict[str, Any]:
+    def extra_results(self) -> Dict[str, Any]:
         """
-        :return: Dictionary containing information which can be stored as final
-            results
+        :return: Dictionary containing information which can be appended to
+            results written out
         """
-        trials_resumed = [
-            (int(trial_id), level)
-            for trial_id, level in self.trials_resumed_without_checkpoint()
-        ]
-        sum_resource = sum(level for _, level in trials_resumed)
+        sum_resource = sum(
+            level for _, level in self.trials_resumed_without_checkpoint()
+        )
         return {
             "num_checkpoints_removed": self.num_checkpoints_removed,
             "num_trials_resumed": self._num_trials_resumed,
             "cost_resources": sum_resource,
-            "trials_resumed_no_checkpoint": trials_resumed,
         }
+
+    @staticmethod
+    def extra_results_keys() -> List[str]:
+        return ["num_checkpoints_removed", "num_trials_resumed", "cost_resources"]
 
 
 class HyperbandRemoveCheckpointsCallback(HyperbandRemoveCheckpointsCommon):

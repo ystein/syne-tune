@@ -13,18 +13,36 @@
 """
 Example for speculative checkpoint removal with asynchronous multi-fidelity
 """
+from typing import Optional, Dict, Any, List
 import logging
 
 from syne_tune.backend import LocalBackend
 from syne_tune.callbacks.hyperband_remove_checkpoints_callback import (
-    HyperbandRemoveCheckpointsCallback,
+    HyperbandRemoveCheckpointsCommon,
 )
+from syne_tune.constants import ST_TUNER_TIME
+from syne_tune.experiments import load_experiment
 from syne_tune.optimizer.baselines import MOBSTER
+from syne_tune.results_callback import ExtraResultsComposer, StoreResultsCallback
 from syne_tune import Tuner, StoppingCriterion
 
 from benchmarking.commons.benchmark_definitions.mlp_on_fashionmnist import (
     mlp_fashionmnist_benchmark,
 )
+
+
+# This is used to monitor what the checkpoint removal mechanism is doing, and
+# writing out results. This is optional, the mechanism works without this.
+class CPRemovalExtraResults(ExtraResultsComposer):
+    def __call__(self, tuner: Tuner) -> Optional[Dict[str, Any]]:
+        result = None
+        callback = tuner.callbacks[-1]
+        if isinstance(callback, HyperbandRemoveCheckpointsCommon):
+            result = callback.extra_results()
+        return result
+
+    def keys(self) -> List[str]:
+        return HyperbandRemoveCheckpointsCommon.extra_results_keys()
 
 
 if __name__ == "__main__":
@@ -34,6 +52,9 @@ if __name__ == "__main__":
     max_num_checkpoints = 10
     # This time may be too short to see positive effects:
     max_wallclock_time = 1800
+    # Monitor how checkpoint removal is doing over time, appending this
+    # information to results.csv.zip?
+    monitor_cp_removal_in_results = True
 
     # We pick the MLP on FashionMNIST benchmark
     benchmark = mlp_fashionmnist_benchmark()
@@ -72,29 +93,47 @@ if __name__ == "__main__":
     # ``early_checkpoint_removal_kwargs`` in our case).
     # Early checkpoint removal is done by appending a callback to those normally used
     # with the tuner.
+    if monitor_cp_removal_in_results:
+        # We can monitor how well checkpoint removal is working by storing extra results
+        # (this is optional):
+        extra_results_composer = CPRemovalExtraResults()
+        callbacks = [
+            StoreResultsCallback(extra_results_composer=extra_results_composer)
+        ]
+    else:
+        extra_results_composer = None
+        callbacks = None
     tuner = Tuner(
         trial_backend=trial_backend,
         scheduler=scheduler,
         stop_criterion=stop_criterion,
         n_workers=n_workers,
+        callbacks=callbacks,
     )
     tuner.run()
 
-    # We can obtain details about checkpoint removal from the callback, which is the
-    # last one in ``tuner``
+    if monitor_cp_removal_in_results:
+        # We have monitored how checkpoint removal has been doing over time. Here,
+        # we just look at the information at the end of the experiment
+        results_df = load_experiment(tuner.name).results
+        final_pos = results_df.loc[:, ST_TUNER_TIME].argmax()
+        final_row = dict(results_df.loc[final_pos])
+        extra_results_at_end = {
+            name: final_row[name] for name in extra_results_composer.keys()
+        }
+        logging.info(f"Extra results at end of experiment:\n{extra_results_at_end}")
+
+    # We can obtain additional details from the callback, which is the last one
+    # in ``tuner``
     callback = tuner.callbacks[-1]
-    assert isinstance(callback, HyperbandRemoveCheckpointsCallback), (
+    assert isinstance(callback, HyperbandRemoveCheckpointsCommon), (
         "The final callback in tuner.callbacks should be "
-        f"HyperbandRemoveCheckpointsCallback, but is {type(callback)}"
+        f"HyperbandRemoveCheckpointsCommon, but is {type(callback)}"
     )
-    logging.info(f"Number of checkpoints removed: {callback.num_checkpoints_removed}")
     trials_resumed = callback.trials_resumed_without_checkpoint()
     if trials_resumed:
         logging.info(
             f"The following {len(trials_resumed)} trials were resumed without a checkpoint:\n{trials_resumed}"
         )
-        sum_resource = sum(level for _, level in trials_resumed)
     else:
         logging.info("No trials were resumed without a checkpoint")
-        sum_resource = 0
-    logging.info(f"Cost: {sum_resource} epochs of training from scratch")

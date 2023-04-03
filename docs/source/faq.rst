@@ -370,7 +370,7 @@ dictionary with the following arguments:
 * ``approx_steps``: Positive integer. The computation of the ranking score is
   a step-wise approximation, which gets more accurate for larger ``approx_steps``.
   However, this computation scales cubically in ``approx_steps``. The default
-  is 10, which may be sufficient in most cases, but if you need to keep the
+  is 25, which may be sufficient in most cases, but if you need to keep the
   number of checkpoints quite small, you may want to tune this parameter.
 * ``max_wallclock_time``: Maximum time in seconds the experiment is run for. This
   is the same as passed to :class:`~syne_tune.StoppingCriterion`, and if you use

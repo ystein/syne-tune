@@ -10,7 +10,7 @@
 # on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
 # express or implied. See the License for the specific language governing
 # permissions and limitations under the License.
-from typing import Dict, Optional, Any
+from typing import Dict, Optional, Any, List
 
 from benchmarking.commons.hpo_main_local import main
 from benchmarking.nursery.test_checkpoints.baselines import methods
@@ -21,18 +21,21 @@ from syne_tune import Tuner
 from syne_tune.callbacks.hyperband_remove_checkpoints_callback import (
     HyperbandRemoveCheckpointsCommon,
 )
-from syne_tune.results_callback import FinalResultsComposer
+from syne_tune.results_callback import ExtraResultsComposer
 
 
-class CPRemovalFinalResults(FinalResultsComposer):
+class CPRemovalExtraResults(ExtraResultsComposer):
     def __call__(self, tuner: Tuner) -> Optional[Dict[str, Any]]:
         result = None
         callback = tuner.callbacks[-1]
         if isinstance(callback, HyperbandRemoveCheckpointsCommon):
-            result = {"checkpoint_removal": callback.final_results()}
+            result = callback.extra_results()
         return result
+
+    def keys(self) -> List[str]:
+        return HyperbandRemoveCheckpointsCommon.extra_results_keys()
 
 
 if __name__ == "__main__":
-    final_results = CPRemovalFinalResults()
-    main(methods, benchmark_definitions, final_results=final_results)
+    extra_results = CPRemovalExtraResults()
+    main(methods, benchmark_definitions, extra_results=extra_results)
