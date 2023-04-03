@@ -277,7 +277,7 @@ class HyperbandRemoveCheckpointsCallback(HyperbandRemoveCheckpointsCommon):
         :meth:`on_trial_result`
     :param mode: "min" or "max"
     :param approx_steps: Number of approximation steps in score computation.
-        Computations scale cubically in this number
+        Computations scale cubically in this number. Defaults to 25
     :param prior_beta_mean: Parameter of Beta prior for estimators. Defaults
         to 0.33
     :param prior_beta_size: Parameter of Beta prior for estimators. Defaults
@@ -292,7 +292,7 @@ class HyperbandRemoveCheckpointsCallback(HyperbandRemoveCheckpointsCommon):
         metric: str,
         resource_attr: str,
         mode: str,
-        approx_steps: int = 10,
+        approx_steps: int = 25,
         prior_beta_mean: float = 0.33,
         prior_beta_size: float = 2,
         min_data_at_rung: int = 5,
