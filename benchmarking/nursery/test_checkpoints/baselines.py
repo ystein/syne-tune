@@ -25,7 +25,7 @@ class Methods:
 
 
 methods = {
-    Methods.ASHA: lambda method_arguments: ASHA(method_arguments, type="promotion"),
+    # Methods.ASHA: lambda method_arguments: ASHA(method_arguments, type="promotion"),
     Methods.ASHA_RCP_10: lambda method_arguments: ASHA(
         method_arguments,
         type="promotion",

@@ -19,7 +19,7 @@ from benchmarking.commons.benchmark_definitions import (
 )
 from syne_tune import Tuner
 from syne_tune.callbacks.hyperband_remove_checkpoints_callback import (
-    HyperbandRemoveCheckpointsCallback,
+    HyperbandRemoveCheckpointsCommon,
 )
 from syne_tune.results_callback import FinalResultsComposer
 
@@ -28,7 +28,7 @@ class CPRemovalFinalResults(FinalResultsComposer):
     def __call__(self, tuner: Tuner) -> Optional[Dict[str, Any]]:
         result = None
         callback = tuner.callbacks[-1]
-        if isinstance(callback, HyperbandRemoveCheckpointsCallback):
+        if isinstance(callback, HyperbandRemoveCheckpointsCommon):
             result = {"checkpoint_removal": callback.final_results()}
         return result
 
