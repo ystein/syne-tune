@@ -34,6 +34,9 @@ from syne_tune.optimizer.schedulers.hyperband_stopping import (
     StoppingRungSystem,
     PausedTrialsResult,
 )
+from syne_tune.optimizer.schedulers.remove_checkpoints import (
+    RemoveCheckpointsSchedulerMixin,
+)
 from syne_tune.optimizer.schedulers.searchers.dyhpo.hyperband_dyhpo import (
     DyHPORungSystem,
     DEFAULT_SH_PROBABILITY,
@@ -150,7 +153,9 @@ class TrialInformation:
         self.trial_decision = SchedulerDecision.CONTINUE
 
 
-class HyperbandScheduler(FIFOScheduler, MultiFidelitySchedulerMixin):
+class HyperbandScheduler(
+    FIFOScheduler, MultiFidelitySchedulerMixin, RemoveCheckpointsSchedulerMixin
+):
     r"""Implements different variants of asynchronous Hyperband
 
     See ``type`` for the different variants. One implementation detail is

@@ -282,26 +282,6 @@ class TrialScheduler:
         else:
             raise NotImplementedError
 
-    def trials_checkpoints_can_be_removed(self) -> List[int]:
-        """
-        This (optional) method can be implemented by schedulers which pause and
-        resume trials (in that :meth:`on_trial_result` can return
-        :const:`SchedulerDecision.PAUSE`). Model checkpoints are retained for
-        paused trials, because they may get resumed later on. This can lead to
-        the disk filling up, so removing checkpoints which are not longer needed,
-        can be important.
-
-        This method returns IDs of paused trials for which checkpoints can be
-        removed. These trials either cannot be resumed anymore, or it is very
-        unlikely they will be resumed. Any trial ID needs to be returned only once,
-        not over and over. If a trial gets stopped (by returning
-        :const:`SchedulerDecision.STOP` in :meth:`on_trial_result`), its checkpoint
-        is removed anyway, so its ID does not have to be returned here.
-
-        :return: IDs of paused trials for which checkpoints can be removed
-        """
-        return []  # Default is not to participate in early checkpoint removal
-
     def metadata(self) -> Dict[str, Any]:
         """
         :return: Metadata for the scheduler
@@ -322,22 +302,3 @@ class TrialScheduler:
         """
         # This is set to False as a default but should be overriden by any classes that implement MO Schedulers
         return False
-
-    def params_early_checkpoint_removal(self) -> Optional[Dict[str, Any]]:
-        """
-        Some schedulers support the early removal of checkpoints for paused
-        trials. This is done by a special callback in :class:`~syne_tune.Tuner`,
-        created by
-        :func:``~syne_tune.callbacks.checkpoint_removal_factory.early_checkpoint_removal_factory`.
-        The arguments for the callback constructor are provided here.
-
-        .. note::
-           If this method returns ``None``,
-           :meth:`trials_checkpoints_can_be_removed` is not used. But there are
-           schedulers which support early CP removal, yet do not implement
-           :meth:`trials_checkpoints_can_be_removed`.
-
-        :return: Arguments for callback constructor, or ``None`` if early
-            checkpoint removal is not supported
-        """
-        return None

@@ -19,6 +19,9 @@ from syne_tune.callbacks.hyperband_remove_checkpoints_callback import (
 from syne_tune.callbacks.remove_checkpoints_callback import RemoveCheckpointsCallback
 from syne_tune.optimizer.scheduler import TrialScheduler
 from syne_tune.optimizer.schedulers import HyperbandScheduler
+from syne_tune.optimizer.schedulers.remove_checkpoints import (
+    RemoveCheckpointsSchedulerMixin,
+)
 from syne_tune.stopping_criterion import StoppingCriterion
 from syne_tune.tuner_callback import TunerCallback
 from syne_tune.tuning_status import TuningStatus
@@ -39,7 +42,10 @@ def early_checkpoint_removal_factory(
         supported for the scheduler
     """
     callback = None
-    callback_kwargs = scheduler.params_early_checkpoint_removal()
+    if isinstance(scheduler, RemoveCheckpointsSchedulerMixin):
+        callback_kwargs = scheduler.params_early_checkpoint_removal()
+    else:
+        callback_kwargs = None
     if callback_kwargs is not None:
         # Scheduler supports early checkpoint removal
         if (
@@ -57,6 +63,9 @@ def early_checkpoint_removal_factory(
             else:
                 callback = HyperbandRemoveCheckpointsCallback(**callback_kwargs)
         else:
+            # General case: Scheduler implements ``trials_checkpoints_can_be_removed``
+            # method, and we can use the generic ``RemoveCheckpointsCallback``
+            # callback
             assert len(callback_kwargs) == 0, (
                 "params_early_checkpoint_removal of your scheduler returns "
                 "arguments, which are not used in RemoveCheckpointsCallback"
