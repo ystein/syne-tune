@@ -22,8 +22,6 @@ import numpy as np
 import pandas as pd
 
 from syne_tune.constants import (
-    ST_TUNER_TIME,
-    ST_TUNER_CREATION_TIMESTAMP,
     ST_METADATA_FILENAME,
     ST_RESULTS_DATAFRAME_FILENAME,
     ST_TUNER_DILL_FILENAME,
