@@ -17,6 +17,7 @@ from syne_tune.experiments.experiment_result import (
     list_experiments,
     load_experiments_df,
 )
+from syne_tune.experiments.plotting import ComparativeResults
 
 __all__ = [
     "ExperimentResult",
@@ -24,4 +25,5 @@ __all__ = [
     "get_metadata",
     "list_experiments",
     "load_experiments_df",
+    "ComparativeResults",
 ]

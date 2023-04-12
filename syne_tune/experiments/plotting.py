@@ -15,9 +15,15 @@ import itertools
 import json
 from dataclasses import dataclass
 
+import numpy as np
 import pandas as pd
 
-from syne_tune.constants import ST_METADATA_FILENAME, ST_RESULTS_DATAFRAME_FILENAME
+from syne_tune.constants import (
+    ST_METADATA_FILENAME,
+    ST_RESULTS_DATAFRAME_FILENAME,
+    ST_TUNER_TIME,
+)
+from syne_tune.experiments.aggregate_results import aggregate_and_errors_over_time
 from syne_tune.util import experiment_path
 
 
@@ -25,7 +31,7 @@ MapMetadataToSetup = Callable[[Dict[str, Any]], Optional[str]]
 
 MapMetadataToSubplot = Callable[[Dict[str, Any]], Optional[int]]
 
-DEFAULT_AGGREGATE_MODE = "median_percentiles"
+DEFAULT_AGGREGATE_MODE = "iqm_bootstrap"
 
 
 def _strip_common_prefix(tuner_path: str) -> str:
@@ -212,6 +218,10 @@ class SubplotParameters:
         )
         if new_params["title_each_figure"] is None:
             new_params["title_each_figure"] = False
+        kwargs = new_params["kwargs"]
+        assert (
+            kwargs is not None and "nrows" in kwargs and "ncols" in kwargs
+        ), "subplots.kwargs must be given and contain 'nrows' and 'ncols' entries"
         return SubplotParameters(**new_params)
 
 
@@ -340,11 +350,87 @@ class ComparativeResults:
         self.num_runs = num_runs
         self._default_plot_params = plot_params
 
+    def _aggregrate_results(
+        self, df: pd.DataFrame, plot_params: PlotParameters
+    ) -> List[List[Dict[str, np.ndarray]]]:
+        subplots = plot_params.subplots
+        if subplots is not None:
+            kwargs = subplots.kwargs
+            num_subplots = kwargs["nrows"] * kwargs["ncols"]
+            subplot_xlims = subplots.xlims
+        else:
+            num_subplots = 1
+            subplot_xlims = None
+        metric = plot_params.metric
+        mode = plot_params.mode
+        metric_multiplier = plot_params.metric_multiplier
+        xlim = plot_params.xlim
+        aggregate_mode = plot_params.aggregate_mode
+        stats = [[None] * len(self.setups) for _ in range(num_subplots)]
+        for (subplot_no, setup_name), setup_df in df.groupby(
+            ["subplot_no", "setup_name"]
+        ):
+            if subplot_xlims is not None:
+                xlim = (0, subplot_xlims[subplot_no])
+            traj = []
+            runtime = []
+            trial_nums = []
+            tuner_names = []
+            max_rt = []
+            for tuner_name, sub_df in setup_df.groupby("tuner_name"):
+                tuner_names.append(tuner_name)
+                if mode == "max":
+                    ys = 1 - metric_multiplier * np.array(sub_df[metric].cummax())
+                else:
+                    ys = metric_multiplier * np.array(sub_df[metric].cummin())
+                rt = np.array(sub_df[ST_TUNER_TIME])
+                max_rt.append(rt[-1])
+                if xlim is not None:
+                    # Slice w.r.t. time. Doing this here, speeds up
+                    # aggregation
+                    ind = np.logical_and(rt >= xlim[0], rt <= xlim[1])
+                    rt = rt[ind]
+                    ys = ys[ind]
+                traj.append(ys)
+                runtime.append(rt)
+                trial_nums.append(len(sub_df.trial_id.unique()))
+                setup_id = self.setups.index(setup_name)
+                stats[subplot_no][setup_id] = aggregate_and_errors_over_time(
+                    errors=traj, runtimes=runtime, mode=aggregate_mode
+                )
+                if subplots is not None:
+                    msg = f"[{subplot_no}, {setup_name}]: "
+                else:
+                    msg = f"[{setup_name}]: "
+                msg += f"max_rt = {np.mean(max_rt):.2f} (+- {np.std(max_rt):.2f})"
+                print(msg)
+                num_repeats = len(tuner_names)
+                if num_repeats != self.num_runs:
+                    if subplots is not None:
+                        part = f"subplot = {subplot_no}, "
+                    else:
+                        part = ""
+                    print(
+                        f"{part}setup = {setup_name} has {num_repeats} repeats "
+                        f"instead of {self.num_runs}:\n{tuner_names}"
+                    )
+        return stats
+
     def plot(
         self,
         benchmark_name: Optional[str] = None,
         plot_params: Optional[PlotParameters] = None,
     ):
+        """
+        Create comparative plot from results of all experiments collected at
+        construction, for benchmark ``benchmark_name`` (if there is a single
+        benchmark only, this need not be given).
+
+        :param benchmark_name: Name of benchmark for which to plot results.
+            Not needed if there is only one benchmark
+        :param plot_params: Parameters controlling the plot. Values provided
+            here overwrite values provided at construction.
+        """
         err_msg = f"benchmark_name must be one of {list(self._reverse_index.keys())}"
         if benchmark_name is None:
             assert len(self._reverse_index) == 1, err_msg
@@ -354,4 +440,9 @@ class ComparativeResults:
         if plot_params is None:
             plot_params = PlotParameters()
         plot_params = plot_params.merge_defaults(self._default_plot_params)
-        # HIER!
+        print(f"Load results for benchmark {benchmark_name}")
+        results_df = load_results_dataframe_per_benchmark(
+            self._reverse_index[benchmark_name]
+        )
+        print("Aggregate results")
+        stats = self._aggregrate_results(results_df, plot_params)
