@@ -31,6 +31,8 @@ This package provides state-of-the-art algorithms for hyperparameter optimizatio
 What's New?
 -----------
 
+* You can now create comparative plots, combining the results of many experiments,
+  as show `here <tutorials/benchmarking/bm_plotting.html>`__.
 * Speculative early checkpoint removal for asynchronous multi-fidelity optimization.
   Retaining all checkpoints often exhausts all available disk space when training
   large models. With this feature, Syne Tune automatically removes checkpoints
