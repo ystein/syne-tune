@@ -433,8 +433,11 @@ class ComparativeResults:
         return nrows, ncols
 
     def _aggregrate_results(
-        self, df: pd.DataFrame, plot_params: PlotParameters
-    ) -> (List[List[Dict[str, np.ndarray]]], List[str]):
+        self,
+        df: pd.DataFrame,
+        plot_params: PlotParameters,
+        extra_results_keys: Optional[List[str]],
+    ) -> Dict[str, Any]:
         subplots = plot_params.subplots
         subplot_xlims = None if subplots is None else subplots.xlims
         fig_shape = self._figure_shape(plot_params)
@@ -447,9 +450,17 @@ class ComparativeResults:
         show_one_trial = plot_params.show_one_trial
         do_show_one_trial = show_one_trial is not None
         setup_names = self.setups
+        if extra_results_keys is not None:
+            extra_results = {
+                setup_name: {key: [] for key in extra_results_keys}
+                for setup_name in setup_names
+            }
+        else:
+            extra_results = None
         if do_show_one_trial:
             # Put extra name at the end
             setup_names = setup_names + [show_one_trial.new_setup_name]
+
         stats = [[None] * len(setup_names) for _ in range(num_subplots)]
         for (subplot_no, setup_name), setup_df in df.groupby(
             ["subplot_no", "setup_name"]
@@ -503,6 +514,13 @@ class ComparativeResults:
                     traj.append(ys)
                     runtime.append(rt)
                     trial_nums.append(len(sub_df.trial_id.unique()))
+                    # Collect extra results
+                    if extra_results_keys is not None and not one_trial_special:
+                        extra_dict = extra_results[setup_name]
+                        final_pos = sub_df.loc[:, ST_TUNER_TIME].argmax()
+                        final_row = dict(sub_df.loc[final_pos])
+                        for key in extra_results_keys:
+                            extra_dict[key].append(final_row[key])
 
                 setup_id = setup_names.index(setup_name)
                 stats[subplot_no][setup_id] = aggregate_and_errors_over_time(
@@ -525,10 +543,16 @@ class ComparativeResults:
                             f"{part}setup = {setup_name} has {num_repeats} repeats "
                             f"instead of {self.num_runs}:\n{tuner_names}"
                         )
-        return stats, setup_names
+        result = {"stats": stats, "setup_names": setup_names}
+        if extra_results_keys is not None:
+            result["extra_results"] = extra_results
+        return result
 
     def _plot_figure(
-        self, stats: List[List[Dict[str, np.ndarray]]], plot_params: PlotParameters
+        self,
+        stats: List[List[Dict[str, np.ndarray]]],
+        plot_params: PlotParameters,
+        setup_names: List[str],
     ):
         subplots = plot_params.subplots
         if subplots is not None:
@@ -565,7 +589,7 @@ class ComparativeResults:
             ax = axs[row, col]
             # Plot curves in the order of ``setups``. Not all setups may feature in
             # each of the subplots
-            for i, (curves, setup_name) in enumerate(zip(stats_subplot, self.setups)):
+            for i, (curves, setup_name) in enumerate(zip(stats_subplot, setup_names)):
                 if curves is not None:
                     color = f"C{i}"
                     x = curves["time"]
@@ -601,7 +625,8 @@ class ComparativeResults:
         benchmark_name: Optional[str] = None,
         plot_params: Optional[PlotParameters] = None,
         file_name: Optional[str] = None,
-    ):
+        extra_results_keys: Optional[List[str]] = None,
+    ) -> Optional[Dict[str, Dict[str, List[float]]]]:
         """
         Create comparative plot from results of all experiments collected at
         construction, for benchmark ``benchmark_name`` (if there is a single
@@ -618,11 +643,20 @@ class ComparativeResults:
         curve is labeled with ``plot_params.show_one_trial.new_setup_name`` in
         the legend.
 
+        If ``extra_results_keys``is given, these are column names in the result
+        dataframe. For each setup and seed, we collect the values for the
+        largest time stamp. We return a nested dictionary ``extra_results``, so
+        that ``extra_results[setup_name][key]`` contains values (over seeds),
+        where ``key`` is in ``extra_results_keys``.
+
         :param benchmark_name: Name of benchmark for which to plot results.
             Not needed if there is only one benchmark
         :param plot_params: Parameters controlling the plot. Values provided
             here overwrite values provided at construction.
         :param file_name: If given, the figure is stored in a file of this name
+        :param extra_results_keys: See above, optional
+        :return: ``extra_results`` if ``extra_results_keys`` is given, otherwise
+            ``None``
         """
         benchmark_name = self._check_benchmark_name(benchmark_name)
         if plot_params is None:
@@ -633,7 +667,16 @@ class ComparativeResults:
             self._reverse_index[benchmark_name]
         )
         logger.info("Aggregate results")
-        stats = self._aggregrate_results(results_df, plot_params)
-        fig, axs = self._plot_figure(stats, plot_params)
+        result = self._aggregrate_results(
+            df=results_df,
+            plot_params=plot_params,
+            extra_results_keys=extra_results_keys,
+        )
+        fig, axs = self._plot_figure(
+            stats=result["stats"],
+            plot_params=plot_params,
+            setup_names=result["setup_names"],
+        )
         if file_name is not None:
             fig.savefig(file_name, dpi=plot_params.dpi)
+        return None if extra_results_keys is None else result["extra_results"]
