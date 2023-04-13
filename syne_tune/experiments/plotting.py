@@ -25,6 +25,12 @@ from syne_tune.constants import (
 )
 from syne_tune.experiments.aggregate_results import aggregate_and_errors_over_time
 from syne_tune.util import experiment_path
+from syne_tune.try_import import try_import_visual_message
+
+try:
+    import matplotlib.pyplot as plt
+except ImportError:
+    print(try_import_visual_message())
 
 
 MapMetadataToSetup = Callable[[Dict[str, Any]], Optional[str]]

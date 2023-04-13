@@ -19,6 +19,12 @@ import logging
 from syne_tune.backend.trial_status import Trial
 from syne_tune.constants import ST_TUNER_TIME
 from syne_tune.tuner_callback import TunerCallback
+from syne_tune.try_import import try_import_visual_message
+
+try:
+    from tensorboardX import SummaryWriter
+except ImportError:
+    print(try_import_visual_message())
 
 logger = logging.getLogger(__name__)
 
@@ -134,13 +140,6 @@ class TensorboardCallback(TunerCallback):
         self.iter += 1
 
     def _create_summary_writer(self):
-        try:
-            from tensorboardX import SummaryWriter
-        except ImportError:
-            logger.error(
-                "TensoboardX is not installed. You can install it via: pip install tensorboardX"
-            )
-            raise
         return SummaryWriter(self.output_path)
 
     def on_tuning_start(self, tuner):
