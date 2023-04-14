@@ -17,7 +17,12 @@ from syne_tune.experiments.experiment_result import (
     list_experiments,
     load_experiments_df,
 )
-from syne_tune.experiments.plotting import ComparativeResults
+from syne_tune.experiments.plotting import (
+    ComparativeResults,
+    PlotParameters,
+    SubplotParameters,
+    ShowTrialParameters,
+)
 
 __all__ = [
     "ExperimentResult",
@@ -26,4 +31,7 @@ __all__ = [
     "list_experiments",
     "load_experiments_df",
     "ComparativeResults",
+    "PlotParameters",
+    "SubplotParameters",
+    "ShowTrialParameters",
 ]

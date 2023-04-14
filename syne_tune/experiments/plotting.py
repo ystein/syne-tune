@@ -38,7 +38,9 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
-MapMetadataToSetup = Callable[[Dict[str, Any]], Optional[str]]
+_MapMetadataToSetup = Callable[[Dict[str, Any]], Optional[str]]
+
+MapMetadataToSetup = Union[_MapMetadataToSetup, Dict[str, _MapMetadataToSetup]]
 
 MapMetadataToSubplot = Callable[[Dict[str, Any]], Optional[int]]
 
@@ -174,6 +176,7 @@ def create_index_for_result_files(
     if metadata_keys is None:
         metadata_keys = []
     datetime_bounds = _convert_datetime_bounds(datetime_bounds, experiment_names)
+    is_map_dict = isinstance(metadata_to_setup, dict)
     for experiment_name in experiment_names:
         datetime_lower, datetime_upper = datetime_bounds[experiment_name]
         patterns = [experiment_name + "-*/" + ST_METADATA_FILENAME]
@@ -204,7 +207,12 @@ def create_index_for_result_files(
                 )
                 benchmark_name = metadata[benchmark_key]
                 try:
-                    setup_name = metadata_to_setup(metadata)
+                    map = (
+                        metadata_to_setup[benchmark_name]
+                        if is_map_dict
+                        else metadata_to_setup
+                    )
+                    setup_name = map(metadata)
                 except BaseException as err:
                     logger.error(f"Caught exception for {tuner_path}:\n" + str(err))
                     raise
