@@ -16,6 +16,7 @@ import json
 from dataclasses import dataclass
 import logging
 import time
+from time import struct_time
 
 import numpy as np
 import pandas as pd
@@ -59,15 +60,21 @@ def _strip_common_prefix(tuner_path: str) -> str:
 
 
 def _insert_into_dict(
-    metadata_values: Dict[str, Any], benchmark_name: str, key: str, value: Any
+    metadata_values: Dict[str, Any],
+    benchmark_name: str,
+    key: str,
+    setup_name: str,
+    value: Any,
 ):
-    if benchmark_name not in metadata_values:
-        metadata_values[benchmark_name] = dict()
-    inner_dict = metadata_values[benchmark_name]
-    if key in inner_dict:
-        inner_dict[key].append(value)
+    inner_dict = metadata_values
+    for name in [benchmark_name, key]:
+        if name not in inner_dict:
+            inner_dict[name] = dict()
+        inner_dict = inner_dict[name]
+    if setup_name in inner_dict:
+        inner_dict[setup_name].append(value)
     else:
-        inner_dict[key] = [value]
+        inner_dict[setup_name] = [value]
 
 
 DateTimeInterval = Tuple[Optional[str], Optional[str]]
@@ -78,7 +85,7 @@ DateTimeBounds = Union[DateTimeInterval, Dict[str, DateTimeInterval]]
 
 def _convert_datetime_bound(
     bound: DateTimeInterval,
-) -> Tuple[Optional[time.struct_time], Optional[time.struct_time]]:
+) -> Tuple[Optional[struct_time], Optional[struct_time]]:
     result = ()
     assert len(bound) == 2
     for elem in bound:
@@ -94,7 +101,7 @@ def _convert_datetime_bound(
 
 def _convert_datetime_bounds(
     datetime_bounds: Optional[DateTimeBounds], experiment_names: Tuple[str, ...]
-) -> Dict[str, Tuple[Optional[time.struct_time], Optional[time.struct_time]]]:
+) -> Dict[str, Tuple[Optional[struct_time], Optional[struct_time]]]:
     if datetime_bounds is None:
         result = {name: (None, None) for name in experiment_names}
     elif isinstance(datetime_bounds, dict):
@@ -108,11 +115,24 @@ def _convert_datetime_bounds(
     return result
 
 
-def _extract_datetime(tuner_name: str) -> time.struct_time:
+def _extract_datetime(tuner_name: str) -> struct_time:
     assert (
         tuner_name[-4] == "-" and tuner_name[-24] == "-"
     ), f"tuner_name = {tuner_name} has invalid format. Postfix should be like {ST_DATETIME_FORMAT}-XYZ"
-    return time.strptime(tuner_name[-23:-4])
+    return time.strptime(tuner_name[-23:-4], ST_DATETIME_FORMAT)
+
+
+def _skip_based_on_datetime(
+    tuner_name: str,
+    datetime_lower: Optional[struct_time],
+    datetime_upper: Optional[struct_time],
+) -> bool:
+    if datetime_lower is None and datetime_upper is None:
+        return False
+    datetime = _extract_datetime(tuner_name)
+    return (datetime_lower is not None and datetime < datetime_lower) or (
+        datetime_upper is not None and datetime > datetime_upper
+    )
 
 
 def create_index_for_result_files(
@@ -125,6 +145,8 @@ def create_index_for_result_files(
     datetime_bounds: Optional[DateTimeBounds] = None,
 ) -> Dict[str, Any]:
     """
+    Helper function for :class:`ComparativeResults`.
+
     Runs over all result directories for experiments of a comparative study.
     For each experiment, we read the metadata file, extract the benchmark name
     (key ``benchmark_key``), and use ``metadata_to_setup``,
@@ -148,8 +170,9 @@ def create_index_for_result_files(
 
     If ``metadata_keys`` is given, it contains a list of keys into the
     metadata. In this case, a nested dictionary ``metadata_values`` is
-    returned, where ``metadata_values[benchmark_name][key]`` contains a list
-    of metadata values for this benchmark and key in ``metadata_keys``.
+    returned, where ``metadata_values[benchmark_name][key][setup_name]``
+    contains a list of metadata values for this benchmark, key in
+    ``metadata_keys``, and setup name.
 
     If ``datetime_bounds`` is given, it contains a tuple of strings
     ``(lower_time, upper_time)``, or a dictionary mapping experiment names (from
@@ -194,13 +217,8 @@ def create_index_for_result_files(
             *[experiment_path().glob(pattern) for pattern in patterns]
         ):
             tuner_path = meta_path.parent
-            if not (datetime_lower is None and datetime_upper is None):
-                # Filter by bound
-                datetime = _extract_datetime(tuner_path.name)
-                if (datetime_lower is not None and datetime < datetime_lower) or (
-                    datetime_upper is not None and datetime > datetime_upper
-                ):
-                    continue  # Skip this result
+            if _skip_based_on_datetime(tuner_path.name, datetime_lower, datetime_upper):
+                continue  # Skip this result
             try:
                 with open(str(meta_path), "r") as f:
                     metadata = json.load(f)
@@ -244,7 +262,11 @@ def create_index_for_result_files(
                         for key in metadata_keys:
                             if key in metadata:
                                 _insert_into_dict(
-                                    metadata_values, benchmark_name, key, metadata[key]
+                                    metadata_values,
+                                    benchmark_name,
+                                    key,
+                                    setup_name,
+                                    value=metadata[key],
                                 )
 
     result = {
@@ -259,6 +281,18 @@ def create_index_for_result_files(
 def load_results_dataframe_per_benchmark(
     experiment_list: List[Tuple[str, str, int]]
 ) -> Optional[pd.DataFrame]:
+    """
+    Helper function for :class:`ComparativeResults`.
+
+    Loads time-stamped results for all experiments in ``experiments_list``
+    and returns them in a single dataframe with additional columns
+    "setup_name", "suplot_no", "tuner_name", whose values are constant
+    across data for one experiment, allowing for later grouping.
+
+    :param experiment_list: Information about experiments, see
+        :func:`create_index_for_result_files`
+    :return: Dataframe with all results combined
+    """
     dfs = []
     for tuner_path, setup_name, subplot_no in experiment_list:
         tuner_path = experiment_path() / tuner_path
@@ -307,6 +341,23 @@ def _check_and_set_defaults(
 
 @dataclass
 class SubplotParameters:
+    """
+    Parameters specifying an arrangement of subplots. ``kwargs`` is mandatory.
+
+    :param titles: If given, these are titles for each column in the
+        arrangement of subplots. If ``title_each_figure == True``, these
+        are titles for each subplot. If ``titles`` is not given, then
+        ``PlotParameters.title`` is printed on top of the leftmost column
+    :param title_each_figure: See ``titles``, defaults to ``False``
+    :param kwargs: Arguments for ``plt.subplots``. Must include entries for
+        "nrows" and "ncols"
+    :param legend_no: Numbers of subplots where legend is to be shown. Defaults
+        to ``[]`` (no legends shown)
+    :param xlims: If this is given, must be a list with one entry per subfigure.
+        In this case, the global ``xlim`` is overwritten by
+        ``(0, xlims[subplot_no])``
+    """
+
     titles: List[str] = None
     title_each_figure: bool = None
     kwargs: Dict[str, Any] = None
@@ -331,6 +382,18 @@ class SubplotParameters:
 
 @dataclass
 class ShowTrialParameters:
+    """
+    Parameters specifying the ``show_one_trial`` feature. This features adds
+    one more curve to each subplot where ``setup_name`` features. This curve
+    shows the metric for one trial only (with ``trial_id``). The right-most
+    value is extended as constant line across the remainder of the x-axis, for
+    better visibility.
+
+    :param setup_name: Setup from which the trial performance is taken
+    :param trial_id: ID of trial. Defaults to 0
+    :param new_setup_name: Name of the additional curve in legends
+    """
+
     setup_name: str = None
     trial_id: int = None
     new_setup_name: str = None
@@ -354,6 +417,42 @@ class ShowTrialParameters:
 
 @dataclass
 class PlotParameters:
+    """
+    Parameters specifying the figure.
+
+    In plots, lower is better. An original metric value ``metric_val`` is
+    converted as :code:`metric_multiplier * metric_val` if ``mode == "min"``,
+    and as :code:`1 - metric_multiplier * metric_val` if ``mode == "max"``.
+
+    :param metric: Name of metric, mandatory
+    :param mode: See above, "min" or "max", mandatory
+    :param title: Title of plot. If ``subplots`` is used, see
+        :class:`SubplotParameters`
+    :param xlabel: Label for x axis. If ``subplots`` is used, this is
+        printed below each column
+    :param ylabel: Label for y axis. If ``subplots`` is used, this is
+        printed left of each row
+    :param xlim: ``(x_min, x_max)`` for x axis. If ``subplots`` is used, see
+        :class:`SubplotParameters`
+    :param ylim: ``(y_min, y_max)`` for y axis.
+    :param metric_multiplier: See above. Defaults to 1
+    :param tick_params: Params for ``ax.tick_params``
+    :param aggregate_mode: How are values across seeds aggregated?
+
+        * "mean_and_ci": Mean and 0.95 normal confidence interval
+        * "median_percentiles": Mean and 25, 75 percentiles
+        * "iqm_bootstrap": Interquartile mean and 0.95 confidence interval
+          based on the bootstrap variance estimate
+
+        Defaults to :const:`DEFAULT_AGGREGATE_MODE`
+    :param dpi: Resolution of figure in DPI. Defaults to 200
+    :param grid: Figure with grid? Defaults to ``False``
+    :param subplots: If given, the figure consists of several subplots. See
+         :class:`SubplotParameters`
+    :param show_one_trial: If given, the "show one trial" feature is activated,
+        see :class:`ShowTrialParameters`
+    """
+
     metric: str = None
     mode: str = None
     title: str = None
@@ -433,15 +532,41 @@ class ComparativeResults:
     have several subplots, in which case results are first grouped into
     subplot number, then setup.
 
+    If ``benchmark_key is None``, there is only a single benchmark, and all
+    results are merged together.
+
     Both setup name and subplot number (optional) can be configured by the
     user, as function of metadata written for each experiment. The functions
     ``metadata_to_setup`` and ``metadata_to_subplot`` (optional) can also be
     used for filtering: results of experiments for which any of them returns
     ``None``, are not used.
 
+    When grouping results w.r.t. benchmark name and setup name, we should end
+    up with ``num_runs`` experiments. These are (typically) random repetitions
+    with different seeds. If after grouping, a different number of experiments
+    is found for some setup, a warning message is printed. In this case, we
+    recommend to check the completeness of result files. Common reasons:
+
+    * Less than ``num_runs`` experiments found. Experiments failed, or files
+      were not properly synced.
+    * More than ``num_runs`` experiments found. This happens if initial
+      experiments for the study failed, but ended up writing results. This can
+      be fixed by either removing the result files, or by using
+      ``datetime_bounds`` (since initial failed experiments ran first).
+
     If ``with_subdirs`` is given, results are loaded from subdirectories below
     each experiment name, if they match the expression ``with_subdirs``. Use
     ``subdirs="*"`` to be safe.
+
+    If ``datetime_bounds`` is given, it contains a tuple of strings
+    ``(lower_time, upper_time)``, or a dictionary mapping names from
+    ``experiment_names`` to such tuples. Both strings are time-stamps in the
+    format :const:`~syne_tune.constants.ST_DATETIME_FORMAT` (example:
+    "2023-03-19-22-01-57"), and each can be ``None`` as well. This serves to
+    filter out any result whose time-stamp does not fall within the interval
+    (both sides are inclusive), where ``None`` means the interval is open on
+    that side. This feature is useful to filter out results of erroneous
+    attempts.
 
     If ``metadata_keys`` is given, it contains a list of keys into the
     metadata. In this case, metadata values for these keys are extracted and
@@ -451,15 +576,15 @@ class ComparativeResults:
         timestamps)
     :param setups: Possible values of setup names
     :param num_runs: When grouping results w.r.t. benchmark name and setup
-        name, we should end up with this many experiments. They are
-        random repetitions (with different seeds), over which results are
-        aggregated
+        name, we should end up with this many experiments. See above
     :param metadata_to_setup: See above
     :param plot_params: Parameters controlling the plot. Can be overwritten
-        in :meth:`plot`
+        in :meth:`plot`. See :class:`PlotParameters`
     :param metadata_to_subplot: See above. Optional
+    :param datetime_bounds: See above
     :param benchmark_key: Key for benchmark in metadata files. Defaults to
-        "benchmark"
+        "benchmark". If this is ``None``, there is only a single benchmark,
+        and all results are merged together
     :param with_subdirs: See above
     """
 
@@ -471,8 +596,9 @@ class ComparativeResults:
         metadata_to_setup: MapMetadataToSetup,
         plot_params: Optional[PlotParameters] = None,
         metadata_to_subplot: Optional[MapMetadataToSubplot] = None,
-        benchmark_key: str = "benchmark",
+        benchmark_key: Optional[str] = "benchmark",
         with_subdirs: Optional[Union[str, List[str]]] = None,
+        datetime_bounds: Optional[DateTimeBounds] = None,
         metadata_keys: Optional[List[str]] = None,
     ):
         result = create_index_for_result_files(
@@ -482,6 +608,7 @@ class ComparativeResults:
             metadata_keys=metadata_keys,
             benchmark_key=benchmark_key,
             with_subdirs=with_subdirs,
+            datetime_bounds=datetime_bounds,
         )
         self._reverse_index = result["index"]
         assert result["setup_names"] == set(setups), (
