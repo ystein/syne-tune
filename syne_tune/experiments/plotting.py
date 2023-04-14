@@ -10,25 +10,25 @@
 # on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
 # express or implied. See the License for the specific language governing
 # permissions and limitations under the License.
-from typing import Dict, Any, Optional, Tuple, Callable, Union, List
-import itertools
-import json
+from typing import Dict, Any, Optional, Tuple, Union, List
 from dataclasses import dataclass
 import logging
-import time
-from time import struct_time
 
 import numpy as np
 import pandas as pd
 
 from syne_tune.constants import (
-    ST_METADATA_FILENAME,
-    ST_RESULTS_DATAFRAME_FILENAME,
     ST_TUNER_TIME,
-    ST_DATETIME_FORMAT,
 )
 from syne_tune.experiments.aggregate_results import aggregate_and_errors_over_time
-from syne_tune.util import experiment_path
+from syne_tune.experiments.results_utils import (
+    MapMetadataToSetup,
+    MapMetadataToSubplot,
+    DateTimeBounds,
+    create_index_for_result_files,
+    load_results_dataframe_per_benchmark,
+    download_result_files_from_s3,
+)
 from syne_tune.try_import import try_import_visual_message
 
 try:
@@ -39,287 +39,7 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
-_MapMetadataToSetup = Callable[[Dict[str, Any]], Optional[str]]
-
-MapMetadataToSetup = Union[_MapMetadataToSetup, Dict[str, _MapMetadataToSetup]]
-
-MapMetadataToSubplot = Callable[[Dict[str, Any]], Optional[int]]
-
 DEFAULT_AGGREGATE_MODE = "iqm_bootstrap"
-
-
-def _strip_common_prefix(tuner_path: str) -> str:
-    prefix_path = str(experiment_path())
-    assert tuner_path.startswith(
-        prefix_path
-    ), f"tuner_path = {tuner_path}, prefix_path = {prefix_path}"
-    start_pos = len(prefix_path)
-    if tuner_path[start_pos] in ["/", "\\"]:
-        start_pos += 1
-    return tuner_path[start_pos:]
-
-
-def _insert_into_dict(
-    metadata_values: Dict[str, Any],
-    benchmark_name: str,
-    key: str,
-    setup_name: str,
-    value: Any,
-):
-    inner_dict = metadata_values
-    for name in [benchmark_name, key]:
-        if name not in inner_dict:
-            inner_dict[name] = dict()
-        inner_dict = inner_dict[name]
-    if setup_name in inner_dict:
-        inner_dict[setup_name].append(value)
-    else:
-        inner_dict[setup_name] = [value]
-
-
-DateTimeInterval = Tuple[Optional[str], Optional[str]]
-
-
-DateTimeBounds = Union[DateTimeInterval, Dict[str, DateTimeInterval]]
-
-
-def _convert_datetime_bound(
-    bound: DateTimeInterval,
-) -> Tuple[Optional[struct_time], Optional[struct_time]]:
-    result = ()
-    assert len(bound) == 2
-    for elem in bound:
-        if elem is not None:
-            elem = time.strptime(elem, ST_DATETIME_FORMAT)
-        result = result + (elem,)
-    lower, upper = result
-    assert (
-        lower is None or upper is None or lower < upper
-    ), f"Invalid time bound {bound}: First must be before second"
-    return result
-
-
-def _convert_datetime_bounds(
-    datetime_bounds: Optional[DateTimeBounds], experiment_names: Tuple[str, ...]
-) -> Dict[str, Tuple[Optional[struct_time], Optional[struct_time]]]:
-    if datetime_bounds is None:
-        result = {name: (None, None) for name in experiment_names}
-    elif isinstance(datetime_bounds, dict):
-        result = dict()
-        for name in experiment_names:
-            bound = datetime_bounds.get(name)
-            result[name] = None if bound is None else _convert_datetime_bound(bound)
-    else:
-        tbound = _convert_datetime_bound(datetime_bounds)
-        result = {name: tbound for name in experiment_names}
-    return result
-
-
-def _extract_datetime(tuner_name: str) -> struct_time:
-    assert (
-        tuner_name[-4] == "-" and tuner_name[-24] == "-"
-    ), f"tuner_name = {tuner_name} has invalid format. Postfix should be like {ST_DATETIME_FORMAT}-XYZ"
-    return time.strptime(tuner_name[-23:-4], ST_DATETIME_FORMAT)
-
-
-def _skip_based_on_datetime(
-    tuner_name: str,
-    datetime_lower: Optional[struct_time],
-    datetime_upper: Optional[struct_time],
-) -> bool:
-    if datetime_lower is None and datetime_upper is None:
-        return False
-    datetime = _extract_datetime(tuner_name)
-    return (datetime_lower is not None and datetime < datetime_lower) or (
-        datetime_upper is not None and datetime > datetime_upper
-    )
-
-
-def create_index_for_result_files(
-    experiment_names: Tuple[str, ...],
-    metadata_to_setup: MapMetadataToSetup,
-    metadata_to_subplot: Optional[MapMetadataToSubplot] = None,
-    metadata_keys: Optional[List[str]] = None,
-    benchmark_key: Optional[str] = "benchmark",
-    with_subdirs: Optional[Union[str, List[str]]] = None,
-    datetime_bounds: Optional[DateTimeBounds] = None,
-) -> Dict[str, Any]:
-    """
-    Helper function for :class:`ComparativeResults`.
-
-    Runs over all result directories for experiments of a comparative study.
-    For each experiment, we read the metadata file, extract the benchmark name
-    (key ``benchmark_key``), and use ``metadata_to_setup``,
-    ``metadata_to_subplot`` to map the metadata to setup name and subplot index.
-    If any of the two return ``None``, the result is not used. Otherwise, we
-    enter ``(result_path, setup_name, subplot_no)`` into the list for benchmark
-    name.
-    Here, ``result_path`` is the result path for the experiment, without the
-    :meth:`~syne_tune.util.experiment_path` prefix. The index returned is the
-    dictionary from benchmark names to these list. It allows loading results
-    specifically for each benchmark, and we do not have to load and parse the
-    metadata files again.
-
-    If ``benchmark_key is None``, the returned index is a dictionary with a
-    single element only, and the metadata files need not contain an entry for
-    benchmark name.
-
-    If ``with_subdirs`` is given, results are loaded from subdirectories below
-    each experiment name, if they match the expression ``with_subdirs``. Use
-    ``subdirs="*"`` to be safe.
-
-    If ``metadata_keys`` is given, it contains a list of keys into the
-    metadata. In this case, a nested dictionary ``metadata_values`` is
-    returned, where ``metadata_values[benchmark_name][key][setup_name]``
-    contains a list of metadata values for this benchmark, key in
-    ``metadata_keys``, and setup name.
-
-    If ``datetime_bounds`` is given, it contains a tuple of strings
-    ``(lower_time, upper_time)``, or a dictionary mapping experiment names (from
-    ``experiment_names``) to such tuples. Both strings are time-stamps in the
-    format :const:`~syne_tune.constants.ST_DATETIME_FORMAT` (example:
-    "2023-03-19-22-01-57"), and each can be ``None`` as well. This serves to
-    filter out any result whose time-stamp does not fall within the interval
-    (both sides are inclusive), where ``None`` means the interval is open on
-    that side. This feature is useful to filter out results of erroneous
-    attempts.
-
-    :param experiment_names: Tuple of experiment names (prefixes, without the
-        timestamps)
-    :param metadata_to_setup: See above
-    :param metadata_to_subplot: See above. Optional
-    :param metadata_keys: See above. Optional
-    :param benchmark_key: Key for benchmark in metadata files. Defaults to
-        "benchmark"
-    :param with_subdirs: See above
-    :param datetime_bounds: See above
-    :return: Dictionary; entry "index" for index (see above); entry
-        "setup_names" for setup names encountered; entry "metadata_values" see
-        ``metadata_keys``
-    """
-    reverse_index = dict()
-    setup_names = set()
-    metadata_values = dict()
-    if metadata_keys is None:
-        metadata_keys = []
-    datetime_bounds = _convert_datetime_bounds(datetime_bounds, experiment_names)
-    is_map_dict = isinstance(metadata_to_setup, dict)
-    for experiment_name in experiment_names:
-        datetime_lower, datetime_upper = datetime_bounds[experiment_name]
-        patterns = [experiment_name + "-*/" + ST_METADATA_FILENAME]
-        if with_subdirs is not None:
-            if not isinstance(with_subdirs, list):
-                with_subdirs = [with_subdirs]
-            pattern = patterns[0]
-            patterns = [experiment_name + f"/{x}/" + pattern for x in with_subdirs]
-        logger.info(f"Patterns for result files: {patterns}")
-        for meta_path in itertools.chain(
-            *[experiment_path().glob(pattern) for pattern in patterns]
-        ):
-            tuner_path = meta_path.parent
-            if _skip_based_on_datetime(tuner_path.name, datetime_lower, datetime_upper):
-                continue  # Skip this result
-            try:
-                with open(str(meta_path), "r") as f:
-                    metadata = json.load(f)
-            except FileNotFoundError:
-                metadata = None
-            if metadata is not None:
-                if benchmark_key is not None:
-                    assert benchmark_key in metadata, (
-                        f"Metadata for tuner_path = {tuner_path} does not contain "
-                        f"key {benchmark_key}:\n{metadata}"
-                    )
-                    benchmark_name = metadata[benchmark_key]
-                else:
-                    benchmark_name = "SINGLE_BENCHMARK"  # Key for single dict entry
-                try:
-                    map = (
-                        metadata_to_setup[benchmark_name]
-                        if is_map_dict
-                        else metadata_to_setup
-                    )
-                    setup_name = map(metadata)
-                except BaseException as err:
-                    logger.error(f"Caught exception for {tuner_path}:\n" + str(err))
-                    raise
-                if setup_name is not None:
-                    if metadata_to_subplot is not None:
-                        subplot_no = metadata_to_subplot(metadata)
-                    else:
-                        subplot_no = 0
-                    if subplot_no is not None:
-                        if benchmark_name not in reverse_index:
-                            reverse_index[benchmark_name] = []
-                        reverse_index[benchmark_name].append(
-                            (
-                                _strip_common_prefix(str(tuner_path)),
-                                setup_name,
-                                subplot_no,
-                            )
-                        )
-                        setup_names.add(setup_name)
-                        for key in metadata_keys:
-                            if key in metadata:
-                                _insert_into_dict(
-                                    metadata_values,
-                                    benchmark_name,
-                                    key,
-                                    setup_name,
-                                    value=metadata[key],
-                                )
-
-    result = {
-        "index": reverse_index,
-        "setup_names": setup_names,
-    }
-    if metadata_keys:
-        result["metadata_values"] = metadata_values
-    return result
-
-
-def load_results_dataframe_per_benchmark(
-    experiment_list: List[Tuple[str, str, int]]
-) -> Optional[pd.DataFrame]:
-    """
-    Helper function for :class:`ComparativeResults`.
-
-    Loads time-stamped results for all experiments in ``experiments_list``
-    and returns them in a single dataframe with additional columns
-    "setup_name", "suplot_no", "tuner_name", whose values are constant
-    across data for one experiment, allowing for later grouping.
-
-    :param experiment_list: Information about experiments, see
-        :func:`create_index_for_result_files`
-    :return: Dataframe with all results combined
-    """
-    dfs = []
-    for tuner_path, setup_name, subplot_no in experiment_list:
-        tuner_path = experiment_path() / tuner_path
-        df_filename = str(tuner_path / ST_RESULTS_DATAFRAME_FILENAME)
-        try:
-            df = pd.read_csv(df_filename)
-        except FileNotFoundError:
-            df = None
-        except Exception as ex:
-            logger.error(f"{df_filename}: Error in pd.read_csv\n{ex}")
-            df = None
-        if df is None:
-            logger.warning(
-                f"{tuner_path}: Meta-data matches filter, but "
-                "results file not found. Skipping."
-            )
-        else:
-            df["setup_name"] = setup_name
-            df["subplot_no"] = subplot_no
-            df["tuner_name"] = tuner_path.name
-            dfs.append(df)
-
-    if not dfs:
-        res_df = None
-    else:
-        res_df = pd.concat(dfs, ignore_index=True)
-    return res_df
 
 
 def _impute_with_defaults(original, default, names: List[str]) -> Dict[str, Any]:
@@ -554,9 +274,12 @@ class ComparativeResults:
       be fixed by either removing the result files, or by using
       ``datetime_bounds`` (since initial failed experiments ran first).
 
-    If ``with_subdirs`` is given, results are loaded from subdirectories below
-    each experiment name, if they match the expression ``with_subdirs``. Use
-    ``subdirs="*"`` to be safe.
+    Result files have the path
+    ``f"{experiment_path()}{ename}/{patt}/{ename}-*/"``, where ``path`` is from
+    ``with_subdirs``, and ``ename`` from ``experiment_names``. The default is
+    ``with_subdirs="*"``. If ``with_subdirs`` is ``None``, result files have
+    the path ``f"{experiment_path()}{ename}-*/"``. This is an older convention,
+    which makes it harder to sync files from S3, it is not recommended.
 
     If ``datetime_bounds`` is given, it contains a tuple of strings
     ``(lower_time, upper_time)``, or a dictionary mapping names from
@@ -581,11 +304,16 @@ class ComparativeResults:
     :param plot_params: Parameters controlling the plot. Can be overwritten
         in :meth:`plot`. See :class:`PlotParameters`
     :param metadata_to_subplot: See above. Optional
-    :param datetime_bounds: See above
     :param benchmark_key: Key for benchmark in metadata files. Defaults to
         "benchmark". If this is ``None``, there is only a single benchmark,
         and all results are merged together
-    :param with_subdirs: See above
+    :param with_subdirs: See above. Defaults to "*"
+    :param datetime_bounds: See above
+    :param metadata_keys: See above
+    :param download_from_s3: Should result files be downloaded from S3? This
+        is supported only if ``with_subdirs``
+    :param s3_bucket: Only if ``download_from_s3 == True``. If not given, the
+        default bucket for the SageMaker session is used
     """
 
     def __init__(
@@ -597,10 +325,17 @@ class ComparativeResults:
         plot_params: Optional[PlotParameters] = None,
         metadata_to_subplot: Optional[MapMetadataToSubplot] = None,
         benchmark_key: Optional[str] = "benchmark",
-        with_subdirs: Optional[Union[str, List[str]]] = None,
+        with_subdirs: Optional[Union[str, List[str]]] = "*",
         datetime_bounds: Optional[DateTimeBounds] = None,
         metadata_keys: Optional[List[str]] = None,
+        download_from_s3: bool = False,
+        s3_bucket: Optional[str] = None,
     ):
+        if download_from_s3:
+            assert (
+                with_subdirs is not None
+            ), "Cannot download files from S3 if with_subdirs=None"
+            download_result_files_from_s3(experiment_names, s3_bucket)
         result = create_index_for_result_files(
             experiment_names=experiment_names,
             metadata_to_setup=metadata_to_setup,
