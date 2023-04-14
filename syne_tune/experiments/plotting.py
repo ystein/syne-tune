@@ -15,6 +15,7 @@ import itertools
 import json
 from dataclasses import dataclass
 import logging
+import time
 
 import numpy as np
 import pandas as pd
@@ -23,6 +24,7 @@ from syne_tune.constants import (
     ST_METADATA_FILENAME,
     ST_RESULTS_DATAFRAME_FILENAME,
     ST_TUNER_TIME,
+    ST_DATETIME_FORMAT,
 )
 from syne_tune.experiments.aggregate_results import aggregate_and_errors_over_time
 from syne_tune.util import experiment_path
@@ -66,6 +68,51 @@ def _insert_into_dict(
         inner_dict[key] = [value]
 
 
+DateTimeInterval = Tuple[Optional[str], Optional[str]]
+
+
+DateTimeBounds = Union[DateTimeInterval, Dict[str, DateTimeInterval]]
+
+
+def _convert_datetime_bound(
+    bound: DateTimeInterval,
+) -> Tuple[Optional[time.struct_time], Optional[time.struct_time]]:
+    result = ()
+    assert len(bound) == 2
+    for elem in bound:
+        if elem is not None:
+            elem = time.strptime(elem, ST_DATETIME_FORMAT)
+        result = result + (elem,)
+    lower, upper = result
+    assert (
+        lower is None or upper is None or lower < upper
+    ), f"Invalid time bound {bound}: First must be before second"
+    return result
+
+
+def _convert_datetime_bounds(
+    datetime_bounds: Optional[DateTimeBounds], experiment_names: Tuple[str, ...]
+) -> Dict[str, Tuple[Optional[time.struct_time], Optional[time.struct_time]]]:
+    if datetime_bounds is None:
+        result = {name: (None, None) for name in experiment_names}
+    elif isinstance(datetime_bounds, dict):
+        result = dict()
+        for name in experiment_names:
+            bound = datetime_bounds.get(name)
+            result[name] = None if bound is None else _convert_datetime_bound(bound)
+    else:
+        tbound = _convert_datetime_bound(datetime_bounds)
+        result = {name: tbound for name in experiment_names}
+    return result
+
+
+def _extract_datetime(tuner_name: str) -> time.struct_time:
+    assert (
+        tuner_name[-4] == "-" and tuner_name[-24] == "-"
+    ), f"tuner_name = {tuner_name} has invalid format. Postfix should be like {ST_DATETIME_FORMAT}-XYZ"
+    return time.strptime(tuner_name[-23:-4])
+
+
 def create_index_for_result_files(
     experiment_names: Tuple[str, ...],
     metadata_to_setup: MapMetadataToSetup,
@@ -73,6 +120,7 @@ def create_index_for_result_files(
     metadata_keys: Optional[List[str]] = None,
     benchmark_key: str = "benchmark",
     with_subdirs: Optional[Union[str, List[str]]] = None,
+    datetime_bounds: Optional[DateTimeBounds] = None,
 ) -> Dict[str, Any]:
     """
     Runs over all result directories for experiments of a comparative study.
@@ -97,6 +145,16 @@ def create_index_for_result_files(
     returned, where ``metadata_values[benchmark_name][key]`` contains a list
     of metadata values for this benchmark and key in ``metadata_keys``.
 
+    If ``datetime_bounds`` is given, it contains a tuple of strings
+    ``(lower_time, upper_time)``, or a dictionary mapping experiment names (from
+    ``experiment_names``) to such tuples. Both strings are time-stamps in the
+    format :const:`~syne_tune.constants.ST_DATETIME_FORMAT` (example:
+    "2023-03-19-22-01-57"), and each can be ``None`` as well. This serves to
+    filter out any result whose time-stamp does not fall within the interval
+    (both sides are inclusive), where ``None`` means the interval is open on
+    that side. This feature is useful to filter out results of erroneous
+    attempts.
+
     :param experiment_names: Tuple of experiment names (prefixes, without the
         timestamps)
     :param metadata_to_setup: See above
@@ -105,6 +163,7 @@ def create_index_for_result_files(
     :param benchmark_key: Key for benchmark in metadata files. Defaults to
         "benchmark"
     :param with_subdirs: See above
+    :param datetime_bounds: See above
     :return: Dictionary; entry "index" for index (see above); entry
         "setup_names" for setup names encountered; entry "metadata_values" see
         ``metadata_keys``
@@ -114,7 +173,9 @@ def create_index_for_result_files(
     metadata_values = dict()
     if metadata_keys is None:
         metadata_keys = []
+    datetime_bounds = _convert_datetime_bounds(datetime_bounds, experiment_names)
     for experiment_name in experiment_names:
+        datetime_lower, datetime_upper = datetime_bounds[experiment_name]
         patterns = [experiment_name + "-*/" + ST_METADATA_FILENAME]
         if with_subdirs is not None:
             if not isinstance(with_subdirs, list):
@@ -126,6 +187,11 @@ def create_index_for_result_files(
             *[experiment_path().glob(pattern) for pattern in patterns]
         ):
             tuner_path = meta_path.parent
+            if not (datetime_lower is None and datetime_upper is None):
+                # Filter by bound
+                datetime = _extract_datetime(tuner_path.name)
+                if datetime < datetime_lower or datetime > datetime_upper:
+                    continue  # Skip this result
             try:
                 with open(str(meta_path), "r") as f:
                     metadata = json.load(f)
