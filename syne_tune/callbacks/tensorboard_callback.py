@@ -19,12 +19,13 @@ import logging
 from syne_tune.backend.trial_status import Trial
 from syne_tune.constants import ST_TUNER_TIME
 from syne_tune.tuner_callback import TunerCallback
-from syne_tune.try_import import try_import_visual_message
 
 try:
     from tensorboardX import SummaryWriter
 except ImportError:
-    print(try_import_visual_message())
+    print(
+        "TensorboardCallback requires tensorboardX to be installed:\npip install tensorboardX"
+    )
 
 logger = logging.getLogger(__name__)
 

@@ -663,9 +663,6 @@ Note that, you need to install
 
    pip install tensorboardX
 
-If you installed Syne Tune with ``visual`` or ``extra``, this dependence is
-included.
-
 The callback will log all metrics that are reported in your training script via
 the ``report(...)`` function. Now, to open Tensorboard, run:
 

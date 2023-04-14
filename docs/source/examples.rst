@@ -81,8 +81,6 @@ Visualize Tuning Progress with Tensorboard
 **Requirements**:
 
 * Needs ``tensorboardX`` to be installed: ``pip install tensorboardX``.
-  If you installed Syne Tune with ``visual`` or ``extra``, this dependence
-  is included.
 
 Makes use of :ref:`train_height.py <train_height_script>`.
 

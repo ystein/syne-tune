@@ -27,8 +27,6 @@ To use this functionality you need to install tensorboardX:
 
    pip install tensorboardX
 
-If you installed Syne Tune with ``visual`` or ``extra``, this dependence is
-already included.
 """
 
 import logging
