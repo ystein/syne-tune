@@ -120,7 +120,7 @@ def create_index_for_result_files(
     metadata_to_setup: MapMetadataToSetup,
     metadata_to_subplot: Optional[MapMetadataToSubplot] = None,
     metadata_keys: Optional[List[str]] = None,
-    benchmark_key: str = "benchmark",
+    benchmark_key: Optional[str] = "benchmark",
     with_subdirs: Optional[Union[str, List[str]]] = None,
     datetime_bounds: Optional[DateTimeBounds] = None,
 ) -> Dict[str, Any]:
@@ -137,6 +137,10 @@ def create_index_for_result_files(
     dictionary from benchmark names to these list. It allows loading results
     specifically for each benchmark, and we do not have to load and parse the
     metadata files again.
+
+    If ``benchmark_key is None``, the returned index is a dictionary with a
+    single element only, and the metadata files need not contain an entry for
+    benchmark name.
 
     If ``with_subdirs`` is given, results are loaded from subdirectories below
     each experiment name, if they match the expression ``with_subdirs``. Use
@@ -193,7 +197,9 @@ def create_index_for_result_files(
             if not (datetime_lower is None and datetime_upper is None):
                 # Filter by bound
                 datetime = _extract_datetime(tuner_path.name)
-                if datetime < datetime_lower or datetime > datetime_upper:
+                if (datetime_lower is not None and datetime < datetime_lower) or (
+                    datetime_upper is not None and datetime > datetime_upper
+                ):
                     continue  # Skip this result
             try:
                 with open(str(meta_path), "r") as f:
@@ -201,11 +207,14 @@ def create_index_for_result_files(
             except FileNotFoundError:
                 metadata = None
             if metadata is not None:
-                assert benchmark_key in metadata, (
-                    f"Metadata for tuner_path = {tuner_path} does not contain "
-                    f"key {benchmark_key}:\n{metadata}"
-                )
-                benchmark_name = metadata[benchmark_key]
+                if benchmark_key is not None:
+                    assert benchmark_key in metadata, (
+                        f"Metadata for tuner_path = {tuner_path} does not contain "
+                        f"key {benchmark_key}:\n{metadata}"
+                    )
+                    benchmark_name = metadata[benchmark_key]
+                else:
+                    benchmark_name = "SINGLE_BENCHMARK"  # Key for single dict entry
                 try:
                     map = (
                         metadata_to_setup[benchmark_name]
@@ -225,7 +234,11 @@ def create_index_for_result_files(
                         if benchmark_name not in reverse_index:
                             reverse_index[benchmark_name] = []
                         reverse_index[benchmark_name].append(
-                            (_strip_common_prefix(tuner_path), setup_name, subplot_no)
+                            (
+                                _strip_common_prefix(str(tuner_path)),
+                                setup_name,
+                                subplot_no,
+                            )
                         )
                         setup_names.add(setup_name)
                         for key in metadata_keys:
@@ -478,7 +491,7 @@ class ComparativeResults:
         self._metadata_values = (
             None if metadata_keys is None else result["metadata_values"]
         )
-        self.setups = setups
+        self.setups = tuple(setups)
         self.num_runs = num_runs
         self._default_plot_params = plot_params
 
@@ -486,7 +499,7 @@ class ComparativeResults:
         err_msg = f"benchmark_name must be one of {list(self._reverse_index.keys())}"
         if benchmark_name is None:
             assert len(self._reverse_index) == 1, err_msg
-            benchmark_name = next(self._reverse_index.keys())
+            benchmark_name = next(iter(self._reverse_index.keys()))
         else:
             assert benchmark_name in self._reverse_index, err_msg
         return benchmark_name
@@ -533,7 +546,7 @@ class ComparativeResults:
             extra_results = None
         if do_show_one_trial:
             # Put extra name at the end
-            setup_names = setup_names + [show_one_trial.new_setup_name]
+            setup_names = setup_names + (show_one_trial.new_setup_name,)
 
         stats = [[None] * len(setup_names) for _ in range(num_subplots)]
         for (subplot_no, setup_name), setup_df in df.groupby(
@@ -596,7 +609,7 @@ class ComparativeResults:
                         for key in extra_results_keys:
                             extra_dict[key].append(final_row[key])
 
-                setup_id = setup_names.index(setup_name)
+                setup_id = setup_names.index(new_setup_name)
                 stats[subplot_no][setup_id] = aggregate_and_errors_over_time(
                     errors=traj, runtimes=runtime, mode=aggregate_mode
                 )

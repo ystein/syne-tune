@@ -24,7 +24,7 @@ try:
     from tensorboardX import SummaryWriter
 except ImportError:
     print(
-        "TensorboardCallback requires tensorboardX to be installed:\npip install tensorboardX"
+        "TensorboardCallback requires tensorboardX to be installed:\n   pip install tensorboardX"
     )
 
 logger = logging.getLogger(__name__)

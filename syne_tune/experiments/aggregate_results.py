@@ -21,7 +21,7 @@ def fill_trajectory(
     performance_list: List[np.ndarray], time_list: List[np.ndarray], replace_nan=np.NaN
 ) -> (np.ndarray, np.ndarray):
     frame_dict = OrderedDict()
-    for c, p, t in enumerate(zip(performance_list, time_list)):
+    for c, (p, t) in enumerate(zip(performance_list, time_list)):
         assert len(p) == len(t), f"({c}) Array length mismatch: {len(p)} != {len(t)}"
         ds = pd.Series(data=p, index=t)
         ds = ds[~ds.index.duplicated(keep="first")]
@@ -136,7 +136,7 @@ def _compute_iqm_bootstrap(
 def aggregate_and_errors_over_time(
     errors: List[np.ndarray], runtimes: List[np.ndarray], mode: str = "mean_and_ci"
 ) -> Dict[str, np.ndarray]:
-    min_t = np.max(runtime[0] for runtime in runtimes)
+    min_t = np.max([runtime[0] for runtime in runtimes])
     metrics_runs, time = fill_trajectory(errors, runtimes, replace_nan=1)
     idx = time.tolist().index(min_t)
     metrics_runs = metrics_runs[idx:, :]
