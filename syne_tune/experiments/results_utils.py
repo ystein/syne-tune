@@ -328,6 +328,8 @@ def load_results_dataframe_per_benchmark(
     return res_df
 
 
+# HIER: This is VERY slow! Try to run "aws s3 sync" as a subprocess, as in
+# sagemaker_utils.download_sagemaker_results. Only if this fails ...
 def download_result_files_from_s3(
     experiment_names: Tuple[str, ...],
     s3_bucket: Optional[str] = None,
