@@ -10,9 +10,10 @@
 # on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
 # express or implied. See the License for the specific language governing
 # permissions and limitations under the License.
-from typing import Dict, Any, Optional, Tuple, Union, List
+from typing import Dict, Any, Optional, Tuple, Union, List, Iterable
 from dataclasses import dataclass
 import logging
+import copy
 
 import numpy as np
 import pandas as pd
@@ -319,7 +320,7 @@ class ComparativeResults:
     def __init__(
         self,
         experiment_names: Tuple[str, ...],
-        setups: List[str],
+        setups: Iterable[str],
         num_runs: int,
         metadata_to_setup: MapMetadataToSetup,
         plot_params: Optional[PlotParameters] = None,
@@ -355,7 +356,7 @@ class ComparativeResults:
         )
         self.setups = tuple(setups)
         self.num_runs = num_runs
-        self._default_plot_params = plot_params
+        self._default_plot_params = copy.deepcopy(plot_params)
 
     def _check_benchmark_name(self, benchmark_name: Optional[str]) -> str:
         err_msg = f"benchmark_name must be one of {list(self._reverse_index.keys())}"

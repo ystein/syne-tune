@@ -14,6 +14,9 @@ from typing import Dict, Any, Optional
 
 from syne_tune.experiments import ComparativeResults, PlotParameters, SubplotParameters
 from benchmarking.nursery.benchmark_hypertune.baselines import methods
+from benchmarking.nursery.benchmark_hypertune.benchmark_definitions import (
+    benchmark_definitions,
+)
 
 
 def metadata_to_setup(metadata: Dict[str, Any]) -> Optional[str]:
@@ -29,7 +32,8 @@ def metadata_to_subplot(metadata: Dict[str, Any]) -> Optional[int]:
 
 
 if __name__ == "__main__":
-    experiment_names = ("docs-1",)
+    experiment_name = "docs-1"
+    experiment_names = (experiment_name,)
     setups = list(methods.keys())
     num_runs = 15
     download_from_s3 = False  # Set ``True`` in order to download files from S3
@@ -60,4 +64,32 @@ if __name__ == "__main__":
         metadata_to_subplot=metadata_to_subplot,
         download_from_s3=download_from_s3,
     )
-    # HIER
+    # We can now create plots for the different benchmarks
+    # First: nas201-cifar100
+    benchmark_name = "nas201-cifar100"
+    benchmark = benchmark_definitions[benchmark_name]
+    # These parameters overwrite those given at construction
+    plot_params = PlotParameters(
+        metric=benchmark.metric,
+        mode=benchmark.mode,
+        ylim=(0.265, 0.31),
+    )
+    results.plot(
+        benchmark_name=benchmark_name,
+        plot_params=plot_params,
+        file_name=f"{experiment_name}-{benchmark_name}.png",
+    )
+    # Next: nas201-ImageNet16-120
+    benchmark_name = "nas201-ImageNet16-120"
+    benchmark = benchmark_definitions[benchmark_name]
+    # These parameters overwrite those given at construction
+    plot_params = PlotParameters(
+        metric=benchmark.metric,
+        mode=benchmark.mode,
+        ylim=(0.535, 0.58),
+    )
+    results.plot(
+        benchmark_name=benchmark_name,
+        plot_params=plot_params,
+        file_name=f"{experiment_name}-{benchmark_name}.png",
+    )
