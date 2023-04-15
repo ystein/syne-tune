@@ -14,6 +14,8 @@ import itertools
 import json
 import logging
 from pathlib import Path
+import subprocess
+from subprocess import CalledProcessError
 import time
 from time import struct_time
 from typing import Callable, Dict, Any, Optional, Union, Tuple, List
@@ -328,17 +330,27 @@ def load_results_dataframe_per_benchmark(
     return res_df
 
 
-# HIER: This is VERY slow! Try to run "aws s3 sync" as a subprocess, as in
-# sagemaker_utils.download_sagemaker_results. Only if this fails ...
+def sync_from_s3_command(experiment_name: str, s3_bucket: Optional[str] = None) -> str:
+    s3_source_path = s3_experiment_path(
+        s3_bucket=s3_bucket, experiment_name=experiment_name
+    )
+    target_path = str(experiment_path() / experiment_name)
+    return (
+        f'aws s3 sync {s3_source_path} {target_path} --exclude "*" '
+        f'--include "*{ST_METADATA_FILENAME}" '
+        f'--include "*{ST_RESULTS_DATAFRAME_FILENAME}"'
+    )
+
+
 def download_result_files_from_s3(
     experiment_names: Tuple[str, ...],
     s3_bucket: Optional[str] = None,
 ):
     """
-    Recursively downloads result files from S3. This works only if the result
-    objects on S3 have prefixes ``f"{s3_experiment_path(s3_bucket)}{ename}/"``,
-    where ``ename`` is in ``experiment_names``. Only files with names
-    :const:` ST_METADATA_FILENAME` and :const:`ST_RESULTS_DATAFRAME_FILENAME`
+    Downloads result files from S3. This works only if the result objects on S3
+    have prefixes ``f"{s3_experiment_path(s3_bucket)}{ename}/"``, where ``ename``
+    is in ``experiment_names``. Only files with names
+    :const:`ST_METADATA_FILENAME` and :const:`ST_RESULTS_DATAFRAME_FILENAME`
     are downloaded.
 
     :param experiment_names: Tuple of experiment names (prefixes, without the
@@ -347,10 +359,25 @@ def download_result_files_from_s3(
         is used
     """
     for experiment_name in experiment_names:
-        s3_source_path = s3_experiment_path(s3_bucket) + experiment_name + "/"
+        s3_source_path = s3_experiment_path(
+            s3_bucket=s3_bucket, experiment_name=experiment_name
+        )
+        logger.info(f"Downloading result files from {s3_source_path}")
+        # Try "aws s3 sync", which is very fast
+        try:
+            cmd = sync_from_s3_command(experiment_name, s3_bucket)
+            subprocess.run(cmd.split(" "))
+            continue  # Skip rest of the loop if this succeeded
+        except CalledProcessError as ex:
+            err_msg = (
+                f"Failed to execute sync command:\n{ex.cmd}\nstdout:"
+                f"\n{ex.stdout}\nstderr:\n{ex.stderr}\n"
+                "Fallback to using boto3 (this is slow!)"
+            )
+            logger.warning(err_msg)
+        # Recursive download with boto3. This is quite slow!
         target_path = str(experiment_path() / experiment_name)
         valid_postfixes = [ST_METADATA_FILENAME, ST_RESULTS_DATAFRAME_FILENAME]
-        logger.info(f"Downloading result files from {s3_source_path}")
         result = s3_download_files_recursively(
             s3_source_path=s3_source_path,
             target_path=target_path,
