@@ -66,9 +66,15 @@ Here is the code for generating result plots for two of the benchmarks:
    :caption: benchmarking/nursery/benchmark_hypertune/plot_results.py
    :start-after: # permissions and limitations under the License.
 
+.. |Results for nas201-cifar-100| image:: docs-1-nas201-cifar100.png
+
 The figure for benchmark ``nas201-cifar-100`` looks as follows:
 
-HIER!
++---------------------------------------+
+| |Results for nas201-cifar-100|        |
++=======================================+
+| Results for NASBench-201 (CIFAR-100)  |
++---------------------------------------+
 
 * There are two subfigures next to each other. Each contains a number of
   curves in bold, along with confidence intervals. The horizontal axis

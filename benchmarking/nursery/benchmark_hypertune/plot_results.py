@@ -77,7 +77,7 @@ if __name__ == "__main__":
     results.plot(
         benchmark_name=benchmark_name,
         plot_params=plot_params,
-        file_name=f"{experiment_name}-{benchmark_name}.png",
+        file_name=f"./{experiment_name}-{benchmark_name}.png",
     )
     # Next: nas201-ImageNet16-120
     benchmark_name = "nas201-ImageNet16-120"
@@ -91,5 +91,5 @@ if __name__ == "__main__":
     results.plot(
         benchmark_name=benchmark_name,
         plot_params=plot_params,
-        file_name=f"{experiment_name}-{benchmark_name}.png",
+        file_name=f"./{experiment_name}-{benchmark_name}.png",
     )
