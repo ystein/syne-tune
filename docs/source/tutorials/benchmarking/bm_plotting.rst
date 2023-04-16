@@ -4,7 +4,7 @@ Visualization of Results
 As we have seen, Syne Tune is a powerful tool for running a large number of
 experiments in parallel, which can be used to compare different tuning
 algorithms, or to split a difficult tuning problem into smaller pieces, which
-can be worked on in parallel. In this section, we show results of all
+can be worked on in parallel. In this section, we show how results of all
 experiments of such a comparative study can be visualized, using plotting
 facilities provided in Syne Tune.
 
@@ -66,7 +66,7 @@ Here is the code for generating result plots for two of the benchmarks:
    :caption: benchmarking/nursery/benchmark_hypertune/plot_results.py
    :start-after: # permissions and limitations under the License.
 
-.. |Results for nas201-cifar-100| image:: docs-1-nas201-cifar100.png
+.. |Results for nas201-cifar-100| image:: img/docs-1-nas201-cifar100.png
 
 The figure for benchmark ``nas201-cifar-100`` looks as follows:
 
@@ -80,9 +80,10 @@ The figure for benchmark ``nas201-cifar-100`` looks as follows:
   curves in bold, along with confidence intervals. The horizontal axis
   depicts wall-clock time, and on the vertical axis, we show the best
   metric value found until this time.
-* More general, the data from our 1260 can be grouped w.r.t. subplot, then
-  *setup*. Each setup gives rise to one curve (bold, with confidence band).
-  Subplots are optional, the default is to plot a single figure.
+* More general, the data from our 1260 experiments can be grouped w.r.t.
+  subplot, then *setup*. Each setup gives rise to one curve (bold, with
+  confidence band). Subplots are optional, the default is to plot a single
+  figure.
 * The function ``metadata_to_setup`` maps the metadata stored for an experiment
   to the setup name, or to ``None`` if this experiment should be filtered out.
   In our basic case, the setup is simply the name of the tuning algorithm.
@@ -145,7 +146,7 @@ The figure for benchmark ``nas201-cifar-100`` looks as follows:
   for every setup. For large studies, it frequently happens that too few
   or too many results are found. The warning outputs can be used for
   debugging.
-* Given ``results, we can create plots for every benchmark. In our example,
+* Given ``results``, we can create plots for every benchmark. In our example,
   this is done for ``nas201-cifar100`` and ``nas201-ImageNet16-120``, by
   calling ``results.plot()``. Apart from the benchmark name, we also pass
   plot parameters in ``plot_params``, which extend (and overwrite) those
