@@ -13,29 +13,37 @@
 from typing import Dict, Any, Optional
 
 from syne_tune.experiments import ComparativeResults, PlotParameters, SubplotParameters
-from benchmarking.examples.benchmark_hypertune.baselines import methods
-from benchmarking.examples.benchmark_hypertune.benchmark_definitions import (
+from benchmarking.nursery.odsc_tutorial.transformer_wikitext2.benchmark_definitions import (
     benchmark_definitions,
 )
 
 
+TMLR10_SETUPS = [
+    "2 workers",
+    "4 workers",
+    "8 workers",
+]
+
+
 def metadata_to_setup(metadata: Dict[str, Any]) -> Optional[str]:
-    # The setup is the algorithm. No filtering
-    return metadata["algorithm"]
+    return f"{metadata['n_workers']} workers"
 
 
-SETUPS_RIGHT = ("ASHA", "SYNCHB", "BOHB")
+TMLR10_METHOD_TO_SUBPLOT = {
+    "RS": 0,
+    "BO": 1,
+    "ASHA": 2,
+    "MOBSTER": 3,
+}
 
 
-def metadata_to_subplot(metadata: Dict[str, Any]) -> Optional[int]:
-    return int(metadata["algorithm"] in SETUPS_RIGHT)
+def metadata_to_subplot(metadata: dict) -> Optional[int]:
+    return TMLR10_METHOD_TO_SUBPLOT[metadata["algorithm"]]
 
 
 if __name__ == "__main__":
-    experiment_name = "docs-1"
-    experiment_names = (experiment_name,)
-    setups = list(methods.keys())
-    num_runs = 15
+    experiment_names = ("tmlr-10",)
+    num_runs = 5
     download_from_s3 = False  # Set ``True`` in order to download files from S3
     # Plot parameters across all benchmarks
     plot_params = PlotParameters(
@@ -43,15 +51,12 @@ if __name__ == "__main__":
         aggregate_mode="iqm_bootstrap",
         grid=True,
     )
-    # We would like two subplots (1 row, 2 columns), with MOBSTER and HYPERTUNE
-    # results on the left, and the remaining baselines on the right. Each
-    # column gets its own title, and legends are shown in both
+    # We would like to have 4 subfigures, one for each method
     plot_params.subplots = SubplotParameters(
-        nrows=1,
-        ncols=2,
-        kwargs=dict(sharey="all"),
-        titles=["Model-based Methods", "Baselines"],
-        legend_no=[0, 1],
+        kwargs=dict(nrows=2, ncols=2, sharex="all", sharey="all"),
+        titles=["RS", "BO", "ASHA", "MOBSTER"],
+        title_each_figure=True,
+        legend_no=[0],
     )
     # The creation of ``results`` downloads files from S3 (only if
     # ``download_from_s3 == True``), reads the metadata and creates an inverse
@@ -59,39 +64,24 @@ if __name__ == "__main__":
     # warning messages are printed
     results = ComparativeResults(
         experiment_names=experiment_names,
-        setups=setups,
+        setups=TMLR10_SETUPS,
         num_runs=num_runs,
         metadata_to_setup=metadata_to_setup,
         plot_params=plot_params,
         metadata_to_subplot=metadata_to_subplot,
         download_from_s3=download_from_s3,
     )
-    # We can now create plots for the different benchmarks
-    # First: nas201-cifar100
-    benchmark_name = "nas201-cifar100"
-    benchmark = benchmark_definitions[benchmark_name]
+    # Create comparative plot (single panel)
+    benchmark_name = "transformer_wikitext2"
+    benchmark = benchmark_definitions(sagemaker_backend=True)[benchmark_name]
     # These parameters overwrite those given at construction
     plot_params = PlotParameters(
         metric=benchmark.metric,
         mode=benchmark.mode,
-        ylim=(0.265, 0.31),
+        ylim=(5, 8),
     )
     results.plot(
         benchmark_name=benchmark_name,
         plot_params=plot_params,
-        file_name=f"./{experiment_name}-{benchmark_name}.png",
-    )
-    # Next: nas201-ImageNet16-120
-    benchmark_name = "nas201-ImageNet16-120"
-    benchmark = benchmark_definitions[benchmark_name]
-    # These parameters overwrite those given at construction
-    plot_params = PlotParameters(
-        metric=benchmark.metric,
-        mode=benchmark.mode,
-        ylim=(0.535, 0.58),
-    )
-    results.plot(
-        benchmark_name=benchmark_name,
-        plot_params=plot_params,
-        file_name=f"./{experiment_name}-{benchmark_name}.png",
+        file_name=f"./odsc-comparison-sagemaker-{benchmark_name}.png",
     )
