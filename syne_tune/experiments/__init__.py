@@ -23,6 +23,10 @@ from syne_tune.experiments.plotting import (
     SubplotParameters,
     ShowTrialParameters,
 )
+from syne_tune.experiments.plot_per_trial import (
+    TrialsOfExperimentResults,
+    MultiFidelityParameters,
+)
 
 __all__ = [
     "ExperimentResult",
@@ -34,4 +38,6 @@ __all__ = [
     "PlotParameters",
     "SubplotParameters",
     "ShowTrialParameters",
+    "TrialsOfExperimentResults",
+    "MultiFidelityParameters",
 ]

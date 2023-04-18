@@ -42,6 +42,9 @@ MapMetadataToSetup = Union[_MapMetadataToSetup, Dict[str, _MapMetadataToSetup]]
 MapMetadataToSubplot = Callable[[Dict[str, Any]], Optional[int]]
 
 
+SINGLE_BENCHMARK_KEY = "SINGLE_BENCHMARK"
+
+
 def _strip_common_prefix(tuner_path: str) -> str:
     prefix_path = str(experiment_path())
     assert tuner_path.startswith(
@@ -138,7 +141,7 @@ def _get_benchmark_name(
         )
         benchmark_name = metadata[benchmark_key]
     else:
-        benchmark_name = "SINGLE_BENCHMARK"  # Key for single dict entry
+        benchmark_name = SINGLE_BENCHMARK_KEY  # Key for single dict entry
     return benchmark_name
 
 
@@ -150,7 +153,8 @@ def create_index_for_result_files(
     benchmark_key: Optional[str] = "benchmark",
     with_subdirs: Optional[Union[str, List[str]]] = "*",
     datetime_bounds: Optional[DateTimeBounds] = None,
-) -> Dict[str, Any]:
+    seed_key: Optional[str] = None,
+) -> Union[Dict[str, Any], Dict[Tuple[str, int], Any]]:
     """
     Helper function for :class:`ComparativeResults`.
 
@@ -194,6 +198,11 @@ def create_index_for_result_files(
     that side. This feature is useful to filter out results of erroneous
     attempts.
 
+    If ``seed_key`` is given, the returned index is a dictionary with keys
+    ``(benchmark_name, seed)``, where ``seed`` is the value corresponding to
+    ``seed_key`` in the metadata dict. This mode is needed for plots focusing
+    on a single experiment.
+
     :param experiment_names: Tuple of experiment names (prefixes, without the
         timestamps)
     :param metadata_to_setup: See above
@@ -203,6 +212,7 @@ def create_index_for_result_files(
         "benchmark"
     :param with_subdirs: See above. Defaults to "*"
     :param datetime_bounds: See above
+    :param seed_key: See above
     :return: Dictionary; entry "index" for index (see above); entry
         "setup_names" for setup names encountered; entry "metadata_values" see
         ``metadata_keys``
@@ -237,6 +247,7 @@ def create_index_for_result_files(
             if metadata is None:
                 continue
             benchmark_name = _get_benchmark_name(benchmark_key, metadata, tuner_path)
+            seed_value = None if seed_key is None else int(metadata[seed_key])
             try:
                 # Extract ``setup_name``
                 map = (
@@ -257,9 +268,12 @@ def create_index_for_result_files(
                 subplot_no = 0
             if subplot_no is None:
                 continue
-            if benchmark_name not in reverse_index:
-                reverse_index[benchmark_name] = []
-            reverse_index[benchmark_name].append(
+            index_key = (
+                benchmark_name if seed_key is None else (benchmark_name, seed_value)
+            )
+            if index_key not in reverse_index:
+                reverse_index[index_key] = []
+            reverse_index[index_key].append(
                 (
                     _strip_common_prefix(str(tuner_path)),
                     setup_name,

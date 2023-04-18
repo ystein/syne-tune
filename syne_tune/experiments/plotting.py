@@ -517,8 +517,8 @@ class ComparativeResults:
             title_each_figure = subplots.title_each_figure
         else:
             subplot_xlims = None
-            subplots_kwargs = dict(nrows=1, ncols=1)
             nrows = ncols = 1
+            subplots_kwargs = dict(nrows=nrows, ncols=ncols)
             subplot_titles = None
             legend_no = [0]
             title_each_figure = False
