@@ -172,7 +172,7 @@ class TrialsOfExperimentResults:
         else:
             nrows = 1
             ncols = len(self.setups)
-            subplots_kwargs = dict(nrows=nrows, ncols=ncols)
+            subplots_kwargs = dict(nrows=nrows, ncols=ncols, sharey="all")
             subplot_titles = self.setups
             title_each_figure = False
         ylim = plot_params.ylim

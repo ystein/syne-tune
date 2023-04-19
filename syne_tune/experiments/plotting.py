@@ -136,6 +136,9 @@ class ShowTrialParameters:
         return ShowTrialParameters(**new_params)
 
 
+DEFAULT_XLABEL = "wall-clock time (secs)"
+
+
 @dataclass
 class PlotParameters:
     """
@@ -146,11 +149,11 @@ class PlotParameters:
     and as :code:`1 - metric_multiplier * metric_val` if ``mode == "max"``.
 
     :param metric: Name of metric, mandatory
-    :param mode: See above, "min" or "max", mandatory
+    :param mode: See above, "min" or "max". Defaults to "min" if not given
     :param title: Title of plot. If ``subplots`` is used, see
         :class:`SubplotParameters`
     :param xlabel: Label for x axis. If ``subplots`` is used, this is
-        printed below each column
+        printed below each column. Defaults to :const:`DEFAULT_XLABEL`
     :param ylabel: Label for y axis. If ``subplots`` is used, this is
         printed left of each row
     :param xlim: ``(x_min, x_max)`` for x axis. If ``subplots`` is used, see
@@ -210,12 +213,13 @@ class PlotParameters:
         )
         default_values = [
             ("metric", None),
-            ("mode", None),
+            ("mode", "min"),
             ("title", ""),
             ("metric_multiplier", 1),
             ("aggregate_mode", DEFAULT_AGGREGATE_MODE),
             ("dpi", 200),
             ("grid", False),
+            ("xlabel", DEFAULT_XLABEL),
         ]
         _check_and_set_defaults(new_params, default_values)
         if self.subplots is None:
