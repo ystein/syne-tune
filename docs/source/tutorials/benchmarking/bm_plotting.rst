@@ -162,3 +162,10 @@ For details about further features, consider the documentations of
 :class:`~syne_tune.experiments.PlotParameters`,
 :class:`~syne_tune.experiments.SubplotParameters`,
 :class:`~syne_tune.experiments.ShowTrialParameters`.
+
+.. note::
+   Apart from plots comparing different setups, aggregated over multiple seeds,
+   we can also visualize the learning curves per trial for a single
+   experiment. Details are given in
+   :class:`~syne_tune.experiments.TrialsOfExperimentResults`, and examples
+   will be provided in a forthcoming tutorial.
