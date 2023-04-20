@@ -44,7 +44,7 @@ class MethodArguments:
         printed. Defaults to False
     :param fcnet_ordinal: Only for simulator backend and ``fcnet`` blackbox.
         This blackbox is tabulated with finite domains, one of which has
-        irregular spacing. If ``fcnet_ordinal="none"``, this is left as
+        irregular spacing. If ``fcnet_ordinal is None``, this is left as
         categorical, otherwise we use ordinal encoding with
         ``kind=fcnet_ordinal``.
     :param scheduler_kwargs: If given, overwrites defaults of scheduler

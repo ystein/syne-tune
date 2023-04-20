@@ -13,23 +13,21 @@
 from pathlib import Path
 
 from benchmarking.commons.launch_remote_simulator import launch_remote
-from benchmarking.nursery.benchmark_hypertune.benchmark_definitions import (
+from benchmarking.nursery.demo_experiment.benchmark_definitions import (
     benchmark_definitions,
 )
-from benchmarking.nursery.benchmark_hypertune.baselines import methods
-from benchmarking.nursery.benchmark_hypertune.hpo_main import extra_args
+from benchmarking.nursery.demo_experiment.baselines import methods
 
 
 if __name__ == "__main__":
 
     def _is_expensive_method(method: str) -> bool:
-        return method.startswith("MOBSTER") or method.startswith("HYPERTUNE")
+        return method.startswith("MOBSTER")
 
     entry_point = Path(__file__).parent / "hpo_main.py"
     launch_remote(
         entry_point=entry_point,
         methods=methods,
         benchmark_definitions=benchmark_definitions,
-        extra_args=extra_args,
         is_expensive_method=_is_expensive_method,
     )
