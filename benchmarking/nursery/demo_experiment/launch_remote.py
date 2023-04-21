@@ -22,7 +22,7 @@ from benchmarking.nursery.demo_experiment.baselines import methods
 if __name__ == "__main__":
 
     def _is_expensive_method(method: str) -> bool:
-        return method.startswith("MOBSTER")
+        return method.startswith("MOBSTER") or method == "BO"
 
     entry_point = Path(__file__).parent / "hpo_main.py"
     launch_remote(
