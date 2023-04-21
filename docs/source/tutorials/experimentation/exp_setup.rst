@@ -35,15 +35,15 @@ overall tuning problem into smaller pieces by fixing these parameters to
 fixed values, considering ``relu`` and ``tanh`` networks independently. In our
 study, we will compare the following methods:
 
-* ``ASHA-TANH``, ``MOBSTER-TANH``: Runs ``ASHA`` and ``MOBSTER`` on the
+* ``ASHA-TANH``, ``MOBSTER-TANH``: Runs ASHA and MOBSTER on the
   simplified configuration space, where
   ``hp_activation_fn_1 = hp_activation_fn_2 = "tanh"``
-* ``ASHA-RELU``, ``MOBSTER-RELU``: Runs ``ASHA`` and ``MOBSTER`` on the
+* ``ASHA-RELU``, ``MOBSTER-RELU``: Runs ASHA and MOBSTER on the
   simplified configuration space, where
   ``hp_activation_fn_1 = hp_activation_fn_2 = "relu"``
-* ``ASHA``, ``MOBSTER``: Runs ``ASHA`` and ``MOBSTER`` on the original
+* ``ASHA``, ``MOBSTER``: Runs ASHA and MOBSTER on the original
   configuration space
-* ``RS, ``BO``: Runs baselines random search and Bayesian optimization on
+* ``RS``, ``BO``: Runs baselines random search and Bayesian optimization on
   the original configuration space
 
 Here is the script defining these alternatives:
@@ -107,7 +107,7 @@ information about the experiment. Here is the script:
   `here <../../faq.html#what-does-the-output-of-the-tuning-contain>`__. In
   particular, all metric values reported for all trials are recorded.
 * In our example, we would also like to record information about the
-  multi-fidelity schedulers ``ASHA`` and ``MOBSTER``. As detailed in
+  multi-fidelity schedulers ASHA and MOBSTER. As detailed in
   `this tutorial <../multifidelity/mf_asha.html>`__, they record metric
   values for trials at different rung levels these trials reached (e.g.,
   number of epochs trained), and decisions on which paused trial to
@@ -119,14 +119,14 @@ information about the experiment. Here is the script:
   :class:`~syne_tune.results_callback.ExtraResultsComposer`, whose
   ``__call__`` method extracts the desired information from the current
   :class:`~syne_tune.Tuner` object. In our example, we first test whether
-  the current scheduler is ``ASHA`` or ``MOBSTER`` (recall that we also run
+  the current scheduler is ASHA or MOBSTER (recall that we also run
   ``RS`` and ``BO`` as baselines). If so, we extract the desired information
   and return it as a dictionary.
 * Finally, we create ``extra_results`` and pass it to the ``main`` function.
 
 The outcome is that a number of additional columns are appended to the dataframe
-stored in ``results.csv.zip``, at least for experiments with ``ASHA`` or
-``MOBSTER`` schedulers.
+stored in ``results.csv.zip``, at least for experiments with ASHA or
+MOBSTER schedulers.
 
 Running Experiments in Parallel
 -------------------------------
@@ -137,11 +137,12 @@ slow and cumbersome once we are happy with the setup and simply would like to
 know the results. We will want to launch many experiments in parallel on AWS,
 and continue other work on our local machine:
 
-* Experiments with our setups ``RS, ``BO``, ``ASHA-TANH``, ``MOBSTER-TANH``,
+* Experiments with our setups ``RS``, ``BO``, ``ASHA-TANH``, ``MOBSTER-TANH``,
   ``ASHA-RELU``, ``MOBSTER-RELU``, ``ASHA``, ``MOBSTER`` are independent and
   can be run in parallel.
 * We repeat each experiment 15 times, in order to quantify the random
-  fluctuation in the results.
+  fluctuation in the results. These seeds are independent and can be run
+  in parallel.
 * We could also run experiments with different benchmarks (i.e., datasets in
   ``fcnet``) in parallel. But since a single simulated experiment is fast to
   do, we are not doing this here.
@@ -192,10 +193,10 @@ tests. For example:
 We can cycle through several methods and check whether anything breaks. Note that
 ``--verbose 1`` generates useful output about the progress of the method, which
 can be used to check whether properties are the way we expect (for example,
-``"relu"`` is chosen for the both fixed hyperparameters. Results are stored locally
-under ``~syne_tune/docs-2-debug/``.
+``"relu"`` is chosen for the both fixed hyperparameters). Results are stored locally
+under ``~/syne_tune/docs-2-debug/``.
 
-Next, it is recommended to launch the setup remotely, but for a single seed:
+Next, we launch the setup remotely, but for a single seed:
 
 .. code-block:: bash
 
