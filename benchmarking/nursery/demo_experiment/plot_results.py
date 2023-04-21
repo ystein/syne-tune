@@ -10,7 +10,8 @@
 # on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
 # express or implied. See the License for the specific language governing
 # permissions and limitations under the License.
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Set
+import logging
 
 from syne_tune.experiments import ComparativeResults, PlotParameters, SubplotParameters
 from benchmarking.nursery.demo_experiment.baselines import methods
@@ -42,16 +43,20 @@ def metadata_to_subplot(metadata: Dict[str, Any]) -> Optional[int]:
 
 
 def _print_extra_results(
-    extra_results: Dict[str, Dict[str, List[float]]], keys: List[str]
+    extra_results: Dict[str, Dict[str, List[float]]],
+    keys: List[str],
+    skip_setups: Set[str],
 ):
     for setup_name, results_for_setup in extra_results.items():
-        print(f"[{setup_name}]:")
-        for key in keys:
-            values = results_for_setup[key]
-            print(f"  {key}: {values}")
+        if setup_name not in skip_setups:
+            print(f"[{setup_name}]:")
+            for key in keys:
+                values = results_for_setup[key]
+                print(f"  {key}: {[int(x) for x in values]}")
 
 
 if __name__ == "__main__":
+    logging.getLogger().setLevel(logging.INFO)
     experiment_name = "docs-2"
     experiment_names = (experiment_name,)
     setups = list(methods.keys())
@@ -73,6 +78,7 @@ if __name__ == "__main__":
             "activations = relu",
             "single fidelity",
         ],
+        title_each_figure=True,
         legend_no=[0, 1, 2, 3],
     )
 
@@ -97,6 +103,7 @@ if __name__ == "__main__":
     #   Instead of plotting their values over time, we print out their
     #   values at the end of each experiment
     extra_results_keys = RungLevelsExtraResults().keys()
+    skip_setups = {"RS", "BO"}
     # First: fcnet-protein
     benchmark_name = "fcnet-protein"
     benchmark = benchmark_definitions[benchmark_name]
@@ -104,7 +111,7 @@ if __name__ == "__main__":
     plot_params = PlotParameters(
         metric=benchmark.metric,
         mode=benchmark.mode,
-        ylim=(0.22, 0.27),
+        ylim=(0.22, 0.30),
     )
     extra_results = results.plot(
         benchmark_name=benchmark_name,
@@ -112,7 +119,7 @@ if __name__ == "__main__":
         file_name=f"./{experiment_name}-{benchmark_name}.png",
         extra_results_keys=extra_results_keys,
     )
-    _print_extra_results(extra_results, extra_results_keys)
+    _print_extra_results(extra_results, extra_results_keys, skip_setups=skip_setups)
     # Next: fcnet-slice
     benchmark_name = "fcnet-slice"
     benchmark = benchmark_definitions[benchmark_name]
@@ -128,4 +135,4 @@ if __name__ == "__main__":
         file_name=f"./{experiment_name}-{benchmark_name}.png",
         extra_results_keys=extra_results_keys,
     )
-    _print_extra_results(extra_results, extra_results_keys)
+    _print_extra_results(extra_results, extra_results_keys, skip_setups=skip_setups)

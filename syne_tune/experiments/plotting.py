@@ -471,7 +471,7 @@ class ComparativeResults:
                     # Collect extra results
                     if extra_results_keys is not None and not one_trial_special:
                         extra_dict = extra_results[setup_name]
-                        final_pos = sub_df.loc[:, ST_TUNER_TIME].argmax()
+                        final_pos = sub_df[ST_TUNER_TIME].idxmax()
                         final_row = dict(sub_df.loc[final_pos])
                         for key in extra_results_keys:
                             extra_dict[key].append(final_row[key])

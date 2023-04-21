@@ -163,8 +163,8 @@ Running experiments in parallel requires a remote launcher script:
   run in parallel. Otherwise, they are run sequentially.
 * In our example, we know that ``BO`` and ``MOBSTER`` run quite a bit slower
   in the simulator than ``RS`` and ``ASHA``, so we label the former as expensive.
-  This means we have 6 expensive methods and 2 cheap ones, and our complete
-  study will launch ``2 + 6 * 15 = 92`` SageMaker training jobs. Since
+  This means we have 4 expensive methods and 4 cheap ones, and our complete
+  study will launch ``4 + 4 * 15 = 64`` SageMaker training jobs. Since
   ``fcnet`` contains four benchmarks, we run ``8 * 15 * 4 = 480`` experiments
   in total.
 
