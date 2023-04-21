@@ -140,7 +140,7 @@ and continue other work on our local machine:
 * Experiments with our setups ``RS``, ``BO``, ``ASHA-TANH``, ``MOBSTER-TANH``,
   ``ASHA-RELU``, ``MOBSTER-RELU``, ``ASHA``, ``MOBSTER`` are independent and
   can be run in parallel.
-* We repeat each experiment 15 times, in order to quantify the random
+* We repeat each experiment 20 times, in order to quantify the random
   fluctuation in the results. These seeds are independent and can be run
   in parallel.
 * We could also run experiments with different benchmarks (i.e., datasets in
@@ -159,13 +159,13 @@ Running experiments in parallel requires a remote launcher script:
   :func:`~benchmarking.commons.launch_remote_sagemaker.launch_remote`,
   depending on the trial backend.
 * In ``is_expensive_method``, we pass a predicate from method name. If
-  ``is_expensive_method(method)`` is ``True``, the 15 different seeds are
+  ``is_expensive_method(method)`` is ``True``, the 20 different seeds are
   run in parallel. Otherwise, they are run sequentially.
 * In our example, we know that ``BO`` and ``MOBSTER`` run quite a bit slower
   in the simulator than ``RS`` and ``ASHA``, so we label the former as expensive.
   This means we have 4 expensive methods and 4 cheap ones, and our complete
-  study will launch ``4 + 4 * 15 = 64`` SageMaker training jobs. Since
-  ``fcnet`` contains four benchmarks, we run ``8 * 15 * 4 = 480`` experiments
+  study will launch ``4 + 4 * 20 = 84`` SageMaker training jobs. Since
+  ``fcnet`` contains four benchmarks, we run ``8 * 20 * 4 = 640`` experiments
   in total.
 
 All of these experiments can be launched with a single command:
@@ -173,7 +173,7 @@ All of these experiments can be launched with a single command:
 .. code-block:: bash
 
    python benchmarking/nursery/demo_experiment/launch_remote.py \
-     --experiment_tag docs-2 --random_seed 2465497701 --num_seeds 15
+     --experiment_tag docs-2 --random_seed 2465497701 --num_seeds 20
 
 Avoiding Costly Failures
 ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -213,10 +213,10 @@ Finally, if this looks good, we can launch all the rest:
 .. code-block:: bash
 
    python benchmarking/nursery/demo_experiment/launch_remote.py \
-     --experiment_tag docs-2 --random_seed 2465497701 --num_seeds 15 \
+     --experiment_tag docs-2 --random_seed 2465497701 --num_seeds 20 \
      --start_seed 1
 
-This is launching all remaining experiments with ``seed`` from 1 to 14.
+This is launching all remaining experiments with ``seed`` from 1 to 19.
 
 .. note::
    If something breaks when remotely launching for ``seed=0``, it may be that

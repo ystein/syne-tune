@@ -60,7 +60,7 @@ if __name__ == "__main__":
     experiment_name = "docs-2"
     experiment_names = (experiment_name,)
     setups = list(methods.keys())
-    num_runs = 15
+    num_runs = 20
     download_from_s3 = False  # Set ``True`` in order to download files from S3
     # Plot parameters across all benchmarks
     plot_params = PlotParameters(
