@@ -7,6 +7,7 @@ Sequential Model-Based Search
 With limited parallel computing resources, experiments are sequential
 processes, where trials are started and report results in some ordering. This
 means that when deciding on which configuration to explore with any given
+means that when deciding on which configuration to explore with any given
 trial, we can make use of all metric results reported by earlier trials, given
 that they already finished. In the simplest case, with a single worker, a new
 trial can start only once all earlier trials finished. We should be able to use

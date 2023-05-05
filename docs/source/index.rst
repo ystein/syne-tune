@@ -86,6 +86,7 @@ What's New?
    tutorials/multifidelity/README
    tutorials/benchmarking/README
    tutorials/developer/README
+   tutorials/dev_bayesopt/README
    tutorials/pasha/pasha
    tutorials/transfer_learning/transfer_learning
 
