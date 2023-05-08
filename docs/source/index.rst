@@ -87,6 +87,7 @@ What's New?
    schedulers
    tutorials/multifidelity/README
    tutorials/benchmarking/README
+   tutorials/visualization/README
    tutorials/developer/README
    tutorials/pasha/pasha
    tutorials/transfer_learning/transfer_learning
