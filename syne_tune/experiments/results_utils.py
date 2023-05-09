@@ -57,21 +57,20 @@ def _strip_common_prefix(tuner_path: str) -> str:
 
 
 def _insert_into_nested_dict(
-    metadata_values: Dict[str, Any],
-    benchmark_name: str,
-    key: str,
-    setup_name: str,
+    dictionary: Dict[str, Any],
+    key_sequence: List[Any],
     value: Any,
 ):
-    inner_dict = metadata_values
-    for name in [benchmark_name, key]:
-        if name not in inner_dict:
-            inner_dict[name] = dict()
-        inner_dict = inner_dict[name]
-    if setup_name in inner_dict:
-        inner_dict[setup_name].append(value)
+    inner_dict = dictionary
+    for key in key_sequence[:-1]:
+        if key not in inner_dict:
+            inner_dict[key] = dict()
+        inner_dict = inner_dict[key]
+    key = key_sequence[-1]
+    if key in inner_dict:
+        inner_dict[key].append(value)
     else:
-        inner_dict[setup_name] = [value]
+        inner_dict[key] = [value]
 
 
 DateTimeInterval = Tuple[Optional[str], Optional[str]]
@@ -150,6 +149,7 @@ def create_index_for_result_files(
     metadata_to_setup: MapMetadataToSetup,
     metadata_to_subplot: Optional[MapMetadataToSubplot] = None,
     metadata_keys: Optional[List[str]] = None,
+    metadata_subplot_level: bool = False,
     benchmark_key: Optional[str] = "benchmark",
     with_subdirs: Optional[Union[str, List[str]]] = "*",
     datetime_bounds: Optional[DateTimeBounds] = None,
@@ -186,7 +186,11 @@ def create_index_for_result_files(
     metadata. In this case, a nested dictionary ``metadata_values`` is
     returned, where ``metadata_values[benchmark_name][key][setup_name]``
     contains a list of metadata values for this benchmark, key in
-    ``metadata_keys``, and setup name.
+    ``metadata_keys``, and setup name. In this case, if
+    ``metadata_subplot_level`` is ``True`` and ``metadata_to_subplot`` is
+    given, ``metadata_values`` has the structure
+    ``metadata_values[benchmark_name][key][setup_name][subplot_no]``. This
+    should be set if different subplots share the same setup names.
 
     If ``datetime_bounds`` is given, it contains a tuple of strings
     ``(lower_time, upper_time)``, or a dictionary mapping experiment names (from
@@ -208,6 +212,7 @@ def create_index_for_result_files(
     :param metadata_to_setup: See above
     :param metadata_to_subplot: See above. Optional
     :param metadata_keys: See above. Optional
+    :param metadata_subplot_level: See above. Defaults to ``False``
     :param benchmark_key: Key for benchmark in metadata files. Defaults to
         "benchmark"
     :param with_subdirs: See above. Defaults to "*"
@@ -222,6 +227,8 @@ def create_index_for_result_files(
     metadata_values = dict()
     if metadata_keys is None:
         metadata_keys = []
+    if metadata_to_subplot is None:
+        metadata_subplot_level = False
     datetime_bounds = _convert_datetime_bounds(datetime_bounds, experiment_names)
     is_map_dict = isinstance(metadata_to_setup, dict)
     for experiment_name in experiment_names:
@@ -283,11 +290,12 @@ def create_index_for_result_files(
             setup_names.add(setup_name)
             for key in metadata_keys:
                 if key in metadata:
+                    key_sequence = [benchmark_name, key, setup_name]
+                    if metadata_subplot_level:
+                        key_sequence.append(subprocess)
                     _insert_into_nested_dict(
-                        metadata_values,
-                        benchmark_name,
-                        key,
-                        setup_name,
+                        dictionary=metadata_values,
+                        key_sequence=key_sequence,
                         value=metadata[key],
                     )
 

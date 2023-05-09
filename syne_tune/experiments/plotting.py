@@ -29,6 +29,7 @@ from syne_tune.experiments.results_utils import (
     create_index_for_result_files,
     load_results_dataframe_per_benchmark,
     download_result_files_from_s3,
+    _insert_into_nested_dict,
 )
 from syne_tune.try_import import try_import_visual_message
 
@@ -104,14 +105,15 @@ class SubplotParameters:
 @dataclass
 class ShowTrialParameters:
     """
-    Parameters specifying the ``show_one_trial`` feature. This features adds
+    Parameters specifying the ``show_init_trials`` feature. This features adds
     one more curve to each subplot where ``setup_name`` features. This curve
-    shows the metric for one trial only (with ``trial_id``). The right-most
-    value is extended as constant line across the remainder of the x-axis, for
-    better visibility.
+    shows best metric value found for trials with ID ``<= trial_id``. The
+    right-most value is extended as constant line across the remainder of the
+    x-axis, for better visibility.
 
     :param setup_name: Setup from which the trial performance is taken
-    :param trial_id: ID of trial. Defaults to 0
+    :param trial_id: ID of trial. Defaults to 0. If this is positive, data
+        from trials with IDs ``<= trial_id`` are shown
     :param new_setup_name: Name of the additional curve in legends
     """
 
@@ -173,8 +175,7 @@ class PlotParameters:
     :param grid: Figure with grid? Defaults to ``False``
     :param subplots: If given, the figure consists of several subplots. See
          :class:`SubplotParameters`
-    :param show_one_trial: If given, the "show one trial" feature is activated,
-        see :class:`ShowTrialParameters`
+    :param show_init_trials: See :class:`ShowTrialParameters`
     """
 
     metric: str = None
@@ -190,7 +191,7 @@ class PlotParameters:
     dpi: int = None
     grid: bool = None
     subplots: SubplotParameters = None
-    show_one_trial: ShowTrialParameters = None
+    show_init_trials: ShowTrialParameters = None
 
     def merge_defaults(self, default_params: "PlotParameters") -> "PlotParameters":
         new_params = _impute_with_defaults(
@@ -230,13 +231,13 @@ class PlotParameters:
             new_params["subplots"] = self.subplots.merge_defaults(
                 default_params.subplots
             )
-        if self.show_one_trial is None:
-            new_params["show_one_trial"] = default_params.show_one_trial
-        elif default_params.show_one_trial is None:
-            new_params["show_one_trial"] = self.show_one_trial
+        if self.show_init_trials is None:
+            new_params["show_init_trials"] = default_params.show_init_trials
+        elif default_params.show_init_trials is None:
+            new_params["show_init_trials"] = self.show_init_trials
         else:
-            new_params["show_one_trial"] = self.show_one_trial.merge_defaults(
-                default_params.show_one_trial
+            new_params["show_init_trials"] = self.show_init_trials.merge_defaults(
+                default_params.show_init_trials
             )
         return PlotParameters(**new_params)
 
@@ -298,7 +299,13 @@ class ComparativeResults:
 
     If ``metadata_keys`` is given, it contains a list of keys into the
     metadata. In this case, metadata values for these keys are extracted and
-    can be retrieved with :meth:`metadata_values`.
+    can be retrieved with :meth:`metadata_values`. In fact,
+    ``metadata_values(benchmark_name)`` returns a nested dictionary, where
+    ``result[key][setup_name]`` is a list of values. If
+    ``metadata_subplot_level`` is ``True`` and ``metadata_to_subplot`` is
+    given, the result structure is ``result[key][setup_name][subplot_no]``.
+    This should be set if different subplots share the same setup names,
+    since otherwise metadata values are only grouped by setup name.
 
     :param experiment_names: Tuple of experiment names (prefixes, without the
         timestamps)
@@ -315,6 +322,7 @@ class ComparativeResults:
     :param with_subdirs: See above. Defaults to "*"
     :param datetime_bounds: See above
     :param metadata_keys: See above
+    :param metadata_subplot_level: See above. Defaults to ``False``
     :param download_from_s3: Should result files be downloaded from S3? This
         is supported only if ``with_subdirs``
     :param s3_bucket: Only if ``download_from_s3 == True``. If not given, the
@@ -333,6 +341,7 @@ class ComparativeResults:
         with_subdirs: Optional[Union[str, List[str]]] = "*",
         datetime_bounds: Optional[DateTimeBounds] = None,
         metadata_keys: Optional[List[str]] = None,
+        metadata_subplot_level: bool = False,
         download_from_s3: bool = False,
         s3_bucket: Optional[str] = None,
     ):
@@ -346,6 +355,7 @@ class ComparativeResults:
             metadata_to_setup=metadata_to_setup,
             metadata_to_subplot=metadata_to_subplot,
             metadata_keys=metadata_keys,
+            metadata_subplot_level=metadata_subplot_level,
             benchmark_key=benchmark_key,
             with_subdirs=with_subdirs,
             datetime_bounds=datetime_bounds,
@@ -357,6 +367,9 @@ class ComparativeResults:
         )
         self._metadata_values = (
             None if metadata_keys is None else result["metadata_values"]
+        )
+        self._metadata_subplot_level = metadata_subplot_level and (
+            metadata_to_subplot is not None
         )
         self.setups = tuple(setups)
         self.num_runs = num_runs
@@ -372,6 +385,18 @@ class ComparativeResults:
         return benchmark_name
 
     def metadata_values(self, benchmark_name: Optional[str] = None) -> Dict[str, Any]:
+        """
+        The nested dictionary returned has the structure
+        ``result[key][setup_name]``, or ``result[key][setup_name][subplot_no]``
+        if ``metadata_subplot_level == True``.
+
+        :param benchmark_name: Name of benchmark
+        :return: Nested dictionary with meta-data values
+        """
+        assert self._metadata_values is not None, (
+            "Specify metadata_keys when constructing ComparativeResults if you "
+            "want to extract meta-data values"
+        )
         benchmark_name = self._check_benchmark_name(benchmark_name)
         return self._metadata_values[benchmark_name]
 
@@ -401,19 +426,13 @@ class ComparativeResults:
         metric_multiplier = plot_params.metric_multiplier
         xlim = plot_params.xlim
         aggregate_mode = plot_params.aggregate_mode
-        show_one_trial = plot_params.show_one_trial
-        do_show_one_trial = show_one_trial is not None
+        show_init_trials = plot_params.show_init_trials
+        do_show_init_trials = show_init_trials is not None
         setup_names = self.setups
-        if extra_results_keys is not None:
-            extra_results = {
-                setup_name: {key: [] for key in extra_results_keys}
-                for setup_name in setup_names
-            }
-        else:
-            extra_results = None
-        if do_show_one_trial:
+        extra_results = dict()
+        if do_show_init_trials:
             # Put extra name at the end
-            setup_names = setup_names + (show_one_trial.new_setup_name,)
+            setup_names = setup_names + (show_init_trials.new_setup_name,)
 
         stats = [[None] * len(setup_names) for _ in range(num_subplots)]
         for (subplot_no, setup_name), setup_df in df.groupby(
@@ -421,12 +440,12 @@ class ComparativeResults:
         ):
             if subplot_xlims is not None:
                 xlim = (0, subplot_xlims[subplot_no])
-            if do_show_one_trial and show_one_trial.setup_name == setup_name:
+            if do_show_init_trials and show_init_trials.setup_name == setup_name:
                 num_iter = 2
             else:
                 num_iter = 1
             max_rt = None
-            # If this setup is named as ``show_one_trial.setup_name``, we need
+            # If this setup is named as ``show_init_trials.setup_name``, we need
             # to go over the data 2x. The first iteration is as usual, the
             # second extracts the information for the single trial and extends
             # the curve.
@@ -434,9 +453,9 @@ class ComparativeResults:
                 one_trial_special = it == 1
                 if one_trial_special:
                     # Filter down the dataframe
-                    trial_id = show_one_trial.trial_id
-                    setup_df = setup_df[setup_df["trial_id"] == trial_id]
-                    new_setup_name = show_one_trial.new_setup_name
+                    trial_id = show_init_trials.trial_id
+                    setup_df = setup_df[setup_df["trial_id"] <= trial_id]
+                    new_setup_name = show_init_trials.new_setup_name
                     prev_max_rt = max_rt
                 else:
                     new_setup_name = setup_name
@@ -470,11 +489,18 @@ class ComparativeResults:
                     trial_nums.append(len(sub_df.trial_id.unique()))
                     # Collect extra results
                     if extra_results_keys is not None and not one_trial_special:
-                        extra_dict = extra_results[setup_name]
+                        if self._metadata_subplot_level:
+                            key_sequence = [setup_name, subplot_no]
+                        else:
+                            key_sequence = [setup_name]
                         final_pos = sub_df[ST_TUNER_TIME].idxmax()
                         final_row = dict(sub_df.loc[final_pos])
                         for key in extra_results_keys:
-                            extra_dict[key].append(final_row[key])
+                            _insert_into_nested_dict(
+                                dictionary=extra_results,
+                                key_sequence=key_sequence + [key],
+                                value=final_row[key],
+                            )
 
                 setup_id = setup_names.index(new_setup_name)
                 stats[subplot_no][setup_id] = aggregate_and_errors_over_time(
@@ -580,28 +606,30 @@ class ComparativeResults:
         plot_params: Optional[PlotParameters] = None,
         file_name: Optional[str] = None,
         extra_results_keys: Optional[List[str]] = None,
-    ) -> Optional[Dict[str, Dict[str, List[float]]]]:
+    ) -> Optional[Dict[str, Any]]:
         """
         Create comparative plot from results of all experiments collected at
         construction, for benchmark ``benchmark_name`` (if there is a single
         benchmark only, this need not be given).
 
-        If ``plot_params.show_one_trial`` is given, the metric value for a
-        particular trial ``plot_params.show_one_trial.trial_id`` in a particular
-        setup ``plot_params.show_one_trial.setup_name``is shown in all subplots
-        the setup is contained in. This is useful to contrast the performance
-        of methods against the performance for one particular trial, for example
-        the initial configuration (i.e., to show how much this can be improved
-        upon). The final metric value of this trial is extended until the end
-        of the horizontal range, in order to make it visible. The corresponding
-        curve is labeled with ``plot_params.show_one_trial.new_setup_name`` in
-        the legend.
+        If ``plot_params.show_init_trials`` is given, the best metric value
+        curve for the data from trials ``<=  plot_params.show_init_trials.trial_id``
+        in a particular setup ``plot_params.show_init_trials.setup_name``is
+        shown in all subplots the setup is contained in. This is useful to
+        contrast the performance of methods against the performance for one
+        particular trial, for example the initial configuration (i.e., to show
+        how much this can be improved upon). The final metric value of this extra
+        curve is extended until the end of the horizontal range, in order to make
+        it visible. The corresponding curve is labeled with
+        ``plot_params.show_init_trials.new_setup_name`` in the legend.
 
         If ``extra_results_keys``is given, these are column names in the result
         dataframe. For each setup and seed, we collect the values for the
         largest time stamp. We return a nested dictionary ``extra_results``, so
         that ``extra_results[setup_name][key]`` contains values (over seeds),
-        where ``key`` is in ``extra_results_keys``.
+        where ``key`` is in ``extra_results_keys``. If ``metadata_subplot_level``
+        is ``True`` and ``metadata_to_subplot`` is given, the structure is
+        ``extra_results[setup_name][subplot_no][key]``
 
         :param benchmark_name: Name of benchmark for which to plot results.
             Not needed if there is only one benchmark

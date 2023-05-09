@@ -1,4 +1,4 @@
-Visualization of Results over many Experiments
+Visualization of Results from many Experiments
 ==============================================
 
 Apart from troubleshooting, visualizing the results of a single experiment is
@@ -106,8 +106,209 @@ The figure for benchmark ``nas201-cifar-100`` looks as follows:
 * If we pass ``file_name`` as argument to ``results.plot``, the figure is
   stored in this file.
 
+.. note::
+   If suplots are used, the grouping is w.r.t. ``(subplot, setup)``, not
+   just by ``setup``. This means you can use the same setup name in
+   different subplots to show different data. For example, your study may
+   have run a range of methods under different conditions (say, different
+   variants of the configuration space). You can then map these conditions
+   to subplots and show the *same* setups in each subplot. In any case, the
+   mapping of setups to colors is fixed and the same in every subplot.
+
 Additional Features
 -------------------
 
-HIER: Go through all other options. Provide example code snippets, but no
-figures!
+In this section, we discuss additional features, allowing you to customize
+your result plots.
+
+Combining Results from Multiple Studies
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+HPO experiments are expensive to do, so you want to avoid re-running them
+for baselines over and over. Our plotting tools allow you to easily combine
+results across multiple studies.
+
+As an example, say we would like to relate our ``docs-1`` results to what
+random search and Bayesian optimization do on the same benchmarks. These
+baseline results were already obtained as part of an earlier study
+``baselines-1``, in which a number of methods were compared, among them ``RS``
+and ``BO``. As an additional complication, the earlier study used 30
+repetitions (or seeds), while ``docs-1`` uses 15. Here is the modification of
+the code above in order to include these additional baseline results in the
+plot on the right side. First, we need to replace ``metadata_to_setup`` and
+``SETUPS_RIGHT``:
+
+.. code-block:: python
+
+   def metadata_to_setup(metadata: Dict[str, Any]) -> Optional[str]:
+       algorithm = metadata["algorithm"]
+       tag = metadata["tag"]
+       seed = int(metadata["seed"])
+       # Filter out experiments from "baselines-1" we don't want to compare
+       # against
+       if tag == "baselines-1" and (seed >= 15 or algorithm not in ("RS", "BO")):
+           return None
+       else:
+           return algorithm
+
+
+   SETUPS_RIGHT = ("ASHA", "SYNCHB", "BOHB", "RS", "BO")
+
+There are now two more setups, "RS" and "BO", whose results come from the
+earlier ``baselines-1`` study. Now, ``ComparativeResults`` has to be created
+differently:
+
+.. code-block:: python
+
+   experiment_names = experiment_names + ("baselines-1",)
+   setups = setups + ["RS", "BO"]
+   results = ComparativeResults(
+       experiment_names=experiment_names,
+       setups=setups,
+       num_runs=num_runs,
+       metadata_to_setup=metadata_to_setup,
+       plot_params=plot_params,
+       metadata_to_subplot=metadata_to_subplot,
+       download_from_s3=download_from_s3,
+   )
+
+.. note::
+   If you intend to combine results from several different studies, it is
+   recommended to use the same random seed (specified as ``--random_seed``),
+   which ensures that the same sequence of random numbers is used in each
+   experiment. This results in a so-called *paired comparison*, lowering the
+   random variations across setups. In our example, we would look up the
+   master random seed of the ``baselines-1`` study and use this for ``docs-1``
+   as well.
+
+Add Performance of Initial Trials
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+When using HPO, you often have an idea about one or several default
+configurations that should be tried first. In Syne Tune, such initial
+configurations can be specified by ``points_to_evaluate`` (see
+`here <../basics/basics_randomsearch.html#recommendations>`__ for details).
+An obvious question to ask is how long it takes for a HPO method to find a
+configuration which works significantly better than these initial ones.
+
+We can visualize the performance of initial trials by specifying
+``plot_params.show_init_trials`` of type
+:class:`~syne_tune.experiments.ShowTrialParameters`. In our ``docs-1`` study,
+``points_to_evaluate`` is not explicitly used, but the configuration of the
+first trial is selected by a mid-point heuristic. Our plotting script from
+above needs to be modified:
+
+.. code-block:: python
+
+   plot_params.show_init_trials = ShowTrialParameters(
+       setup_name="ASHA",
+       trial_id=0,
+       new_setup_name="default"
+   )
+   results = ComparativeResults(
+       experiment_names=experiment_names,
+       setups=setups,
+       num_runs=num_runs,
+       metadata_to_setup=metadata_to_setup,
+       plot_params=plot_params,
+       metadata_to_subplot=metadata_to_subplot,
+       download_from_s3=download_from_s3,
+   )
+
+Since the ``ASHA`` curve is plotted on the right side, this will add another
+curve there with label ``default``. This curve shows the best metric value,
+using data from the first trial only (``trial_id == 0``). It is extended as a
+flat constant line to the end of the horizontal range.
+
+If you specify a number of initial configurations with ``points_to_evaluate``,
+set ``ShowTrialParameters.trial_id`` to their number minus 1. The initial trials
+curve will use data from trials with ID less or equal this number.
+
+Controlling Subplots
+~~~~~~~~~~~~~~~~~~~~
+
+Our example above already creates two subplots, horizontally arranged, and we
+discussed the role of ``metadata_to_subplot``. Here, we provide extra details
+about fields in :class:`~syne_tune.experiments.SubplotParameters`, the type
+for ``plot_params.subplots``:
+
+* ``kwargs``: These arguments go directly to
+  ``matplotlib.pyplot.subplots``. They need to include "ncols" and "nrows" to
+  determine the shape of the subplot matrix. The total number of subplots is
+  ``<= ncols * nrows``. If the arguments include ``sharey="all"``, the y tick
+  labels are only created for the first column. If you use ``nrows > 1``,
+  you may want to share x tick labels as well, with ``sharex="all"``.
+* ``titles``: If ``title_each_figure == False``, this is a list of titles,
+  one for each column. If ``title_each_figure == True``, then ``titles``
+  contains a title for each subplot. If ``titles`` is not given, the
+  global title ``plot_params.title`` is printed on top of the left-most
+  column.
+* ``legend_no``: List of subfigures in which the legend is shown. The default
+  is not to show legends. In our example, there are different setups in each
+  subplot, so we want a legend in each. If your subplots show the same setups
+  under different conditions, you may want to show the legend in one of the
+  subplots only, in which case ``legend_no`` contains a single number.
+* ``xlims``: Use this if your subfigures have x axis ranges. The global
+  ``xlim`` is overwritten by ``(0, xlims[subplot_no])``.
+
+Filtering Experiments by DateTime Bounds
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Results can be filtered out by having ``metadata_to_setup`` or
+``metadata_to_subplot`` return ``None``. This is particularly useful if results
+from several studies are to be combined. Another way to filter experiments is
+using the ``datetime_bounds`` argument of
+:class:`~syne_tune.experiments.ComparativeResults`. A common use case is that
+experiments for a large study have been launched in several stages, and those
+of an early stage failed. If the corresponding result files are not removed on S3,
+the creation of ``ComparativeResults`` will complain about too many results
+being found. ``datetime_bounds`` is specified in terms of date-time strings of
+the format :const:`~syne_tune.constants.ST_DATETIME_FORMAT`, which currently is
+"YYYY-MM-DD-HH-MM-SS". For example, if results are valid from
+"2023-03-19-22-01-57" onwards, but invalid before, we can use
+``datetime_bounds=("2023-03-19-22-01-57", None)``. ``datetime_bounds`` can also
+be a dictionary with keys from ``experiment_names``, in which case bounds are
+specific to different experiment prefixes.
+
+Extract Meta-Data Values
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+Apart from plotting results, we can also retrieve meta-data values. This is
+done by passing a list of meta-data key names via ``metadata_keys`` when
+creating :class:`~syne_tune.experiments.ComparativeResults`. Afterwards, the
+corresponding meta-data values can be queried by calling
+``results.metadata_values(benchmark_name)``. The result is a nested dictionary
+``result``, so that ``result[key][setup_name]`` is a list of values, where
+``key`` is the meta-data key from ``metadata_keys``, ``setup_name`` is a setup
+name. The list contains values from all experiments mapped to this
+``setup_name``. If you use the same setup names across different subplots,
+set ``metadata_subplot_level=True``, in which case
+``results.metadata_values(benchmark_name)`` returns
+``result[key][setup_name][subplot_no]``, so the grouping w.r.t. setup names
+*and* subplots is used.
+
+Extract Final Values for Extra Results
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Syne Tune allows extra results to be stored alongside the usual metrics data,
+as shown in
+`examples/launch_height_extra_results.py <examples.html#customize-results-written-during-an-experiment>`__.
+These are simply additional columns in the result dataframe. In order to plot
+them over time, you currently need to write your own plotting scripts. If the
+best value over time approach of Syne Tune's plotting tools makes sense for
+any single column, you can just specify their name for ``plot_params.metric`
+and set ``plot_params.mode`` accordingly.
+
+However, in many cases it is sufficient to know final values for extra results,
+grouped in the same way as everything else. For example, extra results may be
+used to monitor some internals of the HPO method being used, in which case we
+may be satisfied to see these statistics at the end of experiments. If
+``extra_results_keys`` is used in
+:meth:`~syne_tune.experiments.ComparativeResults.plot`, the method returns
+a nested dictionary ``extra_results``, so that
+``extra_results[setup_name][key]`` contains a list of values (one for each
+seed) for setup ``setup_name`` and ``key`` an extra result name from
+``extra_results_keys``. As `above <#extract-meta-data-values>`__, if
+``metadata_subplot_level=True`` at construction of
+:class:`~syne_tune.experiments.ComparativeResults`, the structure of the
+dictionary is ``extra_results[setup_name][subplot_no][key]``.
