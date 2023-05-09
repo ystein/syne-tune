@@ -292,7 +292,7 @@ def create_index_for_result_files(
                 if key in metadata:
                     key_sequence = [benchmark_name, key, setup_name]
                     if metadata_subplot_level:
-                        key_sequence.append(subprocess)
+                        key_sequence.append(subplot_no)
                     _insert_into_nested_dict(
                         dictionary=metadata_values,
                         key_sequence=key_sequence,
