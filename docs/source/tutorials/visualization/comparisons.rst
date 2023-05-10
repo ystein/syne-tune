@@ -110,9 +110,9 @@ The figure for benchmark ``nas201-cifar-100`` looks as follows:
    If suplots are used, the grouping is w.r.t. ``(subplot, setup)``, not
    just by ``setup``. This means you can use the same setup name in
    different subplots to show different data. For example, your study may
-   have run a range of methods under different conditions (say, different
-   variants of the configuration space). You can then map these conditions
-   to subplots and show the *same* setups in each subplot. In any case, the
+   have run a range of methods under different conditions (say, using a
+   different number of workers). You can then map these conditions to
+   subplots and show the *same* setups in each subplot. In any case, the
    mapping of setups to colors is fixed and the same in every subplot.
 
 Additional Features
@@ -292,11 +292,11 @@ Extract Final Values for Extra Results
 
 Syne Tune allows extra results to be stored alongside the usual metrics data,
 as shown in
-`examples/launch_height_extra_results.py <examples.html#customize-results-written-during-an-experiment>`__.
+`examples/launch_height_extra_results.py <../../examples.html#customize-results-written-during-an-experiment>`__.
 These are simply additional columns in the result dataframe. In order to plot
 them over time, you currently need to write your own plotting scripts. If the
 best value over time approach of Syne Tune's plotting tools makes sense for
-any single column, you can just specify their name for ``plot_params.metric`
+any single column, you can just specify their name for ``plot_params.metric``
 and set ``plot_params.mode`` accordingly.
 
 However, in many cases it is sufficient to know final values for extra results,

@@ -148,7 +148,7 @@ mechanism by passing a :class:`~syne_tune.results_callback.ExtraResultsComposer`
 object as ``extra_results`` to ``main``. This object extracts extra information
 and returns it as dictionary, which is appended to the results dataframe. A
 complete example is
-``benchmarking/nursery/benchmark_dyhpo <../../benchmarking/benchmark_dyhpo.html>`__.
+`benchmarking/nursery/benchmark_dyhpo <../../benchmarking/benchmark_dyhpo.html>`__.
 
 Launching Experiments Locally
 -----------------------------

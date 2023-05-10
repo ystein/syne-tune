@@ -22,7 +22,7 @@ using 15 random repetitions (or seeds). This is the command:
      --experiment_tag docs-1 --random_seed 2965402734 --num_seeds 15
 
 Note that we fix the seed here in order to obtain repeatable results. Recall
-from `here <bm_simulator.html#defining-the-experiment>`__ that we compare 7
+from `here <../benchmarking/bm_simulator.html#defining-the-experiment>`__ that we compare 7
 methods on 12 surrogate benchmarks:
 
 * Since 4 of the 7 methods are "expensive", the above command launches
