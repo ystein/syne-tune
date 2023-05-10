@@ -32,7 +32,7 @@ What's New?
 -----------
 
 * You can now create comparative plots, combining the results of many experiments,
-  as show `here <tutorials/benchmarking/bm_plotting.html>`__.
+  as show `here <tutorials/visualization/README.html>`__.
 * Local Backend supports
   `training with more than one GPU per trial <faq.html#how-can-i-utilize-multiple-gpus>`__.
 * Speculative early checkpoint removal for asynchronous multi-fidelity optimization.
