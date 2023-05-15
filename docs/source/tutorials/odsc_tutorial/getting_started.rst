@@ -60,7 +60,7 @@ problem to come up with one. We start with an example
 Ignoring the boilerplate, here are the important parts. First, we define the
 hyperparameters which should be optimized over:
 
-.. literalinclude:: ../../benchmarking/nursery/odsc_tutorial/transformer_wikitext2/code/training_script_report_end.py
+.. literalinclude:: ../../../../benchmarking/nursery/odsc_tutorial/transformer_wikitext2/code/training_script_report_end.py
    :caption: training_script_report_end.py -- hyperparameters
    :start-at: from syne_tune import Reporter
    :end-before: DATASET_PATH =
@@ -74,7 +74,7 @@ hyperparameters which should be optimized over:
 
 Next, here is the function which executes a trial:
 
-.. literalinclude:: ../../benchmarking/nursery/odsc_tutorial/transformer_wikitext2/code/training_script_report_end.py
+.. literalinclude:: ../../../../benchmarking/nursery/odsc_tutorial/transformer_wikitext2/code/training_script_report_end.py
    :caption: training_script_report_end.py -- objective
    :start-at: def objective(config):
    :end-at: print("Exiting from training early")
@@ -92,7 +92,7 @@ Next, here is the function which executes a trial:
 
 Finally, the script needs some command line arguments:
 
-.. literalinclude:: ../../benchmarking/nursery/odsc_tutorial/transformer_wikitext2/code/training_script_report_end.py
+.. literalinclude:: ../../../../benchmarking/nursery/odsc_tutorial/transformer_wikitext2/code/training_script_report_end.py
    :caption: training_script_report_end.py -- command line arguments
    :start-at: parser = argparse.ArgumentParser(
 
@@ -116,7 +116,7 @@ inputs, you also need to define a configuration space. In our example, we
 add this definition to the script, but you can also keep it separate and
 use the same training script with different configuration spaces:
 
-.. literalinclude:: ../../benchmarking/nursery/odsc_tutorial/transformer_wikitext2/code/training_script_report_end.py
+.. literalinclude:: ../../../../benchmarking/nursery/odsc_tutorial/transformer_wikitext2/code/training_script_report_end.py
    :caption: training_script_report_end.py -- configuration space
    :start-at: _config_space = {
    :end-before: DATASET_PATH =
@@ -140,7 +140,7 @@ life of most users easier, and we will use this tooling in the rest of the
 tutorial. To this end, we need to define some defaults about how experiments
 are to be run (most of these can be overwritten by command line arguments):
 
-.. literalinclude:: ../../benchmarking/nursery/odsc_tutorial/transformer_wikitext2/code/transformer_wikitext2_definition.py
+.. literalinclude:: ../../../../benchmarking/nursery/odsc_tutorial/transformer_wikitext2/code/transformer_wikitext2_definition.py
    :caption: transformer_wikitext2_definition.py
    :start-after: # permissions and limitations under the License.
 

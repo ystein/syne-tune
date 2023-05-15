@@ -35,7 +35,7 @@ try:
 except ImportError:
     print("Failed to import apex. You can still train with --precision {float|double}.")
 
-from syne_tune.report import Reporter
+from syne_tune import Reporter
 from syne_tune.config_space import randint, uniform, loguniform, add_to_argparse
 from syne_tune.utils import (
     resume_from_checkpointed_model,

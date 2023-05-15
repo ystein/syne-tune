@@ -32,7 +32,7 @@ number of HPO methods, or the same method on different variations, such as
 different number of workers, or different configuration spaces. First,
 we specify which methods to compare with each other:
 
-.. literalinclude:: ../../benchmarking/nursery/odsc_tutorial/transformer_wikitext2/baselines.py
+.. literalinclude:: ../../../../benchmarking/nursery/odsc_tutorial/transformer_wikitext2/baselines.py
    :caption: transformer_wikitext2/baselines.py
    :start-after: # permissions and limitations under the License.
 
@@ -42,7 +42,7 @@ each method only in that we use the ``promotion`` (or pause-and-resume)
 variant of the latter two. Next, we specify which baselines we would like
 to consider in our study:
 
-.. literalinclude:: ../../benchmarking/nursery/odsc_tutorial/transformer_wikitext2/benchmark_definitions.py
+.. literalinclude:: ../../../../benchmarking/nursery/odsc_tutorial/transformer_wikitext2/benchmark_definitions.py
    :caption: transformer_wikitext2/benchmark_definitions.py
    :start-after: # permissions and limitations under the License.
 

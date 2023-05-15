@@ -32,7 +32,7 @@ training script,
 `training_script_no_checkpoints.py <training_scripts.html#reporting-after-each-epoch>`__,
 enables multi-fidelity tuning. The relevant part is this:
 
-.. literalinclude:: ../../benchmarking/nursery/odsc_tutorial/transformer_wikitext2/code/training_script_no_checkpoints.py
+.. literalinclude:: ../../../../benchmarking/nursery/odsc_tutorial/transformer_wikitext2/code/training_script_no_checkpoints.py
    :caption: training_script_no_checkpoints.py -- objective
    :start-at: def objective(config):
    :end-at: print("Exiting from training early")
@@ -65,7 +65,7 @@ training script,
 `training_script.py <training_scripts.html#reporting-after-each-epoch-with-checkpointing>`__,
 enables checkpointing. The relevant part is this:
 
-.. literalinclude:: ../../benchmarking/nursery/odsc_tutorial/transformer_wikitext2/code/training_script.py
+.. literalinclude:: ../../../../benchmarking/nursery/odsc_tutorial/transformer_wikitext2/code/training_script.py
    :caption: training_script.py -- objective
    :start-at: def objective(config):
    :end-at: print("Exiting from training early")

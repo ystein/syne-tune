@@ -21,8 +21,3 @@ The example code used in this tutorial is located in
    getting_started
    multi_fidelity
    comparison
-
-   real_benchmarks_local
-   real_benchmarks_sagemaker
-   different_methods
-   what_is_new
