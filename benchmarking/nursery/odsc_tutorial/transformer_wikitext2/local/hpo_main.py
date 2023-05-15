@@ -10,19 +10,12 @@
 # on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
 # express or implied. See the License for the specific language governing
 # permissions and limitations under the License.
-from pathlib import Path
-
-from benchmarking.commons.launch_remote_sagemaker import launch_remote
-from benchmarking.commons.benchmark_definitions import (
-    real_benchmark_definitions as benchmark_definitions,
+from benchmarking.commons.hpo_main_local import main
+from benchmarking.nursery.odsc_tutorial.transformer_wikitext2.baselines import methods
+from benchmarking.nursery.odsc_tutorial.transformer_wikitext2.benchmark_definitions import (
+    benchmark_definitions,
 )
-from benchmarking.examples.launch_sagemaker.baselines import methods
 
 
 if __name__ == "__main__":
-    entry_point = Path(__file__).parent / "hpo_main.py"
-    launch_remote(
-        entry_point=entry_point,
-        methods=methods,
-        benchmark_definitions=benchmark_definitions,
-    )
+    main(methods, benchmark_definitions)

@@ -10,26 +10,19 @@
 # on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
 # express or implied. See the License for the specific language governing
 # permissions and limitations under the License.
-from benchmarking.commons.default_baselines import (
-    RandomSearch,
-    BayesianOptimization,
-    ASHA,
-    MOBSTER,
+from pathlib import Path
+
+from benchmarking.commons.launch_remote_sagemaker import launch_remote
+from benchmarking.nursery.odsc_tutorial.transformer_wikitext2.baselines import methods
+from benchmarking.nursery.odsc_tutorial.transformer_wikitext2.benchmark_definitions import (
+    benchmark_definitions,
 )
 
 
-class Methods:
-    RS = "RS"
-    BO = "BO"
-    ASHA = "ASHA"
-    MOBSTER = "MOBSTER"
-
-
-methods = {
-    Methods.RS: lambda method_arguments: RandomSearch(method_arguments),
-    Methods.BO: lambda method_arguments: BayesianOptimization(method_arguments),
-    Methods.ASHA: lambda method_arguments: ASHA(method_arguments, type="promotion"),
-    Methods.MOBSTER: lambda method_arguments: MOBSTER(
-        method_arguments, type="promotion"
-    ),
-}
+if __name__ == "__main__":
+    entry_point = Path(__file__).parent / "hpo_main.py"
+    launch_remote(
+        entry_point=entry_point,
+        methods=methods,
+        benchmark_definitions=benchmark_definitions,
+    )

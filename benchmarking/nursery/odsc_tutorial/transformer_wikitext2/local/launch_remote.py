@@ -13,8 +13,8 @@
 from pathlib import Path
 
 from benchmarking.commons.launch_remote_local import launch_remote
-from benchmarking.nursery.odsc_tutorial.resnet_cifar10.baselines import methods
-from benchmarking.nursery.odsc_tutorial.resnet_cifar10.benchmark_definitions import (
+from benchmarking.nursery.odsc_tutorial.transformer_wikitext2.baselines import methods
+from benchmarking.nursery.odsc_tutorial.transformer_wikitext2.benchmark_definitions import (
     benchmark_definitions,
 )
 
