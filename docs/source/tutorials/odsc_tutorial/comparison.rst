@@ -12,7 +12,7 @@ We have learned about different methods for hyperparameter tuning:
 * :class:`~syne_tune.optimizer.baselines.MOBSTER`: Combine early stopping from
   ``ASHA`` with informed sampling from ``BayesianOptimization``
 
-How do these methods compare when applied to our ``resnet_cifar10`` tuning
+How do these methods compare when applied to our ``transformer_wikitext2`` tuning
 problem? In this section, we look at comparative plots which can easily be
 generated with Syne Tune.
 
@@ -32,8 +32,8 @@ number of HPO methods, or the same method on different variations, such as
 different number of workers, or different configuration spaces. First,
 we specify which methods to compare with each other:
 
-.. literalinclude:: ../../benchmarking/nursery/odsc_tutorial/resnet_cifar10/baselines.py
-   :caption: resnet_cifar10/baselines.py
+.. literalinclude:: ../../benchmarking/nursery/odsc_tutorial/transformer_wikitext2/baselines.py
+   :caption: transformer_wikitext2/baselines.py
    :start-after: # permissions and limitations under the License.
 
 We compare random search (``RS``), Bayesian Optimization (``BO``), ASHA
@@ -42,11 +42,11 @@ each method only in that we use the ``promotion`` (or pause-and-resume)
 variant of the latter two. Next, we specify which baselines we would like
 to consider in our study:
 
-.. literalinclude:: ../../benchmarking/nursery/odsc_tutorial/resnet_cifar10/benchmark_definitions.py
-   :caption: resnet_cifar10/benchmark_definitions.py
+.. literalinclude:: ../../benchmarking/nursery/odsc_tutorial/transformer_wikitext2/benchmark_definitions.py
+   :caption: transformer_wikitext2/benchmark_definitions.py
    :start-after: # permissions and limitations under the License.
 
-The only benchmark to consider here is our ``resnet_cifar10`` tuning
+The only benchmark to consider here is our ``transformer_wikitext2`` tuning
 problem, with its default configuration space. Our study has the
 following properties:
 
@@ -60,8 +60,7 @@ following properties:
 These details are specified in scripts ``hpo_main.py`` and ``launch_remote.py``,
 which we will discuss in more detail in Module 2, along with the choice of
 the execution backend. Once all experiments have finished (if all of them are
-run in parallel, this takes a little more than ``max_wallclock_time``, or 3
+run in parallel, this takes a little more than ``max_wallclock_time``, or 5
 hours), we can visualize results.
 
-HIER! This needs new plotting code!
-
+HIER! Needs new results in odsc-1 !!

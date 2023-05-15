@@ -1,13 +1,13 @@
 Multi-Fidelity Hyperparameter Tuning
 ====================================
 
-In our example above, a Resnet-18 neural network model is trained for 27 epochs
+In our example above, a transformer language model is trained for 40 epochs
 before being validated. If a configuration performs poorly, we should find out
 earlier, and a lot of time could be saved by stopping poorly performing trials
 early. This is what *multi-fidelity HPO* methods are doing. There are different
 variants:
 
-* Early stopping: Trials are not just validated after 27 epochs, but at the end
+* Early stopping: Trials are not just validated after 40 epochs, but at the end
   of every epoch. If a trial is performing worse than many others trained for
   the same number of epochs, it is stopped early.
 
@@ -24,18 +24,18 @@ Annotating a Training Script for Multi-fidelity Tuning
 ------------------------------------------------------
 
 Clearly, the training script
-`resnet_cifar10_report_end.py <training_scripts.html#reporting-once-at-the-end>`__
+`training_script_report_end.py <training_scripts.html#reporting-once-at-the-end>`__
 won't do for multi-fidelity tuning. These methods need to know validation errors
 of models after each epoch of training, while the script above only validates the
-model at the end, after 27 epochs of training. A small modification of our
+model at the end, after 40 epochs of training. A small modification of our
 training script,
-`resnet_cifar10_no_checkpoints.py <training_scripts.html#reporting-after-each-epoch>`__,
+`training_script_no_checkpoints.py <training_scripts.html#reporting-after-each-epoch>`__,
 enables multi-fidelity tuning. The relevant part is this:
 
-.. literalinclude:: ../../benchmarking/nursery/odsc_tutorial/resnet_cifar10/code/resnet_cifar10_no_checkpoints.py
-   :caption: resnet_cifar10_no_checkpoints.py -- objective
+.. literalinclude:: ../../benchmarking/nursery/odsc_tutorial/transformer_wikitext2/code/training_script_no_checkpoints.py
+   :caption: training_script_no_checkpoints.py -- objective
    :start-at: def objective(config):
-   :end-at: report(**{RESOURCE_ATTR: epoch, METRIC_NAME: valid_error})
+   :end-at: print("Exiting from training early")
 
 Instead of calling ``report`` only once, at the end, we evaluate the model and
 report back at the end of each epoch. We also need to report the number of
@@ -62,13 +62,13 @@ from where it stopped.
 Checkpointing needs to be implemented as part of the training script. Fortunately,
 Syne Tune provides some tooling to simplify this. Another modification of our
 training script,
-`resnet_cifar10.py <training_scripts.html#reporting-after-each-epoch-with-checkpointing>`__,
+`training_script.py <training_scripts.html#reporting-after-each-epoch-with-checkpointing>`__,
 enables checkpointing. The relevant part is this:
 
-.. literalinclude:: ../../benchmarking/nursery/odsc_tutorial/resnet_cifar10/code/resnet_cifar10.py
-   :caption: resnet_cifar10.py -- objective
+.. literalinclude:: ../../benchmarking/nursery/odsc_tutorial/transformer_wikitext2/code/training_script.py
+   :caption: training_script.py -- objective
    :start-at: def objective(config):
-   :end-at: report(**{RESOURCE_ATTR: epoch, METRIC_NAME: valid_error})
+   :end-at: print("Exiting from training early")
 
 Details about supporting checkpointing are given in
 `this tutorial <../basics/basics_promotion.html#pause-and-resume-checkpointing-of-trials>`__.
@@ -79,7 +79,7 @@ from the same place. If one is found, the training loop skips all epochs already
 done. If not, it starts from scratch as usual.
 
 At this point, we have a final version,
-`resnet_cifar10.py <training_scripts.html#reporting-after-each-epoch-with-checkpointing>`__,
+`training_script.py <training_scripts.html#reporting-after-each-epoch-with-checkpointing>`__,
 of our training script, which can be used with all HPO methods in Syne Tune.
 While earlier versions are simpler to implement, we recommend to include
 reporting in every epoch and checkpointing in any training script you care
