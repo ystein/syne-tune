@@ -37,12 +37,6 @@ except ImportError:
 
 from syne_tune.report import Reporter
 from syne_tune.config_space import randint, uniform, loguniform, add_to_argparse
-from syne_tune.utils import (
-    resume_from_checkpointed_model,
-    checkpoint_model_at_rung_level,
-    add_checkpointing_to_argparse,
-    pytorch_load_save_functions,
-)
 
 
 METRIC_NAME = "val_loss"
@@ -327,29 +321,9 @@ def objective(config):
             model, optimizer, opt_level="O1", min_loss_scale=0.0001, verbosity=0
         )
 
-    # Checkpointing
-    # Note that ``best_val_loss`` and ``logs`` are also part of the state to be
-    # checkpointed. In order for things to work out, we keep them in a
-    # dict (otherwise, they'd not be mutable in ``load_model_fn``,
-    # ``save_model_fn``).
-    mutable_state = {"best_val_loss": None, "logs": []}
-    state_dict_objects = {
-        "model": model,
-        "optimizer": optimizer,
-    }
-    if precision == "half":
-        state_dict_objects["amp"] = amp
-
-    load_model_fn, save_model_fn = pytorch_load_save_functions(
-        state_dict_objects=state_dict_objects,
-        mutable_state=mutable_state,
-    )
-    # Resume from checkpoint (optional)
-    resume_from = resume_from_checkpointed_model(config, load_model_fn)
-
     # At any point you can hit Ctrl + C to break out of training early.
     try:
-        for epoch in range(resume_from + 1, config[MAX_RESOURCE_ATTR] + 1):
+        for epoch in range(1, config[MAX_RESOURCE_ATTR] + 1):
             train_loss, first_loss = train(optimizer, epoch)
             val_loss = evaluate(val_data)
             print("-" * 89)
@@ -358,19 +332,6 @@ def objective(config):
                 f"valid ppl {np.exp(val_loss):8.2f}"
             )
             print("-" * 89)
-            mutable_state["logs"].append(
-                dict(
-                    epoch=epoch,
-                    train_loss=train_loss,
-                    val_loss=val_loss,
-                    first_loss=first_loss,
-                )
-            )
-            best_val_loss = mutable_state["best_val_loss"]
-            if not best_val_loss or val_loss < best_val_loss:
-                mutable_state["best_val_loss"] = val_loss
-            # Write checkpoint (optional)
-            checkpoint_model_at_rung_level(config, save_model_fn, epoch)
             # Report validation loss back to Syne Tune
             report(**{RESOURCE_ATTR: epoch, METRIC_NAME: val_loss})
 
@@ -522,7 +483,6 @@ if __name__ == "__main__":
         help="the number of heads in the encoder/decoder of the transformer model",
     )
     add_to_argparse(parser, _config_space)
-    add_checkpointing_to_argparse(parser)
 
     args, _ = parser.parse_known_args()
     args.use_cuda = bool(args.use_cuda)

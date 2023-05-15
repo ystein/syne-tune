@@ -56,36 +56,35 @@ Annotating a Training Script
 First, we need a script to execute a trial, by training a model and evaluating it.
 Since training models is bread and butter to machine learners, you will have no
 problem to come up with one. We start with an example
-`resnet_cifar10_report_end.py <training_scripts.html#reporting-once-at-the-end>`__.
+`training_script_report_end.py <training_scripts.html#reporting-once-at-the-end>`__.
 Ignoring the boilerplate, here are the important parts. First, we define the
 hyperparameters which should be optimized over:
 
-.. literalinclude:: ../../benchmarking/nursery/odsc_tutorial/resnet_cifar10/code/resnet_cifar10_report_end.py
-   :caption: resnet_cifar10_report_end.py -- hyperparameters
+.. literalinclude:: ../../benchmarking/nursery/odsc_tutorial/transformer_wikitext2/code/training_script_report_end.py
+   :caption: training_script_report_end.py -- hyperparameters
    :start-at: from syne_tune import Reporter
-   :end-before: # ATTENTION: train_dataset, valid_dataset
+   :end-before: DATASET_PATH =
 
 * The keys of ``_config_space`` are the hyperparameters we would like to tune
-  (``batch_size``, ``momentum``, ``weight_decay``, ``lr``). It also defines their
-  ranges and datatypes, we come back to this
+  (``lr``, ``dropout``, ``batch_size``, ``momentum``, ``clip``). It also defines
+  their ranges and datatypes, we come back to this
   `below <#choosing-a-configuration-space>`__.
 * ``METRIC_NAME`` is the name of the target metric returned, ``MAX_RESOURCE_ATTR``
   the key name for how many epochs to train.
 
 Next, here is the function which executes a trial:
 
-.. literalinclude:: ../../benchmarking/nursery/odsc_tutorial/resnet_cifar10/code/resnet_cifar10_report_end.py
-   :caption: resnet_cifar10_report_end.py -- objective
+.. literalinclude:: ../../benchmarking/nursery/odsc_tutorial/transformer_wikitext2/code/training_script_report_end.py
+   :caption: training_script_report_end.py -- objective
    :start-at: def objective(config):
-   :end-at: report(**{METRIC_NAME: valid_error})
+   :end-at: print("Exiting from training early")
 
 * The input ``config`` to ``objective`` is a configuration dictionary, containing
   values for the hyperparameters, as well as for ``MAX_RESOURCE_ATTR``.
 * We start with downloading training and validation data, which is part of
   ``PyTorch`` in this case. The training loader depends on hyperparameter
   ``batch_size``.
-* Next, we create model, optimizer and learning rate scheduler. This depends on
-  hyperparameters ``momentum``, ``weight_decay``, ``lr``.
+* Next, we create model and optimizer. This depends on the remaining hyperparameters.
 * We then run ``config[MAX_RESOURCE_ATTR]`` epochs of training.
 * Finally, we compute the error on the validation data and report it back to
   Syne Tune. The latter is done by creating ``report`` of type ``Reporter`` and
@@ -93,9 +92,9 @@ Next, here is the function which executes a trial:
 
 Finally, the script needs some command line arguments:
 
-.. literalinclude:: ../../benchmarking/nursery/odsc_tutorial/resnet_cifar10/code/resnet_cifar10_report_end.py
-   :caption: resnet_cifar10_report_end.py -- command line arguments
-   :start-at: if __name__ == "__main__":
+.. literalinclude:: ../../benchmarking/nursery/odsc_tutorial/transformer_wikitext2/code/training_script_report_end.py
+   :caption: training_script_report_end.py -- command line arguments
+   :start-at: parser = argparse.ArgumentParser(
 
 * We use an argument parser ``parser``. Hyperparameters can be added by
   ``add_to_argparse(parser, _config_space)``, given the configuration space is
@@ -117,14 +116,14 @@ inputs, you also need to define a configuration space. In our example, we
 add this definition to the script, but you can also keep it separate and
 use the same training script with different configuration spaces:
 
-.. literalinclude:: ../../benchmarking/nursery/odsc_tutorial/resnet_cifar10/code/resnet_cifar10_report_end.py
-   :caption: resnet_cifar10_report_end.py -- configuration space
+.. literalinclude:: ../../benchmarking/nursery/odsc_tutorial/transformer_wikitext2/code/training_script_report_end.py
+   :caption: training_script_report_end.py -- configuration space
    :start-at: _config_space = {
-   :end-before: # ATTENTION: train_dataset, valid_dataset
+   :end-before: DATASET_PATH =
 
 * Each hyperparameters gets assigned a data type and a range. In this example,
-  ``batch_size`` is an integer, while ``momentum``, ``weight_decay``, ``lr``
-  are floats, the latter two are encoded on a log scale.
+  ``batch_size`` is an integer, while ``lr``, ``dropout``, ``momentum``, ``clip``
+  are floats. ``lr`` is encoded in log scale.
 
 Syne Tune provides a range of data types. Choosing them well requires a bit of
 attention, guidelines are given `here <../../search_space.html>`__.
@@ -141,11 +140,11 @@ life of most users easier, and we will use this tooling in the rest of the
 tutorial. To this end, we need to define some defaults about how experiments
 are to be run (most of these can be overwritten by command line arguments):
 
-.. literalinclude:: ../../benchmarking/nursery/odsc_tutorial/resnet_cifar10/code/resnet_cifar10_definition.py
-   :caption: resnet_cifar10_definition.py
+.. literalinclude:: ../../benchmarking/nursery/odsc_tutorial/transformer_wikitext2/code/transformer_wikitext2_definition.py
+   :caption: transformer_wikitext2_definition.py
    :start-after: # permissions and limitations under the License.
 
-All you need to do is to provide a function (``resnet_cifar10_benchmark`` here)
+All you need to do is to provide a function (``transformer_wikitext2_benchmark`` here)
 which returns an instance of
 :class:`~benchmarking.commons.benchmark_definitions.common.RealBenchmarkDefinition`.
 The most important fields are:
@@ -155,12 +154,12 @@ The most important fields are:
   of two parts. First, the hyperparameters from ``_config``, already discussed
   `above <#choosing-a-configuration-space>`__. Second, ``fixed_parameters`` are
   passed to each trial as they are. In particular, we would like to train for
-  27 epochs, so pass ``{MAX_RESOURCE_ATTR: 27}``.
+  40 epochs, so pass ``{MAX_RESOURCE_ATTR: 40}``.
 * ``metric``, ``max_resource_attr``, ``resource_attr``: Names of inputs to and
   metrics reported from the training script. If ``mode == "max"``, the target
   metric ``metric`` is maximized, if ``mode == "min"``, it is minimized.
-* ``max_wallclock_time``: Wallclock time the experiment is going to run (3 hours
+* ``max_wallclock_time``: Wallclock time the experiment is going to run (5 hours
   in our example).
 * ``n_workers``: Maximum number of trials which run in parallel (4 in our
   example). The achievable degree of parallelism may be lower, depending on
-  which execution backend is used and on which hardware instance we run.
+  which execution backend is used and which hardware instance we run on.
