@@ -35,7 +35,7 @@ enables multi-fidelity tuning. The relevant part is this:
 .. literalinclude:: ../../../../benchmarking/nursery/odsc_tutorial/transformer_wikitext2/code/training_script_no_checkpoints.py
    :caption: training_script_no_checkpoints.py -- objective
    :start-at: def objective(config):
-   :end-at: print("Exiting from training early")
+   :end-at: report(**{RESOURCE_ATTR: epoch, METRIC_NAME: val_loss})
 
 Instead of calling ``report`` only once, at the end, we evaluate the model and
 report back at the end of each epoch. We also need to report the number of
@@ -46,8 +46,8 @@ the trial may continue or should be stopped.
 Checkpointing
 -------------
 
-Instead of stopping underperforming trials, some multi-fidelity methods rather
-pause trials. Any paused trial can be resumed in the future if there is evidence
+Instead of *stopping* underperforming trials, some multi-fidelity methods rather
+*pause* trials. Any paused trial can be resumed in the future if there is evidence
 that it outperforms the majority of other trials. If training is very expensive,
 pause-and-resume scheduling can work better than early stopping, because any
 pause decision can be revisited in the future, while a stopping decision is
@@ -68,7 +68,7 @@ enables checkpointing. The relevant part is this:
 .. literalinclude:: ../../../../benchmarking/nursery/odsc_tutorial/transformer_wikitext2/code/training_script.py
    :caption: training_script.py -- objective
    :start-at: def objective(config):
-   :end-at: print("Exiting from training early")
+   :end-at: report(**{RESOURCE_ATTR: epoch, METRIC_NAME: val_loss})
 
 Details about supporting checkpointing are given in
 `this tutorial <../basics/basics_promotion.html#pause-and-resume-checkpointing-of-trials>`__.

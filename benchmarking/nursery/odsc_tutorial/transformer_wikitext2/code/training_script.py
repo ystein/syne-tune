@@ -347,36 +347,30 @@ def objective(config):
     # Resume from checkpoint (optional)
     resume_from = resume_from_checkpointed_model(config, load_model_fn)
 
-    # At any point you can hit Ctrl + C to break out of training early.
-    try:
-        for epoch in range(resume_from + 1, config[MAX_RESOURCE_ATTR] + 1):
-            train_loss, first_loss = train(optimizer, epoch)
-            val_loss = evaluate(val_data)
-            print("-" * 89)
-            print(
-                f"| end of epoch {epoch:3d} | valid loss {val_loss:5.2f} | "
-                f"valid ppl {np.exp(val_loss):8.2f}"
-            )
-            print("-" * 89)
-            mutable_state["logs"].append(
-                dict(
-                    epoch=epoch,
-                    train_loss=train_loss,
-                    val_loss=val_loss,
-                    first_loss=first_loss,
-                )
-            )
-            best_val_loss = mutable_state["best_val_loss"]
-            if not best_val_loss or val_loss < best_val_loss:
-                mutable_state["best_val_loss"] = val_loss
-            # Write checkpoint (optional)
-            checkpoint_model_at_rung_level(config, save_model_fn, epoch)
-            # Report validation loss back to Syne Tune
-            report(**{RESOURCE_ATTR: epoch, METRIC_NAME: val_loss})
-
-    except KeyboardInterrupt:
+    for epoch in range(resume_from + 1, config[MAX_RESOURCE_ATTR] + 1):
+        train_loss, first_loss = train(optimizer, epoch)
+        val_loss = evaluate(val_data)
         print("-" * 89)
-        print("Exiting from training early")
+        print(
+            f"| end of epoch {epoch:3d} | valid loss {val_loss:5.2f} | "
+            f"valid ppl {np.exp(val_loss):8.2f}"
+        )
+        print("-" * 89)
+        # Write checkpoint (optional)
+        mutable_state["logs"].append(
+            dict(
+                epoch=epoch,
+                train_loss=train_loss,
+                val_loss=val_loss,
+                first_loss=first_loss,
+            )
+        )
+        best_val_loss = mutable_state["best_val_loss"]
+        if not best_val_loss or val_loss < best_val_loss:
+            mutable_state["best_val_loss"] = val_loss
+        checkpoint_model_at_rung_level(config, save_model_fn, epoch)
+        # Report validation loss back to Syne Tune
+        report(**{RESOURCE_ATTR: epoch, METRIC_NAME: val_loss})
 
 
 if __name__ == "__main__":

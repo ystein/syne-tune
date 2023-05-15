@@ -2,8 +2,8 @@ Getting Started with Hyperparameter Tuning
 ==========================================
 
 In this section, you will learn what is needed to get hyperparameter tuning up
-and running. We will look at an example, where a deep learning model is trained
-on image classification.
+and running. We will look at an example, where a deep learning language model
+is trained on natural language text.
 
 What is Hyperparameter Tuning?
 ------------------------------
@@ -25,25 +25,25 @@ is minimal.
 
 In this tutorial, we will mostly
 be focussed on making decisions and tuning free parameters in the context of
-training machine learning models on data, so their predictions can be used as
+*training machine learning models on data*, so their predictions can be used as
 part of a solution to a business problem. There are many other steps from
 initial need to solution, such as understanding business requirements, collecting,
 cleaning and labeling data, monitoring and maintenance. Some of these can be
 addressed with automated tuning as well, others need different tools.
 
-A common paradigm for decision-making and parameter tuning is to try many
+A common paradigm for decision-making and parameter tuning is to try a number of
 different configurations and select the best in the end.
 
-* A trial consists of *training* a model on a part of the data (the *training
-  data*). Here, training is an automated process (for example, stochastic
+* A *trial* consists of training a model on a part of the data (the training
+  data). Here, training is an automated process (for example, stochastic
   gradient descent on weight and biases of a neural network model), *given*
   a configuration (e.g., what learning rate is used, what batch size, etc.).
-  Then, the trained model is evaluated on another part of the data (*validation
-  data*, disjoint from training data), giving rise to a quality metric (e.g.,
+  Then, the trained model is evaluated on another part of the data (validation
+  data, disjoint from training data), giving rise to a quality metric (e.g.,
   validation error, AUC, F1), or even several ones. For small datasets, we can
-  also use *cross-validation*, by repeating training and evaluation on a
+  also use cross-validation, by repeating training and evaluation on a
   number of different splits, reporting the average of validation metrics.
-* This metric value (or values) is then the response of the system to a
+* This metric value (or values) is the response of the system to a
   configuration. Note that the response is stochastic: if we run again with
   the same configuration, we may get a different value. This is because training
   has random elements (e.g., initial weights are sampled, ordering of batches).
@@ -77,14 +77,14 @@ Next, here is the function which executes a trial:
 .. literalinclude:: ../../../../benchmarking/nursery/odsc_tutorial/transformer_wikitext2/code/training_script_report_end.py
    :caption: training_script_report_end.py -- objective
    :start-at: def objective(config):
-   :end-at: print("Exiting from training early")
+   :end-at: report(**{METRIC_NAME: val_loss})
 
 * The input ``config`` to ``objective`` is a configuration dictionary, containing
   values for the hyperparameters, as well as for ``MAX_RESOURCE_ATTR``.
-* We start with downloading training and validation data, which is part of
-  ``PyTorch`` in this case. The training loader depends on hyperparameter
-  ``batch_size``.
-* Next, we create model and optimizer. This depends on the remaining hyperparameters.
+* We start with downloading training and validation data. The training data
+  loader ``train_data`` depends on hyperparameter ``config["batch_size"]``.
+* Next, we create model and optimizer. This depends on the remaining hyperparameters
+  in ``config``.
 * We then run ``config[MAX_RESOURCE_ATTR]`` epochs of training.
 * Finally, we compute the error on the validation data and report it back to
   Syne Tune. The latter is done by creating ``report`` of type ``Reporter`` and

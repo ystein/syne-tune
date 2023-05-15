@@ -38,7 +38,7 @@ we specify which methods to compare with each other:
 
 We compare random search (``RS``), Bayesian Optimization (``BO``), ASHA
 (``ASHA``), and MOBSTER (``MOBSTER``), deviating from the defaults for
-each method only in that we use the ``promotion`` (or pause-and-resume)
+each method only in that we use the promotion (or pause-and-resume)
 variant of the latter two. Next, we specify which baselines we would like
 to consider in our study:
 

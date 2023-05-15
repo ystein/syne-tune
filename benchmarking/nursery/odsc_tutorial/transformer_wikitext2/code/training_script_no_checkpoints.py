@@ -321,23 +321,17 @@ def objective(config):
             model, optimizer, opt_level="O1", min_loss_scale=0.0001, verbosity=0
         )
 
-    # At any point you can hit Ctrl + C to break out of training early.
-    try:
-        for epoch in range(1, config[MAX_RESOURCE_ATTR] + 1):
-            train_loss, first_loss = train(optimizer, epoch)
-            val_loss = evaluate(val_data)
-            print("-" * 89)
-            print(
-                f"| end of epoch {epoch:3d} | valid loss {val_loss:5.2f} | "
-                f"valid ppl {np.exp(val_loss):8.2f}"
-            )
-            print("-" * 89)
-            # Report validation loss back to Syne Tune
-            report(**{RESOURCE_ATTR: epoch, METRIC_NAME: val_loss})
-
-    except KeyboardInterrupt:
+    for epoch in range(1, config[MAX_RESOURCE_ATTR] + 1):
+        train_loss, first_loss = train(optimizer, epoch)
+        val_loss = evaluate(val_data)
         print("-" * 89)
-        print("Exiting from training early")
+        print(
+            f"| end of epoch {epoch:3d} | valid loss {val_loss:5.2f} | "
+            f"valid ppl {np.exp(val_loss):8.2f}"
+        )
+        print("-" * 89)
+        # Report validation loss back to Syne Tune
+        report(**{RESOURCE_ATTR: epoch, METRIC_NAME: val_loss})
 
 
 if __name__ == "__main__":
