@@ -13,12 +13,15 @@
 from pathlib import Path
 from typing import Optional, Dict, Any
 
+from sagemaker.estimator import EstimatorBase
+
 import benchmarking
 import syne_tune
 from benchmarking.commons.benchmark_definitions.common import BenchmarkDefinition
 from syne_tune.backend.sagemaker_backend.sagemaker_utils import (
     get_execution_role,
 )
+from syne_tune.remote.scheduling import backoff_boto_clienterror
 from syne_tune.util import s3_experiment_path
 
 
@@ -75,5 +78,40 @@ REMOTE_LAUNCHING_EXTRA_PARAMETERS = [
         type=int,
         default=0,
         help="Skip this number of initial jobs which would be launched",
-    )
+    ),
+    dict(
+        name="backoff_wait_time",
+        type=int,
+        default=600,
+        help=(
+            "If positive, ClientError[ResourceLimitExceeded] is caught, and we "
+            "try again after this many seconds. If 0 or negative, this is not "
+            "done"
+        ),
+    ),
 ]
+
+
+def fit_sagemaker_estimator(backoff_wait_time: int, estimator: EstimatorBase, **kwargs):
+    """
+    Runs ``estimator.fit(**kwargs)``. If ``backoff_wait_time > 0``, this is
+    wrapped into the ``backoff_boto_clienterror`` decorator, which makes sure
+    that if ``fit`` fails with ``ClientError`` of type "ResourceLimitExceeded",
+    we wait for ``backoff_wait_time`` seconds and try again (up to 100 times).
+    If ``backoff_wait_time <= 0``, the call of ``fit`` is not wrapped.
+
+    :param backoff_wait_time: See above.
+    :param estimator: SageMaker estimator to call ``fit`` for
+    :param kwargs: Arguments for ``estimator.fit``
+    """
+
+    @backoff_boto_clienterror(
+        errorname="ResourceLimitExceeded", length2sleep=backoff_wait_time
+    )
+    def fit_sagemaker_estimator_with_backoff(estimator: EstimatorBase, **kwargs):
+        estimator.fit(**kwargs)
+
+    if backoff_wait_time > 0:
+        fit_sagemaker_estimator_with_backoff(estimator, **kwargs)
+    else:
+        estimator.fit(**kwargs)

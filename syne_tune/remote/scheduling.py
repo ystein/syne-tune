@@ -14,6 +14,10 @@ import functools
 import logging
 import time
 
+from syne_tune.try_import import try_import_aws_message
+
+logger = logging.getLogger(__name__)
+
 
 def backoff(errorname: str, ntimes_resource_wait: int = 100, length2sleep: float = 600):
     """
@@ -30,11 +34,48 @@ def backoff(errorname: str, ntimes_resource_wait: int = 100, length2sleep: float
                     if not e.__class__.__name__ == errorname:
                         raise (e)
 
-                logging.info(
+                logger.info(
                     f"{errorname} detected when calling <{some_function.__name__}>, waiting {length2sleep / 60} minutes before retring"
                 )
                 time.sleep(length2sleep)
                 continue
+
+        return wrapper
+
+    return errorcatch
+
+
+def backoff_boto_clienterror(
+    errorname: str, ntimes_resource_wait: int = 100, length2sleep: float = 600
+):
+    """
+    Variant of the general decorator above, which is specific to
+    ``botocore.exceptions.ClientError``.
+    """
+
+    try:
+        from botocore.exceptions import ClientError
+    except ImportError:
+        print(try_import_aws_message())
+
+    def errorcatch(some_function):
+        @functools.wraps(some_function)
+        def wrapper(*args, **kwargs):
+            for idx in range(ntimes_resource_wait):
+                try:
+                    return some_function(*args, **kwargs)
+                except ClientError as ex:
+                    if errorname not in str(ex):
+                        raise (ex)
+                except Exception:
+                    raise
+
+                logger.info(
+                    f"botocore.exceptions.ClientError[{errorname}] detected "
+                    f"when calling <{some_function.__name__}>. Waiting "
+                    f"{length2sleep / 60} minutes before retrying"
+                )
+                time.sleep(length2sleep)
 
         return wrapper
 

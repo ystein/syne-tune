@@ -32,6 +32,7 @@ from benchmarking.commons.hpo_main_simulator import (
 from benchmarking.commons.launch_remote_common import (
     sagemaker_estimator_args,
     REMOTE_LAUNCHING_EXTRA_PARAMETERS,
+    fit_sagemaker_estimator,
 )
 from benchmarking.commons.utils import (
     filter_none,
@@ -248,6 +249,11 @@ def launch_remote_experiments_simulator(
             f"Results written to {sm_args['checkpoint_s3_uri']}"
         )
         est = basic_cpu_instance_sagemaker_estimator(**sm_args)
-        est.fit(job_name=f"{experiment_tag}-{tuner_name}-{suffix}", wait=False)
+        fit_sagemaker_estimator(
+            backoff_wait_time=configuration.backoff_wait_time,
+            estimator=est,
+            job_name=f"{experiment_tag}-{tuner_name}-{suffix}",
+            wait=False,
+        )
 
     print("\n" + message_sync_from_s3(experiment_tag))
