@@ -63,4 +63,16 @@ the execution backend. Once all experiments have finished (if all of them are
 run in parallel, this takes a little more than ``max_wallclock_time``, or 5
 hours), we can visualize results.
 
-HIER! Needs new results in odsc-1 !!
+.. |Local transformer_wikitext2| image:: img/odsc-comparison-local-transformer_wikitext2.png
+
++-----------------------------------------------------------+
+| |Local transformer_wikitext2|                             |
++===========================================================+
+| Comparison of methods on transformer_wikitext2 benchmark, |
+| using the local backend with 4 workers.                   |
++-----------------------------------------------------------+
+
+We can clearly see the benefits coming both from Bayesian optimization
+(intelligent rather than random sampling) and multi-fidelity scheduling. A
+combination of the two, ``MOBSTER``, provides both a rapid initial decrease
+and the best performance after 5 hours.
