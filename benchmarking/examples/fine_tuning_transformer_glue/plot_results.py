@@ -12,11 +12,18 @@
 # permissions and limitations under the License.
 from typing import Dict, Any, Optional
 
-from syne_tune.experiments import ComparativeResults, PlotParameters, SubplotParameters
+from syne_tune.experiments import (
+    ComparativeResults,
+    PlotParameters,
+    ShowTrialParameters,
+)
 from benchmarking.examples.fine_tuning_transformer_glue.baselines import methods
+from benchmarking.commons.benchmark_definitions.real_benchmark_definitions import (
+    real_benchmark_definitions,
+)
 
 
-# TODO !!!
+SETUPS = list(methods.keys())
 
 
 def metadata_to_setup(metadata: Dict[str, Any]) -> Optional[str]:
@@ -24,18 +31,10 @@ def metadata_to_setup(metadata: Dict[str, Any]) -> Optional[str]:
     return metadata["algorithm"]
 
 
-SETUPS_RIGHT = ("ASHA", "SYNCHB", "BOHB")
-
-
-def metadata_to_subplot(metadata: Dict[str, Any]) -> Optional[int]:
-    return int(metadata["algorithm"] in SETUPS_RIGHT)
-
-
 if __name__ == "__main__":
-    experiment_name = "docs-1"
+    experiment_name = "glue-5"
     experiment_names = (experiment_name,)
-    setups = list(methods.keys())
-    num_runs = 15
+    num_runs = 10
     download_from_s3 = False  # Set ``True`` in order to download files from S3
     # Plot parameters across all benchmarks
     plot_params = PlotParameters(
@@ -43,13 +42,12 @@ if __name__ == "__main__":
         aggregate_mode="iqm_bootstrap",
         grid=True,
     )
-    # We would like two subplots (1 row, 2 columns), with MOBSTER and HYPERTUNE
-    # results on the left, and the remaining baselines on the right. Each
-    # column gets its own title, and legends are shown in both
-    plot_params.subplots = SubplotParameters(
-        kwargs=dict(nrows=1, ncols=2, sharey="all"),
-        titles=["Model-based Methods", "Baselines"],
-        legend_no=[0, 1],
+    # We also show the performance of the initial trial, which corresponds to the
+    # Hugging Face default
+    plot_params.show_init_trials = ShowTrialParameters(
+        setup_name="BO",
+        trial_id=0,
+        new_setup_name="default",
     )
     # The creation of ``results`` downloads files from S3 (only if
     # ``download_from_s3 == True``), reads the metadata and creates an inverse
@@ -57,39 +55,40 @@ if __name__ == "__main__":
     # warning messages are printed
     results = ComparativeResults(
         experiment_names=experiment_names,
-        setups=setups,
+        setups=SETUPS,
         num_runs=num_runs,
         metadata_to_setup=metadata_to_setup,
         plot_params=plot_params,
-        metadata_to_subplot=metadata_to_subplot,
         download_from_s3=download_from_s3,
     )
     # We can now create plots for the different benchmarks
-    # First: nas201-cifar100
-    benchmark_name = "nas201-cifar100"
-    benchmark = benchmark_definitions[benchmark_name]
+    # First: HPO, no model selection
+    benchmark_name = "finetune_transformer_glue_rte"
+    benchmark = real_benchmark_definitions()[benchmark_name]
     # These parameters overwrite those given at construction
     plot_params = PlotParameters(
+        title="Fine-tuning bert-base-cased on GLUE RTE",
         metric=benchmark.metric,
         mode=benchmark.mode,
-        ylim=(0.265, 0.31),
+        ylim=(0.27, 0.38),
     )
     results.plot(
         benchmark_name=benchmark_name,
         plot_params=plot_params,
-        file_name=f"./{experiment_name}-{benchmark_name}.png",
+        file_name=f"./{benchmark_name}.png",
     )
-    # Next: nas201-ImageNet16-120
-    benchmark_name = "nas201-ImageNet16-120"
-    benchmark = benchmark_definitions[benchmark_name]
+    # Next: Model selection and HPO
+    benchmark_name = "finetune_transformer_glue_modsel_rte"
+    benchmark = real_benchmark_definitions()[benchmark_name]
     # These parameters overwrite those given at construction
     plot_params = PlotParameters(
+        title="Fine-tuning and Model Selection on GLUE RTE",
         metric=benchmark.metric,
         mode=benchmark.mode,
-        ylim=(0.535, 0.58),
+        ylim=(0.27, 0.38),
     )
     results.plot(
         benchmark_name=benchmark_name,
         plot_params=plot_params,
-        file_name=f"./{experiment_name}-{benchmark_name}.png",
+        file_name=f"./{benchmark_name}.png",
     )
