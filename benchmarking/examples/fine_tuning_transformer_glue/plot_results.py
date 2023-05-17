@@ -32,9 +32,9 @@ def metadata_to_setup(metadata: Dict[str, Any]) -> Optional[str]:
 
 
 if __name__ == "__main__":
-    experiment_name = "glue-5"
+    experiment_name = "glue-6"
     experiment_names = (experiment_name,)
-    num_runs = 10
+    num_runs = 5
     download_from_s3 = False  # Set ``True`` in order to download files from S3
     # Plot parameters across all benchmarks
     plot_params = PlotParameters(
@@ -61,34 +61,27 @@ if __name__ == "__main__":
         plot_params=plot_params,
         download_from_s3=download_from_s3,
     )
+
     # We can now create plots for the different benchmarks
-    # First: HPO, no model selection
-    benchmark_name = "finetune_transformer_glue_rte"
-    benchmark = real_benchmark_definitions()[benchmark_name]
-    # These parameters overwrite those given at construction
-    plot_params = PlotParameters(
-        title="Fine-tuning bert-base-cased on GLUE RTE",
-        metric=benchmark.metric,
-        mode=benchmark.mode,
-        ylim=(0.27, 0.38),
-    )
-    results.plot(
-        benchmark_name=benchmark_name,
-        plot_params=plot_params,
-        file_name=f"./{benchmark_name}.png",
-    )
-    # Next: Model selection and HPO
-    benchmark_name = "finetune_transformer_glue_modsel_rte"
-    benchmark = real_benchmark_definitions()[benchmark_name]
-    # These parameters overwrite those given at construction
-    plot_params = PlotParameters(
-        title="Fine-tuning and Model Selection on GLUE RTE",
-        metric=benchmark.metric,
-        mode=benchmark.mode,
-        ylim=(0.27, 0.38),
-    )
-    results.plot(
-        benchmark_name=benchmark_name,
-        plot_params=plot_params,
-        file_name=f"./{benchmark_name}.png",
-    )
+    # TODO: Adjust ylim !!
+    for dataset, ylim in [("rte", (0.27, 0.38)), ("mrpc", None), ("stsb", None)]:
+        for do_modsel in [False, True]:
+            if do_modsel:
+                benchmark_name = f"finetune_transformer_glue_modsel_{dataset}"
+                title = f"Fine-tuning and model selection on GLUE {dataset}"
+            else:
+                benchmark_name = f"finetune_transformer_glue_{dataset}"
+                title = f"Fine-tuning bert-base-cased on GLUE {dataset}"
+            benchmark = real_benchmark_definitions()[benchmark_name]
+            # These parameters overwrite those given at construction
+            plot_params = PlotParameters(
+                title=title,
+                metric=benchmark.metric,
+                mode=benchmark.mode,
+                ylim=ylim,
+            )
+            results.plot(
+                benchmark_name=benchmark_name,
+                plot_params=plot_params,
+                file_name=f"./{benchmark_name}.png",
+            )
