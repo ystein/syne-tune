@@ -27,16 +27,16 @@ TASK2METRICSMODE = {
     "cola": {
         "metric": "matthews_correlation",
         "mode": "max",
-        "max_wallclock_time": 1800,
+        "max_wallclock_time": 2700,
     },
-    "mnli": {"metric": "accuracy", "mode": "max", "max_wallclock_time": 1800},
-    "mrpc": {"metric": "f1", "mode": "max", "max_wallclock_time": 1800},
-    "qnli": {"metric": "accuracy", "mode": "max", "max_wallclock_time": 1800},
-    "qqp": {"metric": "f1", "mode": "max", "max_wallclock_time": 1800},
-    "rte": {"metric": "accuracy", "mode": "max", "max_wallclock_time": 1800},
-    "sst2": {"metric": "accuracy", "mode": "max", "max_wallclock_time": 1800},
-    "stsb": {"metric": "spearmanr", "mode": "max", "max_wallclock_time": 1800},
-    "wnli": {"metric": "accuracy", "mode": "max", "max_wallclock_time": 1800},
+    "mnli": {"metric": "accuracy", "mode": "max", "max_wallclock_time": 2700},
+    "mrpc": {"metric": "f1", "mode": "max", "max_wallclock_time": 2700},
+    "qnli": {"metric": "accuracy", "mode": "max", "max_wallclock_time": 2700},
+    "qqp": {"metric": "f1", "mode": "max", "max_wallclock_time": 2700},
+    "rte": {"metric": "accuracy", "mode": "max", "max_wallclock_time": 2700},
+    "sst2": {"metric": "accuracy", "mode": "max", "max_wallclock_time": 2700},
+    "stsb": {"metric": "spearmanr", "mode": "max", "max_wallclock_time": 2700},
+    "wnli": {"metric": "accuracy", "mode": "max", "max_wallclock_time": 2700},
 }
 
 
@@ -89,7 +89,7 @@ def finetune_transformer_glue_benchmark(
     :param model_type: Pre-trained model to be used. If ``choose_model`` is
         set, this is the model used in the first evaluation. Defaults to
         "bert-base-cased"
-    :param max_wallclock_time: Maximum wall-clock time in secs. Defaults to 1800
+    :param max_wallclock_time: Maximum wall-clock time in secs. Defaults to 2700
     :param n_workers: Number of workers. Defaults to 4
     :param num_train_epochs: Maximum number of epochs for fine-tuning. Defaults
         to 3
