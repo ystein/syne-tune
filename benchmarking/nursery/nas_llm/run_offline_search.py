@@ -251,7 +251,6 @@ def main():
         neuron_mask = apply_neuron_mask
 
     def evaluate_masks(head_mask, ffn_mask, dataloader):
-
         n_params_model = compute_parameters(
             dmodel=attention_size,
             dhead=attention_head_size,
@@ -345,7 +344,8 @@ def main():
     results[metric_name] = list(costs[:, 0])
     results["params"] = list(costs[:, 1])
     results["test_pareto"] = test_pareto
-    results["config"] = configs
+    if search_args.search_space != "uniform":
+        results["config"] = configs
     results["eval_pareto"] = list(costs[idx, 0])
     results["params_pareto"] = list(costs[idx, 1])
     results["model_loading_time"] = model_loading_time
