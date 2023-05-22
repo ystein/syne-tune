@@ -63,8 +63,11 @@ if __name__ == "__main__":
     )
 
     # We can now create plots for the different benchmarks
-    # TODO: Adjust ylim !!
-    for dataset, ylim in [("rte", (0.27, 0.38)), ("mrpc", None), ("stsb", None)]:
+    for dataset, ylim in [
+        ("rte", (0.27, 0.38)),
+        ("mrpc", (0.09, 0.15)),
+        ("stsb", (0.1, 0.15)),
+    ]:
         for do_modsel in [False, True]:
             if do_modsel:
                 benchmark_name = f"finetune_transformer_glue_modsel_{dataset}"
